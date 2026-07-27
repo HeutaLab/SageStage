@@ -154,6 +154,7 @@ input, select, textarea { font: inherit; color: inherit; }
   font-family: var(--font-display);
 }
 .brand .logo { font-size: 18px; }
+#brandName { font-family: var(--font-display); font-weight: 600; }
 .brand .tag {
   font-size: 14px;
   font-family: var(--font-ui);
@@ -214,11 +215,25 @@ input, select, textarea { font: inherit; color: inherit; }
   backdrop-filter: blur(14px);
   padding: 8px 10px;
   z-index: 4000;
-  max-width: calc(100vw - 220px);
+  /* 498 = both sides clearing the screen-nav pill (≈241px incl. margins) while
+     centered — the old 220 let the dock slide 130px underneath the nav at 1024 */
+  max-width: calc(100vw - 498px);
   overflow-x: auto;
   scrollbar-width: none;
 }
 #toolbar::-webkit-scrollbar { display: none; }
+/* fitDock() measures, these dress. Stage 2: labels go, 34px glyphs stay in
+   ≥44px targets, every tool remains visible (names live in title/aria-label).
+   Stage 3: centering can't clear the nav pill, so the dock hugs the left. */
+#toolbar.compact .tool .label { display: none; }
+#toolbar.compact .tool { min-width: 44px; padding: 6px 5px; }
+#toolbar.compact { gap: 2px; padding: 8px 6px; } /* tighten the chrome, never the 44px targets */
+#toolbar.dock-left {
+  left: 16px;
+  transform: none;
+  /* 269 = 16px left margin + the nav pill's ~241px zone + 12px breathing room */
+  max-width: calc(100vw - 269px);
+}
 
 .tool {
   display: flex;
@@ -244,7 +259,7 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .glyph .ic svg { width: 21px; height: 21px; }
 .tool .label {
-  font-size: 10.5px;
+  font-size: 14px; /* the screen floor — when there isn't room at 14, fitDock drops to icons, not to smaller type */
   font-weight: 600;
   color: var(--ink-soft);
   white-space: nowrap;
@@ -276,8 +291,11 @@ input, select, textarea { font: inherit; color: inherit; }
   position: absolute;
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  /* the Soft Daylight tool-window frame: big soft corners, deep lift. The
+     frosted --panel stays — opaque white over a teacher's backdrop would cost
+     the stage its depth. */
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-window);
   backdrop-filter: blur(12px);
   display: flex;
   flex-direction: column;
@@ -304,7 +322,7 @@ input, select, textarea { font: inherit; color: inherit; }
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px 4px 12px;
+  padding: 6px 10px 4px 16px; /* the 26px corner curves further in — keep the title clear of it */
   cursor: grab;
   user-select: none;
   flex-shrink: 0;
@@ -358,7 +376,7 @@ input, select, textarea { font: inherit; color: inherit; }
   font-size: 14px;
   background: rgba(241, 245, 244, 0.7);
   flex-shrink: 0;
-  border-radius: 0 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px);
+  border-radius: 0 0 calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px);
 }
 
 /* ---------- Settings side panel ---------- */

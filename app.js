@@ -9350,9 +9350,18 @@
     zTop = Math.max(10, ...toShow.map((w) => w.z || 10));
     for (const w of toShow) mountWidget(w);
     $('#screenLabel').textContent = currentIndex() + 1 + ' / ' + screens().length;
+    paintBrand();
     renderToolbar();
     refreshInk();
     if (deckPanel) renderDeck();
+  }
+
+  // While teaching, the top-left pill shows WHERE the teacher is, not what the
+  // app is called — the deck name is the orientation that matters mid-lesson.
+  // The dashboard header still says Sage Stage.
+  function paintBrand() {
+    const n = (viewDeck().name || '').trim();
+    $('#brandName').textContent = n || 'Sage Stage';
   }
 
   function applyBackground() {
@@ -9654,7 +9663,7 @@
     deckPanel.innerHTML = '';
     const title = el('input', {
       class: 'deck-title', value: viewDeck().name || '', placeholder: 'My screen deck',
-      onchange: (e) => { viewDeck().name = e.target.value.trim(); save(); if (dashEl) renderDashboard(); },
+      onchange: (e) => { viewDeck().name = e.target.value.trim(); save(); paintBrand(); if (dashEl) renderDashboard(); },
     });
     const selecting = !!deckSelect;
     deckPanel.append(el('div', { class: 'deck-head' }, title,
@@ -9896,7 +9905,7 @@
         const name = prompt('Deck name:', deck.name || '');
         if (name === null) return;
         deck.name = name.trim() || 'New deck';
-        save(); renderDashboard();
+        save(); paintBrand(); renderDashboard();
       }),
       item('copy', 'Duplicate', () => {
         const copy = JSON.parse(JSON.stringify(deck));
@@ -10461,7 +10470,8 @@
     if (dashTab === 'background') {
       page.append(el('div', { class: 'dash-section-head' },
         el('h3', {}, 'Dashboard wallpaper'),
-        el('div', { class: 'dash-section-sub' }, 'Sets the backdrop of this page — pick a photo, gradient or your own image.')));
+        el('div', { class: 'dash-section-sub' }, 'Sets the backdrop of this page — pick a photo, gradient or your own image.'),
+        el('div', { class: 'dash-section-sub' }, 'Each screen’s teaching backdrop is set on the stage: Background, in the dock.')));
       const picker = el('div', { class: 'dash-bg-card' },
         buildBgPicker(() => state.dashBg, (bg) => { state.dashBg = bg; save(); applyDashBg(); }));
       body.append(picker);
@@ -10876,12 +10886,13 @@
     toolbar.innerHTML = '';
     for (const t of TOOLS) {
       if (!state.pinned.includes(t.id)) continue;
-      toolbar.append(el('button', { class: 'tool', style: '--acc:' + t.accent, onclick: () => t.run() },
+      // title + aria-label so the name survives compact mode's hidden labels
+      toolbar.append(el('button', { class: 'tool', style: '--acc:' + t.accent, title: t.label, 'aria-label': t.label, onclick: () => t.run() },
         el('span', { class: 'glyph' }, iconEl(t.glyph)),
         el('span', { class: 'label' }, t.label)));
     }
     // permanent category tabs — Maths and Games keep growing, so they get their own panels
-    const catTab = (cat, glyph, accent, label) => el('button', { class: 'tool', style: '--acc:' + accent, onclick: () => toggleMorePanel(cat) },
+    const catTab = (cat, glyph, accent, label) => el('button', { class: 'tool', style: '--acc:' + accent, title: label, 'aria-label': label, onclick: () => toggleMorePanel(cat) },
       el('span', { class: 'glyph' }, iconEl(glyph)),
       el('span', { class: 'label' }, label));
     toolbar.append(...[
@@ -10923,7 +10934,28 @@
       miniDock = null;
     }
     if (miniDock) renderMiniDock();
+    fitDock();
   }
+
+  // The dock degrades by measurement, never by viewport guesswork — a teacher
+  // with four pinned tools keeps labels far narrower than one with fourteen.
+  // Stage 1: one row, 14px labels. Stage 2 (.compact): icons only, everything
+  // still visible. Stage 3 (.dock-left): centering can't clear the screen-nav
+  // pill, so the dock takes the left span instead. overflow-x remains the
+  // backstop for a tiny window. Always measured from stage 1, so widening the
+  // window restores labels — no thrash, the classes only ever shrink content.
+  function fitDock() {
+    const tb = $('#toolbar');
+    if (tb.classList.contains('hidden')) return;
+    tb.classList.remove('compact', 'dock-left');
+    if (tb.scrollWidth > tb.clientWidth + 1) tb.classList.add('compact');
+    if (tb.scrollWidth > tb.clientWidth + 1) tb.classList.add('dock-left');
+  }
+  let fitDockTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(fitDockTimer);
+    fitDockTimer = setTimeout(fitDock, 120);
+  });
 
   function renderMiniDock() {
     if (!miniDock) return;

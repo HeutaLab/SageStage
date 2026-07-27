@@ -3210,3 +3210,42 @@ image formats don't obey the media query, and the face is the teacher's own
 choice.
 
 - **Versions: style.css v89, app.js v55.**
+
+## 2026-07-27 (night) — Track 3: the dock earns its floor, the stage learns its name
+
+Also today: SageStage became a GitHub repo (HeutaLab/SageStage). The baseline
+commit holds everything through the mascot photo; this entry lands as the
+first real commit on top. The remote connect + push are Glenn's two commands
+(the session's permission mode rightly won't push on its own).
+
+**The dock, measured honestly.** At 1024 the old dock needed 1086px, got 802,
+hid four tools behind an invisible scrollbar and slid 131px under the
+screen-nav pill. Fix: fitDock() degrades by MEASUREMENT, never viewport
+guesswork — stage 1: one centred row, labels finally at the 14px floor;
+stage 2 (.compact): labels drop, 34px glyphs in ≥44px targets, all fourteen
+tools visible (names in title/aria-label); stage 3 (.dock-left): when
+centring can't clear the nav pill, the dock takes the left span. Measured
+live: 1024 → compact+left, 0 overflow, 18px nav clearance; 1440 → compact
+centred; 1920 → full labels, 130px clearance. A teacher with four pinned
+tools keeps labels far narrower than one with fourteen — that is why it
+measures instead of media-queries. One harness quirk found on the way: the
+browser pane's viewport override doesn't dispatch resize events, so the
+listener was proven with a synthetic event; real windows fire it.
+
+**Stage top bar.** The pill now shows the deck name in the display face —
+orientation over branding while children watch; "Sage Stage" still owns the
+dashboard. paintBrand() runs from renderScreen and both rename paths.
+
+**Widget frames.** Glenn chose the full handoff over my modest option:
+radius 26 + the deep window shadow on every widget, frosted --panel kept
+(opaque white would flatten the stage). The settings drawer's corner calc
+follows (--radius-lg − 2px); header left padding 12→16 keeps titles clear of
+the bigger curve.
+
+**Wallpaper tab.** Name stays (it was always accurate); the subtitle gains
+the pointer the handoff's own confusion proved necessary: each screen's
+teaching backdrop is set on the stage — Background, in the dock.
+
+Checked: three dock stages live-measured; SagePrint 91/91; no console
+errors. Versions: style.css v90, app.js v56. Soft Daylight is now fully
+landed except rewards evolution, which waits for a real pedagogical want.
