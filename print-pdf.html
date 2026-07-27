@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SagePrint PDF harness</title>
+<link rel="stylesheet" href="style.css?v=89" />
+<style>
+  /* on screen this page is a note; the print root is what matters */
+  body { font-family: system-ui, sans-serif; margin: 24px; color: #23262b; }
+</style>
+</head>
+<body>
+<p id="note">Building…</p>
+<script src="print.js?v=8"></script>
+<script>
+/* Renders the REAL print root (SagePrint.buildPrintRoot) so headless Chrome can
+   --print-to-pdf it. Query: ?budget=8&paper=A3&assembly=lap&guides=0
+   Used for the §9 physical check and for eyeballing a genuine PDF, which is the
+   only way to see what a teacher actually gets. */
+(function () {
+  'use strict';
+  const q = new URLSearchParams(location.search);
+  const budget = +(q.get('budget') || 4);
+  const paper = q.get('paper') || 'A4';
+  const assembly = q.get('assembly') || 'butt';
+  const guides = q.get('guides') !== '0';
+
+  // a modelled-writing page: ruled lines plus handwriting that crosses seams,
+  // so a lost or doubled millimetre is visible rather than theoretical
+  function writingPage() {
+    const W = 1000, H = 1414, parts = [];
+    parts.push('<rect width="' + W + '" height="' + H + '" fill="#ffffff"/>');
+    for (let y = 140; y <= H - 40; y += 176) {
+      parts.push('<line x1="40" y1="' + y + '" x2="' + (W - 40) + '" y2="' + y
+        + '" stroke="#64748b" stroke-width="2.2"/>');
+    }
+    // long strokes that deliberately run across every seam
+    parts.push('<path d="M 50 250 L 950 1250" fill="none" stroke="#111827" stroke-width="7" stroke-linecap="round"/>');
+    parts.push('<path d="M 950 250 L 50 1250" fill="none" stroke="#1d4ed8" stroke-width="7" stroke-linecap="round"/>');
+    for (let y = 140; y <= H - 40; y += 176) {
+      parts.push('<path d="M 60 ' + y + ' q 60 -70 120 0 t 120 0 t 120 0 t 120 0 t 120 0 t 120 0 t 120 0"'
+        + ' fill="none" stroke="#111827" stroke-width="6" stroke-linecap="round"/>');
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' ' + H + '">'
+      + parts.join('') + '</svg>';
+  }
+
+  // ?pages=3 exercises a multi-page job (§4.6): every page shares one
+  // orientation, and each sheet must carry its page in the margin or the pile
+  // that lands on the table can't be sorted
+  const nPages = Math.max(1, Math.min(8, +(q.get('pages') || 1)));
+  const note = document.getElementById('note');
+  const plans = [];
+  for (let i = 0; i < nPages; i++) {
+    const opt = { budget, paper, assembly, label: nPages > 1 ? 'Page ' + (i + 1) : null };
+    if (i > 0 && plans[0].ok) opt.orientation = plans[0].meta.orientation;
+    plans.push(SagePrint.plan(writingPage(), opt));
+  }
+  if (plans.some((p) => !p.ok)) {
+    note.textContent = 'plan failed: ' + plans.filter((p) => !p.ok)[0].errors.join('; ');
+    return;
+  }
+  document.body.appendChild(SagePrint.buildPrintRoot(plans, guides));
+  document.body.classList.add('sp-printing');
+  note.textContent = SagePrint.describeJob(plans) + ' · ' + assembly;
+  document.title = 'SagePrint ' + nPages + 'p × ' + plans[0].meta.sheets + ' ' + paper + ' ' + assembly;
+})();
+</script>
+</body>
+</html>

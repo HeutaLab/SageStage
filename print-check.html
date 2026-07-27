@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SagePrint check</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 24px auto; max-width: 1100px;
+         padding: 0 16px; background: #f4f5f7; color: #23262b; }
+  h1 { font-size: 22px; } h2 { font-size: 17px; margin-top: 32px; }
+  .note { color: #5a6270; font-size: 13px; }
+  #summary { font-size: 18px; font-weight: 700; padding: 10px 14px; border-radius: 8px;
+             display: inline-block; margin: 8px 0 4px; }
+  #summary.pass { background: #d9f2df; color: #14632a; }
+  #summary.fail { background: #fbdcdc; color: #8f1616; }
+  ol#asserts { padding-left: 28px; }
+  ol#asserts li { margin: 2px 0; font-size: 13.5px; }
+  ol#asserts li.pass::marker { content: '✓ '; color: #14632a; }
+  ol#asserts li.fail::marker { content: '✗ '; color: #b91c1c; }
+  ol#asserts li.fail { color: #b91c1c; font-weight: 700; }
+  .detail { color: #8a8f98; font-weight: 400; }
+  .readout { font-size: 14px; margin: 6px 0 10px; }
+  .pages { display: grid; gap: 10px; justify-content: start; margin-bottom: 8px; }
+  .pages svg.sp-page { width: 190px; height: auto; background: #fff;
+                       box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+  .pages.frieze svg.sp-page { width: 150px; }
+  .lint-list { font-size: 13.5px; }
+</style>
+</head>
+<body>
+<h1>SagePrint check — poster print engine</h1>
+<p class="note">Standalone harness for <code>print.js</code> v1 (engine slice: lint,
+tiling, page generation, guides). Build contract:
+<code>docs/poster-print-design.md</code> §2, §5–§7, §9. No app files are loaded.</p>
+
+<div id="summary">running…</div>
+<ol id="asserts"></ol>
+
+<h2>Job A — 4:3 sound-mat stand-in, 4-sheet budget, A4</h2>
+<div class="readout" id="readoutA"></div>
+<div class="pages" id="jobA"></div>
+
+<h2>Job B — 10:1 alphabet-frieze stand-in, 8-sheet budget, A4</h2>
+<div class="readout" id="readoutB"></div>
+<div class="pages frieze" id="jobB"></div>
+
+<h2>Contract lint fixtures</h2>
+<ul class="lint-list" id="lints"></ul>
+
+<script src="print.js?v=8"></script>
+<script>
+(function () {
+  'use strict';
+  const SP = window.SagePrint;
+  const results = [];
+  const assert = (name, cond, detail) =>
+    results.push({ name, pass: !!cond, detail: detail || '' });
+  const approx = (a, b, eps) => Math.abs(a - b) <= (eps == null ? 0.01 : eps);
+
+  // ---- fixtures: attribute-styled only, ids prefixed, diagonals + circle so
+  // crop alignment across sheets is eyeballable
+  function fixtureSvg(w, h, hue) {
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + w + ' ' + h + '">'
+      + '<rect x="1" y="1" width="' + (w - 2) + '" height="' + (h - 2) + '"'
+      + ' fill="hsl(' + hue + ',70%,95%)" stroke="hsl(' + hue + ',60%,45%)" stroke-width="2"/>'
+      + '<line x1="0" y1="0" x2="' + w + '" y2="' + h + '" stroke="hsl(' + hue + ',60%,55%)" stroke-width="1.5"/>'
+      + '<line x1="0" y1="' + h + '" x2="' + w + '" y2="0" stroke="hsl(' + hue + ',60%,55%)" stroke-width="1.5"/>'
+      + '<circle cx="' + w / 2 + '" cy="' + h / 2 + '" r="' + Math.min(w, h) / 6 + '"'
+      + ' fill="none" stroke="hsl(' + hue + ',60%,40%)" stroke-width="2"/>'
+      + '<text x="' + w / 2 + '" y="' + h / 2 + '" font-size="' + Math.min(w, h) / 8 + '"'
+      + ' text-anchor="middle" font-family="system-ui,sans-serif"'
+      + ' fill="hsl(' + hue + ',60%,35%)">' + w + '×' + h + '</text>'
+      + '</svg>';
+  }
+  const MAT = fixtureSvg(400, 300, 210);     // 4:3 — spec §5 worked example 1
+  const FRIEZE = fixtureSvg(1000, 100, 30);  // 10:1 — spec §5 worked example 2
+  const SQUARE = fixtureSvg(100, 100, 120);
+
+  // ---- §5 worked example 1: 4:3 mat, 4-sheet budget → landscape 2×2, 49×37cm
+  const A = SP.plan(MAT, { budget: 4, paper: 'A4', assembly: 'lap' });
+  assert('mat plans ok', A.ok, (A.errors || []).join('; '));
+  if (A.ok) {
+    assert('mat: landscape', A.meta.orientation === 'landscape', A.meta.orientation);
+    assert('mat: 2×2 grid', A.meta.rows === 2 && A.meta.cols === 2,
+      A.meta.rows + '×' + A.meta.cols);
+    assert('mat: 4 sheets, full budget', A.meta.sheets === 4 && A.meta.usedFullBudget);
+    assert('mat: scale ≈ 1.2267', approx(A.meta.scale, 368 / 300, 0.0001), A.meta.scale);
+    assert('mat: finished ≈ 490.7×368 mm (49×37 cm)',
+      approx(A.meta.finished.w, 490.67, 0.5) && approx(A.meta.finished.h, 368, 0.5),
+      Math.round(A.meta.finished.w) + '×' + Math.round(A.meta.finished.h));
+  }
+
+  // ---- §5 worked example 2: 10:1 frieze, 8-sheet budget → 1×8, 1.9m
+  const B = SP.plan(FRIEZE, { budget: 8, paper: 'A4', assembly: 'lap' });
+  assert('frieze plans ok', B.ok, (B.errors || []).join('; '));
+  if (B.ok) {
+    assert('frieze: landscape 1×8', B.meta.orientation === 'landscape'
+      && B.meta.rows === 1 && B.meta.cols === 8,
+      B.meta.orientation + ' ' + B.meta.rows + '×' + B.meta.cols);
+    assert('frieze: 8 sheets', B.meta.sheets === 8);
+    assert('frieze: scale = 1.9', approx(B.meta.scale, 1.9, 0.0001), B.meta.scale);
+    assert('frieze: finished 1900×190 mm (1.9 m run)',
+      approx(B.meta.finished.w, 1900, 0.5) && approx(B.meta.finished.h, 190, 0.5));
+    assert('frieze: describe says metres', SP.describe(B).indexOf('1.9 m') !== -1,
+      SP.describe(B));
+  }
+
+  // ---- square cases: tie-breaks and budget honesty
+  const C = SP.plan(SQUARE, { budget: 2, paper: 'A4', assembly: 'lap' });
+  assert('square b2: portrait 1×2 (tie-break portrait)', C.ok
+    && C.meta.orientation === 'portrait' && C.meta.rows === 1 && C.meta.cols === 2,
+    C.ok ? C.meta.orientation + ' ' + C.meta.rows + '×' + C.meta.cols : 'plan failed');
+  assert('square b2: scale 2.77, finished 277×277', C.ok
+    && approx(C.meta.scale, 2.77, 0.0001)
+    && approx(C.meta.finished.w, 277) && approx(C.meta.finished.h, 277));
+
+  const D = SP.plan(SQUARE, { budget: 8, paper: 'A4', assembly: 'lap' });
+  assert('square b8: best grid is 6 sheets, not 8 (budget honesty)', D.ok
+    && D.meta.sheets === 6 && !D.meta.usedFullBudget,
+    D.ok ? D.meta.sheets + ' sheets' : 'plan failed');
+  assert('square b8: portrait 2×3 @ scale 5.42', D.ok
+    && D.meta.orientation === 'portrait' && D.meta.rows === 2 && D.meta.cols === 3
+    && approx(D.meta.scale, 5.42, 0.0001));
+  assert('square b8: describe admits the smaller count', D.ok
+    && SP.describe(D).indexOf('fewer than the 8-sheet budget') !== -1, SP.describe(D));
+
+  // ---- A3 paper takes the same maths
+  const E = SP.plan(SQUARE, { budget: 2, paper: 'A3', assembly: 'lap' });
+  assert('square b2 on A3: portrait 1×2 @ scale 4.0', E.ok
+    && E.meta.orientation === 'portrait' && E.meta.rows === 1 && E.meta.cols === 2
+    && approx(E.meta.scale, 4.0, 0.0001));
+
+  // ---- coverage: exact overlaps (12mm lapped, 0 butted), full coverage, no
+  // blank sheet. The step comes from the plan's own overlap, so the same
+  // checks police both assembly models.
+  function coverageChecks(label, p) {
+    if (!p.ok) { assert(label + ': coverage (plan failed)', false); return; }
+    const { pw, ph } = p.meta, f = p.meta.finished;
+    const ov = p.meta.overlap;
+    let overlapsOk = true, noBlank = true;
+    for (const pg of p.pages) {
+      if (pg.neighbours.right) {
+        const right = p.pages[pg.n]; // n is 1-based; right neighbour is index n
+        if (!approx(right.crop.x - pg.crop.x, pw - ov, 1e-6)) overlapsOk = false;
+      }
+      if (pg.neighbours.down) {
+        const down = p.pages[pg.n - 1 + p.meta.cols];
+        if (!approx(down.crop.y - pg.crop.y, ph - ov, 1e-6)) overlapsOk = false;
+      }
+      if (pg.crop.x >= f.w || pg.crop.y >= f.h) noBlank = false;
+    }
+    const last = p.pages[p.pages.length - 1];
+    const covered = last.crop.x + pw >= f.w - 1e-6 && last.crop.y + ph >= f.h - 1e-6;
+    assert(label + ': adjacent crops step by exactly ' + ov + 'mm overlap', overlapsOk);
+    assert(label + ': crops cover the full rendered extent', covered);
+    assert(label + ': no blank sheet', noBlank);
+  }
+  coverageChecks('mat', A);
+  coverageChecks('frieze', B);
+  coverageChecks('square b8', D);
+
+  // ---- contract lint (§2): reds refuse, user rasters only warn
+  const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const NS = '<svg xmlns="http://www.w3.org/2000/svg"';
+  const badFixtures = [
+    { name: 'user raster (data:) → warns, still prints', expectOk: true, expectWarn: true,
+      svg: NS + ' viewBox="0 0 10 10"><image href="' + PX + '" width="10" height="10"/></svg>' },
+    { name: 'foreignObject → refused', expectOk: false,
+      svg: NS + ' viewBox="0 0 10 10"><foreignObject width="5" height="5"></foreignObject></svg>' },
+    { name: 'external image href → refused', expectOk: false,
+      svg: NS + ' viewBox="0 0 10 10"><image href="https://example.com/x.png" width="5" height="5"/></svg>' },
+    { name: 'missing viewBox → refused', expectOk: false,
+      svg: NS + ' width="10" height="10"><rect width="10" height="10" fill="red"/></svg>' },
+    { name: 'script → refused', expectOk: false,
+      svg: NS + ' viewBox="0 0 10 10"><scr' + 'ipt>1</scr' + 'ipt></svg>' },
+    { name: '<style> @import → refused', expectOk: false,
+      svg: NS + ' viewBox="0 0 10 10"><style>@import url(http://x.com/a.css);</style></svg>' },
+    { name: '@font-face-only style → allowed (the embedding escape hatch)', expectOk: true,
+      svg: NS + ' viewBox="0 0 10 10"><style>@font-face{font-family:X;src:url(data:font/woff2;base64,AA==)}</style><rect width="10" height="10" fill="teal"/></svg>' },
+    { name: 'selector style → refused (would leak into the app)', expectOk: false,
+      svg: NS + ' viewBox="0 0 10 10"><style>.widget{display:none}</style></svg>' },
+    { name: '@font-face pulling an external font → refused', expectOk: false,
+      svg: NS + ' viewBox="0 0 10 10"><style>@font-face{font-family:X;src:url(https://x.com/f.woff)}</style></svg>' },
+    { name: 'on* script attribute → refused', expectOk: false,
+      svg: NS + ' viewBox="0 0 10 10"><rect width="10" height="10" onclick="1" fill="red"/></svg>' },
+    { name: 'root-element onload → refused', expectOk: false,
+      svg: NS + ' viewBox="0 0 10 10" onload="1"><rect width="10" height="10" fill="red"/></svg>' },
+  ];
+  const lintUl = document.getElementById('lints');
+  for (const f of badFixtures) {
+    const p = SP.plan(f.svg, { budget: 2 });
+    const pass = p.ok === f.expectOk && (!f.expectWarn || p.warnings.length > 0);
+    assert('lint: ' + f.name, pass,
+      'ok=' + p.ok + ' errors=[' + p.errors.join('; ') + '] warnings=' + p.warnings.length);
+    const li = document.createElement('li');
+    li.textContent = (pass ? '✓ ' : '✗ ') + f.name +
+      (p.errors.length ? ' — "' + p.errors[0] + '"' : '') +
+      (p.warnings.length ? ' — "' + p.warnings[0] + '"' : '');
+    li.style.color = pass ? '#14632a' : '#b91c1c';
+    lintUl.appendChild(li);
+  }
+
+  // ---- element input works as well as string input
+  const parsed = new DOMParser().parseFromString(SQUARE, 'image/svg+xml').documentElement;
+  assert('plan() accepts a live element', SP.plan(parsed, { budget: 2 }).ok);
+  assert('plan() defaults: budget 4, A4', (function () {
+    const p = SP.plan(SQUARE, {});
+    return p.ok && p.meta.budget === 4 && p.meta.paper === 'A4';
+  })());
+
+  // ---- built pages: the printable box holds the master and NOTHING a teacher
+  // is told to cut towards. Numbers, seam shapes and cut lines moved to the
+  // margin (buildFurniture); only the lap-mode glue strip may stay inside,
+  // because the sheet lapping over it genuinely covers it.
+  const host = document.createElement('div');
+  host.appendChild(SP.buildPages(A));
+  const pages = host.querySelectorAll('svg.sp-page');
+  assert('build: 4 pages', pages.length === 4, pages.length);
+  let uses = 0;
+  pages.forEach((pg) => { if (pg.querySelector('use')) uses++; });
+  assert('build: every page holds the master via <use>', uses === 4, uses);
+  assert('build: sheet 1 glue strips on right + bottom',
+    !!pages[0].querySelector('.sp-strip-right') && !!pages[0].querySelector('.sp-strip-down'));
+  assert('build: sheet 4 has no glue strips',
+    !pages[3].querySelector('.sp-strip-right') && !pages[3].querySelector('.sp-strip-down'));
+  // THE regression test for 2026-07-26: sheet 4's number printed 3mm above its
+  // own bottom edge with nothing lapping over it, and its turn arrow sat 2mm
+  // inside the edge that lies on top. Both landed on the finished wall.
+  assert('build: no numbers, arrows or map inside the printable box',
+    host.querySelectorAll('svg.sp-page .sp-num, svg.sp-page .sp-arrow, svg.sp-page .sp-map').length === 0,
+    host.querySelectorAll('svg.sp-page .sp-num, svg.sp-page .sp-arrow, svg.sp-page .sp-map').length + ' found');
+
+  // ---- sheet paper + margin furniture (§7)
+  function sheetsOf(plan) {
+    const h = document.createElement('div');
+    h.appendChild(SP.wrapSheets(SP.buildPages(plan), plan, { mm: true }));
+    return h;
+  }
+  const shost = sheetsOf(A);
+  const sheets = shost.querySelectorAll('.sp-sheet');
+  assert('sheets: 4 sheets of paper', sheets.length === 4, sheets.length);
+  assert('sheets: the shared master survives the wrap',
+    !!shost.querySelector('.sp-defs') && !shost.querySelector('.sp-sheet .sp-defs'));
+  assert('sheets: every sheet still holds its printable box',
+    shost.querySelectorAll('.sp-sheet > svg.sp-page').length === 4);
+  assert('sheets: every sheet carries edge furniture',
+    shost.querySelectorAll('.sp-sheet > svg.sp-furniture').length === 4);
+
+  const AP = SP.PAPERS[A.meta.paper];
+  const APW = A.meta.orientation === 'landscape' ? AP.h : AP.w;
+  const APH = A.meta.orientation === 'landscape' ? AP.w : AP.h;
+  assert('sheets: the printed sheet is exactly the paper',
+    sheets[0].style.width === APW + 'mm' && sheets[0].style.height === APH + 'mm'
+    && sheets[0].style.padding === SP.MARGIN + 'mm',
+    sheets[0].style.width + ' × ' + sheets[0].style.height);
+
+  const role = (host2, i, edge) => {
+    const el = host2.querySelectorAll('.sp-sheet')[i].querySelector('.sp-edge-' + edge);
+    return el ? (el.classList.contains('sp-role-cut') ? 'cut' : 'lap') : null;
+  };
+  // lapped: leading edges cut, trailing edges lapped, outer edges untouched
+  assert('lap edges: sheet 1 — right/bottom lap, no cuts',
+    role(shost, 0, 'right') === 'lap' && role(shost, 0, 'bottom') === 'lap'
+    && !role(shost, 0, 'left') && !role(shost, 0, 'top'));
+  assert('lap edges: sheet 4 — left/top cut, no outer marks',
+    role(shost, 3, 'left') === 'cut' && role(shost, 3, 'top') === 'cut'
+    && !role(shost, 3, 'right') && !role(shost, 3, 'bottom'));
+
+  // butted: every interior edge cut, outer edges still untouched
+  const BB = SP.plan(MAT, { budget: 4, paper: 'A4', assembly: 'butt' });
+  const bhost2 = sheetsOf(BB);
+  assert('butt edges: sheet 1 — right + bottom cut',
+    role(bhost2, 0, 'right') === 'cut' && role(bhost2, 0, 'bottom') === 'cut'
+    && !role(bhost2, 0, 'left') && !role(bhost2, 0, 'top'));
+  assert('butt edges: sheet 4 — left + top cut',
+    role(bhost2, 3, 'left') === 'cut' && role(bhost2, 3, 'top') === 'cut'
+    && !role(bhost2, 3, 'right') && !role(bhost2, 3, 'bottom'));
+  assert('butt edges: an outer edge is never marked — leave that paper alone',
+    bhost2.querySelectorAll('.sp-sheet')[0].querySelectorAll('.sp-edge').length === 2);
+
+  // cut lines land exactly on the content boundary: cutting removes white only
+  const cutAt = (h2, i, edge, attr) => {
+    const l = h2.querySelectorAll('.sp-sheet')[i].querySelector('.sp-cut-' + edge);
+    return l ? +l.getAttribute(attr) : null;
+  };
+  assert('cut lines sit exactly on the content boundary, never in the writing',
+    cutAt(bhost2, 3, 'left', 'x1') === SP.MARGIN
+    && cutAt(bhost2, 3, 'top', 'y1') === SP.MARGIN
+    && cutAt(bhost2, 0, 'right', 'x1') === APW - SP.MARGIN
+    && cutAt(bhost2, 0, 'bottom', 'y1') === APH - SP.MARGIN,
+    [cutAt(bhost2, 3, 'left', 'x1'), cutAt(bhost2, 3, 'top', 'y1'),
+      cutAt(bhost2, 0, 'right', 'x1'), cutAt(bhost2, 0, 'bottom', 'y1')].join(','));
+
+  // the IKEA rule: every mark lives in a margin band, so the cut removes it all
+  function marksInMargins(h2, pw, ph) {
+    let bad = 0;
+    h2.querySelectorAll('.sp-furniture .sp-seam, .sp-furniture .sp-num').forEach((g) => {
+      const m = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(g.getAttribute('transform') || '');
+      if (!m) { bad++; return; }
+      const x = +m[1], y = +m[2];
+      const inBand = x <= SP.MARGIN || x >= pw - SP.MARGIN
+        || y <= SP.MARGIN || y >= ph - SP.MARGIN;
+      if (!inBand) bad++;
+    });
+    return bad;
+  }
+  assert('every seam shape and number sits in a margin band (lapped)',
+    marksInMargins(shost, APW, APH) === 0, marksInMargins(shost, APW, APH) + ' stray');
+  assert('every seam shape and number sits in a margin band (butted)',
+    marksInMargins(bhost2, APW, APH) === 0, marksInMargins(bhost2, APW, APH) + ' stray');
+  assert('every sheet is numbered, once, out in the margin',
+    shost.querySelectorAll('.sp-furniture .sp-num').length === 4,
+    shost.querySelectorAll('.sp-furniture .sp-num').length);
+
+  // matching shapes pair the two halves of a seam — the whole point of the
+  // language: find a shape, look for its twin, no reading required
+  function seamShape(h2, i, edge) {
+    const g = h2.querySelectorAll('.sp-sheet')[i].querySelector('.sp-edge-' + edge + ' .sp-seam');
+    const s = g && g.firstChild;
+    return s ? s.nodeName + '|' + (s.getAttribute('points') || s.getAttribute('r') || s.getAttribute('width')) : null;
+  }
+  assert('seam shapes match across the vertical seam (sheet 1 right = sheet 2 left)',
+    seamShape(bhost2, 0, 'right') && seamShape(bhost2, 0, 'right') === seamShape(bhost2, 1, 'left'),
+    seamShape(bhost2, 0, 'right') + ' vs ' + seamShape(bhost2, 1, 'left'));
+  assert('seam shapes match across the horizontal seam (sheet 1 bottom = sheet 3 top)',
+    seamShape(bhost2, 0, 'bottom') && seamShape(bhost2, 0, 'bottom') === seamShape(bhost2, 2, 'top'),
+    seamShape(bhost2, 0, 'bottom') + ' vs ' + seamShape(bhost2, 2, 'top'));
+  assert('a sheet never shows the same shape on two different seams',
+    (function () {
+      const seen = {};
+      for (const e of ['left', 'top', 'right', 'bottom']) {
+        const s = seamShape(bhost2, 0, e) || seamShape(bhost2, 3, e);
+      }
+      for (let i = 0; i < 4; i++) {
+        const shapes = ['left', 'top', 'right', 'bottom'].map((e) => seamShape(bhost2, i, e)).filter(Boolean);
+        if (new Set(shapes).size !== shapes.length) return false;
+      }
+      return true;
+    })());
+
+  // direction, and which method this sheet is printed for. "GLUE → 2" on the
+  // receiving edge read as "glue this onto 2" when it meant "2 lands here" —
+  // a teacher following it literally inverts the lap order (Glenn, 2026-07-26).
+  function edgeText(h2, i, edge) {
+    const t = h2.querySelectorAll('.sp-sheet')[i].querySelector('.sp-edge-' + edge + ' .sp-seam text');
+    return t ? t.textContent : null;
+  }
+  assert('lap wording: the cut edge says where it GOES',
+    edgeText(shost, 1, 'left') === 'CUT → 1', edgeText(shost, 1, 'left'));
+  assert('lap wording: the receiving edge says what ARRIVES on it',
+    edgeText(shost, 0, 'right') === '2 ON TOP', edgeText(shost, 0, 'right'));
+  assert('lap wording: no mark ever reads as glue-this-onto-that',
+    !/GLUE →/.test(shost.textContent), 'found "GLUE →"');
+  assert('butt wording: both halves of a seam say cut',
+    edgeText(bhost2, 0, 'right') === 'CUT → 2' && edgeText(bhost2, 1, 'left') === 'CUT → 1');
+  assert('every sheet names the method it is printed for',
+    Array.from(shost.querySelectorAll('.sp-furniture .sp-num text'))
+      .every((t) => t.textContent.indexOf('overlap & glue') !== -1)
+    && Array.from(bhost2.querySelectorAll('.sp-furniture .sp-num text'))
+      .every((t) => t.textContent.indexOf('trim & tape') !== -1),
+    shost.querySelector('.sp-furniture .sp-num text').textContent);
+
+  // preview mode: proportional, so the dialog shows the same paper the printer does
+  const phost = document.createElement('div');
+  phost.appendChild(SP.wrapSheets(SP.buildPages(A), A, { mm: false }));
+  const psheets = phost.querySelectorAll('.sp-sheet');
+  assert('preview: sheets are fluid but keep the paper aspect',
+    psheets[0].style.width === '100%'
+    && psheets[0].style.aspectRatio.replace(/\s/g, '') === APW + '/' + APH,
+    psheets[0].style.aspectRatio);
+  assert('preview: the inset is the same fraction of the sheet',
+    Math.abs(parseFloat(psheets[0].style.padding) - SP.MARGIN / APW * 100) < 1e-3,
+    psheets[0].style.padding);
+  assert('preview: furniture rides along, so the dialog shows the cut marks',
+    phost.querySelectorAll('.sp-sheet > svg.sp-furniture').length === 4);
+
+  // ---- assembly models (§7): butt is the default now
+  const AB = SP.plan(MAT, { budget: 4, paper: 'A4', assembly: 'butt' });
+  assert('assembly: the default is butt (trim & tape)',
+    SP.plan(MAT, { budget: 4, paper: 'A4' }).meta.assembly === 'butt',
+    SP.plan(MAT, { budget: 4, paper: 'A4' }).meta.assembly);
+  assert('assembly: lap still means a 12mm overlap',
+    A.meta.assembly === 'lap' && A.meta.overlap === 12, A.meta.overlap);
+  assert('assembly: butt plans ok with zero overlap',
+    AB.ok && AB.meta.assembly === 'butt' && AB.meta.overlap === 0, AB.meta && AB.meta.overlap);
+  coverageChecks('mat butted', AB);
+  assert('assembly: butting makes a bigger poster from the same sheets',
+    AB.ok && AB.meta.sheets === A.meta.sheets
+    && AB.meta.finished.w > A.meta.finished.w
+    && AB.meta.finished.h > A.meta.finished.h,
+    Math.round(AB.meta.finished.w) + '×' + Math.round(AB.meta.finished.h)
+    + ' vs ' + Math.round(A.meta.finished.w) + '×' + Math.round(A.meta.finished.h));
+  assert('assembly: butted crops are contiguous, never duplicated',
+    AB.ok && approx(AB.pages[1].crop.x - AB.pages[0].crop.x, AB.meta.pw, 1e-6));
+  const bhost = document.createElement('div');
+  bhost.appendChild(SP.buildPages(AB));
+  assert('assembly: butted sheets draw no glue strips',
+    !bhost.querySelector('.sp-strip-right') && !bhost.querySelector('.sp-strip-down'));
+
+  // ---- multi-page jobs (§4.6): pages the teacher ticks, one job
+  const M1 = SP.plan(MAT, { budget: 4, paper: 'A4', assembly: 'butt', label: 'Page 1' });
+  const M2 = SP.plan(SQUARE, { budget: 4, paper: 'A4', assembly: 'butt', label: 'Page 2',
+    orientation: M1.meta.orientation });
+  assert('job: a page carries its label into meta', M1.meta.label === 'Page 1', M1.meta.label);
+  assert('job: a single-page job has no label to carry',
+    SP.plan(MAT, { budget: 4 }).meta.label === null);
+  // every page prints into one @page box, so one orientation rules the job
+  assert('job: orientation can be forced so pages agree',
+    M2.meta.orientation === M1.meta.orientation,
+    M1.meta.orientation + ' vs ' + M2.meta.orientation);
+  assert('job: forcing orientation still plans a real grid',
+    M2.ok && M2.meta.sheets >= 1 && M2.meta.scale > 0, M2.meta.sheets);
+  // the page must be on every sheet: 3 pages x 4 sheets lands 12 sheets on a
+  // table at once, and without it the pile cannot be sorted
+  const mhost = document.createElement('div');
+  mhost.appendChild(SP.wrapSheets(SP.buildPages(M1), M1, { mm: true }));
+  const mline = mhost.querySelector('.sp-furniture .sp-num text').textContent;
+  assert('job: the page leads the sheet line', mline.indexOf('PAGE 1 · SHEET 1 of 4') === 0, mline);
+  const shost1 = document.createElement('div');
+  shost1.appendChild(SP.wrapSheets(SP.buildPages(A), A, { mm: true }));
+  assert('job: a one-page job names no page',
+    shost1.querySelector('.sp-furniture .sp-num text').textContent.indexOf('PAGE') === -1,
+    shost1.querySelector('.sp-furniture .sp-num text').textContent);
+  // the sheet line shrinks to clear the seam marks rather than growing into them
+  const fs = (h2) => +h2.querySelector('.sp-furniture .sp-num text').getAttribute('font-size');
+  assert('job: the longer line shrinks to fit, never overruns the marks',
+    fs(mhost) <= fs(shost1) && fs(mhost) >= 2.8, fs(mhost) + ' vs ' + fs(shost1));
+  // one print root, every page's sheets in order, a single @page rule
+  const root = SP.buildPrintRoot([M1, M2], true);
+  assert('job: one root holds every page’s sheets',
+    root.querySelectorAll('.sp-sheet').length === M1.meta.sheets + M2.meta.sheets,
+    root.querySelectorAll('.sp-sheet').length);
+  assert('job: exactly one @page rule for the whole job',
+    root.querySelectorAll('style').length === 1);
+  assert('job: buildPrintRoot still takes a bare plan',
+    SP.buildPrintRoot(M1, true).querySelectorAll('.sp-sheet').length === M1.meta.sheets);
+  assert('job: the readout totals the sheets that will actually print',
+    SP.describeJob([M1, M2]).indexOf('2 pages · ' + (M1.meta.sheets + M2.meta.sheets) + ' sheets') === 0,
+    SP.describeJob([M1, M2]));
+  assert('job: one ticked page reads as a single poster, not a job',
+    SP.describeJob([M1]) === SP.describe(M1), SP.describeJob([M1]));
+
+  // ---- report
+  const ol = document.getElementById('asserts');
+  let passed = 0;
+  for (const r of results) {
+    const li = document.createElement('li');
+    li.className = r.pass ? 'pass' : 'fail';
+    li.innerHTML = '';
+    li.appendChild(document.createTextNode(r.name));
+    if (r.detail !== '' && r.detail != null) {
+      const s = document.createElement('span');
+      s.className = 'detail';
+      s.textContent = ' — ' + r.detail;
+      li.appendChild(s);
+    }
+    ol.appendChild(li);
+    if (r.pass) passed++;
+  }
+  const sum = document.getElementById('summary');
+  sum.textContent = passed + ' / ' + results.length + ' checks passed';
+  sum.className = passed === results.length ? 'pass' : 'fail';
+
+  // ---- visual grids: what each sheet actually shows
+  function show(plan, mountId, readoutId) {
+    if (!plan.ok) return;
+    document.getElementById(readoutId).textContent = SP.describe(plan);
+    const mount = document.getElementById(mountId);
+    mount.style.gridTemplateColumns = 'repeat(' + plan.meta.cols + ', auto)';
+    mount.appendChild(SP.buildPages(plan));
+  }
+  show(A, 'jobA', 'readoutA');
+  show(B, 'jobB', 'readoutB');
+})();
+</script>
+</body>
+</html>
