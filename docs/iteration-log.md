@@ -3249,3 +3249,24 @@ teaching backdrop is set on the stage — Background, in the dock.
 Checked: three dock stages live-measured; SagePrint 91/91; no console
 errors. Versions: style.css v90, app.js v56. Soft Daylight is now fully
 landed except rewards evolution, which waits for a real pedagogical want.
+
+## 2026-07-27 (later still) — The colour scheme Glenn remembered
+
+Glenn: "Are these the colours that were in the design? I'm sure the whole
+colour scheme was different." He was right, and the tokens were innocent —
+a value-by-value diff against TOKENS.md shows every colour shipped verbatim
+(bar the two documented contrast fixes). What differed was the GROUND: the
+dashboard's default wallpaper was still the pre-redesign pink→periwinkle
+gradient, showing through the hybrid chrome and painting the whole first
+impression, while the design's page ground is calm mint. The redesign changed
+the furniture and forgot to change the floor.
+
+Fix, on Glenn's call: the Soft Daylight mint gradient
+(165deg #eaf7f4→#ccfbf1) is the dashboard default, added to the wallpaper
+picker, and named as a constant (DASH_BG_DEFAULT) instead of the fragile
+gradients[6] index. States still carrying the old pink verbatim never made a
+wallpaper choice, so normalize() migrates them; anything else was chosen on
+purpose and stays. Verified: pink boots to mint; a chosen purple gradient and
+a chosen solid colour both survive; the mint swatch shows active in the tab.
+The stage's dark teal is untouched — that difference from the prototype
+remains deliberate. app.js v57.

@@ -88,8 +88,11 @@
       'linear-gradient(160deg,#0f172a,#334155 60%,#94a3b8)',
       'linear-gradient(140deg,#fdf2f8,#fbcfe8 50%,#c7d2fe)',
       'linear-gradient(140deg,#ecfeff,#a5f3fc 55%,#fef9c3)',
+      'linear-gradient(165deg,#eaf7f4,#ccfbf1)', // the Soft Daylight ground — the dashboard's default
     ],
     colors: ['#0f766e', '#1d4ed8', '#7c3aed', '#be185d', '#b45309', '#166534', '#1f2937', '#f8fafc', '#fef3c7', '#e0f2fe'],
+    // (named, not indexed: normalize() migrates on the OLD default's exact value,
+    // so these strings must never drift from the list above)
     // Curated Unsplash photo ids, hotlinked from images.unsplash.com (free under the
     // Unsplash license, no API key). Same id serves thumbnail and full size via URL params.
     photos: [
@@ -128,6 +131,11 @@
   const bgPhotoUrl = (id, w, q) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=${q}`;
 
   // tools shown on the main bar by default; the rest live in the "More" panel
+  // dashboard ground: the Soft Daylight mint is the default; the pink one was
+  // the default before the redesign and is what untouched states migrate FROM
+  const DASH_BG_DEFAULT = 'linear-gradient(165deg,#eaf7f4,#ccfbf1)';
+  const OLD_DASH_BG_DEFAULT = 'linear-gradient(140deg,#fdf2f8,#fbcfe8 50%,#c7d2fe)';
+
   const DEFAULT_PINNED = ['background', 'sketch', 'text', 'clock', 'timer', 'traffic', 'picker', 'poll', 'sound', 'image'];
 
   function blankDeck(name) {
@@ -196,7 +204,13 @@
     if (!data.defaults || typeof data.defaults !== 'object') data.defaults = {};
     if (!data.lists || typeof data.lists !== 'object') data.lists = {};
     if (!data.dashBg || typeof data.dashBg !== 'object' || !data.dashBg.value) {
-      data.dashBg = { type: 'gradient', value: BACKGROUNDS.gradients[6] };
+      data.dashBg = { type: 'gradient', value: DASH_BG_DEFAULT };
+    }
+    // The pink gradient was the pre-redesign default; a state still carrying it
+    // verbatim never made a wallpaper choice, so it follows the design onto the
+    // Soft Daylight ground. Anything else was chosen on purpose and stays.
+    if (data.dashBg.type === 'gradient' && data.dashBg.value === OLD_DASH_BG_DEFAULT) {
+      data.dashBg = { type: 'gradient', value: DASH_BG_DEFAULT };
     }
     if (typeof data.className !== 'string') data.className = '';
     if (typeof data.mascotImage !== 'string' || !data.mascotImage.startsWith('data:image/')) data.mascotImage = '';
