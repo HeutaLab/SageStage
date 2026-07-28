@@ -105,7 +105,12 @@
   // mid-clause, and says so, rather than losing the tail silently.
   function gtCleanText(v) {
     let s = typeof v === 'string' ? v : '';
-    s = s.replace(/\r\n?/g, '\n').replace(/[\t\v\f ]/g, ' ').replace(GT_BAD_CH, '');
+    // trimmed on BOTH branches (the clipped one always was): an untrimmed
+    // whitespace-only string is truthy but tokenises to nothing, which put the
+    // widget on the "a model text is in" path showing an empty board instead of
+    // the paste target, and made the print page count a sheet nothing built.
+    // Only the ends go — a poem's interior line breaks are its form.
+    s = s.replace(/\r\n?/g, '\n').replace(/[\t\v\f ]/g, ' ').replace(GT_BAD_CH, '').trim();
     if (s.length <= GT_CAP.text) return { text: s, clipped: false };
     const cut = s.slice(0, GT_CAP.text);
     const stop = Math.max(cut.lastIndexOf('.'), cut.lastIndexOf('!'), cut.lastIndexOf('?'));
@@ -673,6 +678,36 @@
     return gtSvg(parts.join(''), Math.max(y + GT_PAD, 300));
   }
 
+  // Which sheets exist, and in what order — decided in ONE place, because
+  // `toPrintablePages` and `printCurrent` both need the answer and they used to
+  // work it out separately. printCurrent restated the presence tests as its own
+  // arithmetic and got one of them looser than the builder's: it counted a Model
+  // text sheet whenever `text` was truthy, while gtTextSvg also requires the
+  // text to tokenise to something. A whitespace-only model text from a
+  // hand-authored pack therefore shifted every later index by one, and on the
+  // word bank face with a modelwrite sibling supplying Cold and Hot it
+  // pre-ticked "Cold task" instead of the word bank — silently, because
+  // print.js clamps the index into range.
+  //
+  // Each predicate below is the same condition its builder guards on. The
+  // builders keep their own guards; this is the list, not a replacement for
+  // them.
+  const GT_PAGES = [
+    ['poster', 'Success criteria', gtPosterSvg],
+    ['text', 'Model text', gtTextSvg],
+    ['bank', 'Word bank', gtBankSvg],
+  ];
+  function gtPageKinds(p) {
+    const g = p && p.genre;
+    if (!g) return [];
+    const kinds = [];
+    if ((p.revealed || []).some((id) => (g.items || []).some((it) => it.id === id))) kinds.push('poster');
+    if (p.text && gtTokens(p.text).length) kinds.push('text');
+    if (gtHasBank(g)) kinds.push('bank');
+    return kinds;
+  }
+  const GT_FACE_PAGE = { list: 'poster', text: 'text', bank: 'bank' };
+
   // §11: the Cold and Hot pages join the list when a modelwrite widget on THIS
   // screen carries both bookends. A read plus a public method — modelwrite gains
   // no knowledge of this widget. The widget's own id finds its screen exactly;
@@ -796,28 +831,25 @@
       }),
       toPrintablePages(w) {
         const p = w.props;
-        if (!p.genre) return [];
         const pages = [];
-        const poster = gtPosterSvg(p);
-        if (poster) pages.push({ svg: poster, label: 'Success criteria' });
-        const text = gtTextSvg(p);
-        if (text) pages.push({ svg: text, label: 'Model text' });
-        const bank = gtBankSvg(p);
-        if (bank) pages.push({ svg: bank, label: 'Word bank' });
+        // built FROM gtPageKinds, so the list printCurrent indexes into and the
+        // list the dialog shows are the same list, in the same order
+        for (const kind of gtPageKinds(p)) {
+          const row = GT_PAGES.find((r) => r[0] === kind);
+          const svg = row && row[2](p);
+          if (svg) pages.push({ svg, label: row[1] });
+        }
         for (const pg of gtColdHotPages(w)) pages.push(pg);
         return pages;
       },
       // One page ticked — SagePrint's paper-waste principle (print.js:751) —
       // and it is the CURRENT face's sheet: the screen is already the control.
-      // Index arithmetic mirrors toPrintablePages' order; a stale face falls
-      // back to 0 and the dialog clamps out-of-range anyway.
+      // Same shape as modelwrite's (modelwrite.js:929): find the page in the
+      // list, fall back to the first one. No arithmetic to drift.
       printCurrent(w) {
         const p = w.props || {};
-        const poster = p.genre && (p.revealed || []).length ? 1 : 0;
-        const text = p.genre && p.text ? 1 : 0;
-        if (p.face === 'text' && text) return poster;
-        if (p.face === 'bank' && gtHasBank(p.genre)) return poster + text;
-        return 0;
+        const i = gtPageKinds(p).indexOf(GT_FACE_PAGE[p.face] || 'poster');
+        return i < 0 ? 0 : i;
       },
 
       mount(body, w, api) {

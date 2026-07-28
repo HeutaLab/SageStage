@@ -5660,12 +5660,31 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
 .gt-covered .gt-word { color: transparent; background: rgba(34, 48, 60, .13); border-radius: 6px; }
 
 /* ---- model text face ---- */
-.gt-chips { display: flex; flex-wrap: wrap; gap: 4px; flex-shrink: 0; }
+/* Since the chips stopped ellipsizing they wrap, and a flex-shrink:0 strip
+   with no ceiling grows without bound — twenty revealed criteria measured
+   1016px of chips on a 510px face, which left .gt-text (flex:1, min-height:0)
+   at its padding and took away the model text, the entire point of this face.
+   The ceiling is a share of the face rather than a row count, so a whole
+   unit's criteria still show on a big widget and a small one still keeps its
+   text; past it the strip scrolls rather than pushing. */
+.gt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex-shrink: 0;
+  max-height: 42%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .gt-chips-none { font-size: 13px; color: #64748b; padding: 3px 2px; }
 /* The chips are the class's learning intentions in surrogate — they read in
    full or they aren't doing their job. Wrap, never ellipsize. */
 .gt-chip {
   white-space: normal;
+  /* a hand-authored pack can hold a 200-character criterion with no space in
+     it; without this the chip renders wider than the face and scrolls the
+     whole thing sideways */
+  overflow-wrap: anywhere;
   text-align: left;
   line-height: 1.3;
   padding: 5px 12px;

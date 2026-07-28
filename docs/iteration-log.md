@@ -3464,3 +3464,53 @@ while the Clock's menu correctly has 9 and no print); dialog header reads
 the text face. Computed backgrounds confirm the split — modelwrite
 rgb(15,118,110) solid, toolkit rgba(15,118,110,.1). No console errors.
 app.js v58, print.js v14, english-text.js v7, style.css v93.
+
+## 2026-07-28 (late night) — The two the audit found, fixed at the root
+
+Both items Glenn held over from the print audit.
+
+**The wrong-sheet bug.** printCurrent had been computing its index with its own
+arithmetic, restating the presence tests that toPrintablePages' page builders
+guard on — and one restatement was looser than the guard it mirrored. It
+counted a Model text sheet whenever p.text was truthy; gtTextSvg also requires
+the text to tokenise to something. gtCleanText never trimmed on its non-clipped
+path, so a pack whose "model" is a blank line or a stray space survived as a
+truthy zero-token string, and every page index after position 0 was off by one.
+Usually invisible because print.js clamps the index into range and lands right
+by accident — but with a modelwrite sibling contributing Cold and Hot, the word
+bank face pre-ticked **Cold task**. Silent: no toast, nothing to notice until a
+teacher collected the wrong sheet from the printer.
+
+Fixed at both ends. gtCleanText now trims on both branches (ends only — a
+poem's interior line breaks are its form; marks are token indices, and trimming
+leading whitespace changes only toks[0].pre, never the count or order). And the
+page list moved into one place: gtPageKinds decides which sheets exist and in
+what order, toPrintablePages builds FROM it, and printCurrent indexes INTO it —
+which lands on modelwrite's own shape (find the page, fall back to the first;
+modelwrite.js:929), reached from the other direction. There is no arithmetic
+left to drift. Proved headless over 768 states (bank × six texts including four
+whitespace flavours × four reveal sets × four faces including a bogus one ×
+Cold/Hot × pre/post mount coercion): the ticked page is always the current
+face's sheet, or page 0 when that face has none. The harness also runs the OLD
+arithmetic on the regression case and shows it picking "Cold task" where the
+new code picks "Word bank".
+
+**The chip strip.** Once chips stopped ellipsizing they wrapped, and a
+flex-shrink:0 strip with no ceiling grows without bound: twenty criteria at the
+200-character cap measured 1016px of chips on a 510px face, leaving .gt-text
+(flex:1, min-height:0) at its padding — the model text gone, on the face whose
+whole point is the model text. "Resize to fit" could not recover it either,
+since it sizes to a scrollHeight that already counts the text as collapsed.
+The ceiling is now a share of the face (42%) rather than a row count, so a big
+widget still shows a whole unit's criteria and a small one still keeps its
+text; past it the strip scrolls rather than pushes. A first cut at a fixed 98px
+(~3 rows) was rejected on measurement: Poetry with all fifteen revealed needs
+238px, so a real end-of-unit board would have scrolled. At 42% that case shows
+214px and scrolls by 24px. Also added overflow-wrap:anywhere — a hand-authored
+200-character criterion with no spaces in it rendered a chip wider than the
+face and scrolled the whole thing sideways; it now wraps inside it (measured:
+widest chip 794px against a 794px face, no sideways scroll anywhere).
+
+Verified live across all three: worst case, realistic full unit, and normal use
+with the word bank face pre-ticking the word bank sheet. No console errors.
+english-text.js v8, style.css v95.
