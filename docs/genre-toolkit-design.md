@@ -417,14 +417,28 @@ option UI. The pages, in order:
 | # | Sheet | Present when |
 | --- | --- | --- |
 | 0 | Success criteria | always |
-| 1 | Word bank | the word bank face is available (§8.5) |
-| 2+ | Cold task, Hot task | a `modelwrite` widget on the same screen carries both |
+| 1 | Model text | a model text is in (added 2026-07-28, Glenn's call) |
+| 2 | Word bank | the word bank face is available (§8.5) |
+| 3+ | Cold task, Hot task | a `modelwrite` widget on the same screen carries both |
 
-`printCurrent(w)` returns `0`, so the criteria poster is the one ticked when the
-dialog opens. **Everything else is one tick away rather than ticked** — SagePrint
-ticks a single page on purpose, because "paper waste is the point of the feature,
-so the safe default prints least" (`print.js:751`), and a widget that quietly
-queued four sheets would be arguing with that.
+`printCurrent(w)` ticks ONE page — SagePrint's paper-waste principle: "paper
+waste is the point of the feature, so the safe default prints least"
+(`print.js:751`), and a widget that quietly queued four sheets would be arguing
+with that. Since 2026-07-28 the ticked page is **the current face's sheet**
+(text face → Model text, bank face → Word bank, otherwise the criteria
+poster) — the screen is already the control. **Everything else is one tick away
+rather than ticked.**
+
+**The model text sheet (`gtTextSvg`, 2026-07-28):** the marked-up WAGOLL
+itself — the class spent a session finding the evidence, and the sheet is that
+work. Source line breaks are hard breaks (a poem's line breaks ARE the form), a
+blank source line prints as a stanza gap, and wrapping happens only where the
+source had a space, against measured widths, so punctuation stays glued to its
+word. Highlights paint behind their runs under the same gap rule the screen and
+the snippets use — the gap between two tokens is painted only when one mark
+covers both sides. Below a divider, a colour key: swatch + full criterion
+wording, reveal order first, and only for criteria that actually have marks —
+the sheet has to stand alone on the wall without the poster beside it.
 
 Live `<text>` with `font-family="system-ui, sans-serif"`, matching
 `modelwrite.js:618` — vector, no webfont dependency, no raster, and no `<image>`
