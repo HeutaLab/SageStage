@@ -31,6 +31,53 @@
   // set returns null, which means "offer every band" rather than "offer none".
   const GT_YEAR_BAND = { R: 'ks1', 1: 'ks1', 2: 'ks1', 3: 'lks2', 4: 'lks2', 5: 'uks2', 6: 'uks2' };
   const gtBandFor = (yg) => GT_YEAR_BAND[String(yg == null ? '' : yg)] || null;
+
+  // Picker identity: each default genre wears a solid Soft Daylight tint (t, the
+  // GT_COLS register extended to twelve) with a deep same-hue ink (k) stroking a
+  // little specimen of the text-form itself — an envelope, a comedy mask, a
+  // quill. The hues are laid out so no two neighbours in the 4-across grid
+  // share a family; newspaper is deliberately the one newsprint-grey card.
+  // Colour is looked up by pack id and never stored: an imported or renamed
+  // genre falls back to the neutral card, and position never carries meaning.
+  const GT_LOOK = {
+    'narrative': { t: '#ddd6fe', k: '#6d28d9' },
+    'recount': { t: '#fde68a', k: '#b45309' },
+    'diary': { t: '#fbcfe8', k: '#be185d' },
+    'letter': { t: '#bae6fd', k: '#0369a1' },
+    'instructions': { t: '#fed7aa', k: '#c2410c' },
+    'explanation': { t: '#99f6e4', k: '#0f766e' },
+    'non-chronological-report': { t: '#d9f99d', k: '#4d7c0f' },
+    'persuasion': { t: '#fecaca', k: '#b91c1c' },
+    'newspaper-report': { t: '#e2e8f0', k: '#475569' },
+    'playscript': { t: '#f5d0fe', k: '#a21caf' },
+    'poetry': { t: '#c7d2fe', k: '#4338ca' },
+    'book-review': { t: '#a7f3d0', k: '#047857' },
+  };
+  // Drawn in the icons.js idiom: 24×24, stroke 1.7, round caps, honest geometry.
+  const GT_ART = {
+    'narrative': '<path d="M12 6.3C10.2 4.9 7.6 4.5 4.5 4.8v13.7c3.1-.3 5.7.1 7.5 1.5 1.8-1.4 4.4-1.8 7.5-1.5V4.8c-3.1-.3-5.7.1-7.5 1.5z"/><path d="M12 6.3v13.7"/>',
+    'recount': '<circle cx="4.5" cy="19.5" r="1.3" fill="currentColor" stroke="none"/><path d="M4.5 19.5c7 0 3.5-7 9.5-7 4.5 0 3.5-5 5.5-6" stroke-dasharray="2.6 2.8"/><path d="M19.5 3.8v5.7"/><path d="M19.5 4l-3 .9 3 1.2"/>',
+    'diary': '<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M8.7 3.5v17"/><path d="M14 9.3c-.8-.9-2.3-.6-2.3.7 0 1 1.2 1.9 2.3 2.7 1.1-.8 2.3-1.7 2.3-2.7 0-1.3-1.5-1.6-2.3-.7z"/>',
+    'letter': '<rect x="3.5" y="6" width="17" height="12" rx="1.8"/><path d="M4.8 7.5L12 12.8l7.2-5.3"/>',
+    'instructions': '<circle cx="5.2" cy="6" r="1.7"/><circle cx="5.2" cy="12" r="1.7"/><path d="M9.5 6h10M9.5 12h10M9.5 18h6.5"/><path d="M3.7 18.1l1 1.1 1.9-2.2"/>',
+    'explanation': '<path d="M6.3 9.2a6.6 6.6 0 0 1 11.2-2.3"/><path d="M17.8 3.4v3.6h-3.6"/><path d="M17.7 14.8a6.6 6.6 0 0 1-11.2 2.3"/><path d="M6.2 20.6v-3.6h3.6"/>',
+    'non-chronological-report': '<circle cx="10.2" cy="9.8" r="5.8"/><path d="M14.5 14.1l5 5"/><path d="M7.8 8.4h4.8M7.8 11.2h3.4"/>',
+    'persuasion': '<path d="M14.5 5v13l-7-3.4H5a1.6 1.6 0 0 1-1.6-1.6v-3A1.6 1.6 0 0 1 5 8.4h2.5L14.5 5z"/><path d="M17.6 9.3a4 4 0 0 1 0 5.4"/><path d="M19.9 7.4a7 7 0 0 1 0 9.2"/>',
+    'newspaper-report': '<rect x="3.5" y="4.5" width="17" height="15" rx="1.6"/><path d="M6.3 8h11.4"/><path d="M6.3 11.2h5.2M6.3 13.8h5.2M6.3 16.4h5.2"/><rect x="13.7" y="10.9" width="3.9" height="5.6"/>',
+    'playscript': '<path d="M5.5 4.6c4.2 1.4 8.8 1.4 13 0v7.2a6.5 6.5 0 0 1-13 0z"/><path d="M8.8 9.4c.6-.7 1.7-.7 2.3 0M12.9 9.4c.6-.7 1.7-.7 2.3 0"/><path d="M9 13c1.7 1.5 4.3 1.5 6 0"/>',
+    'poetry': '<path d="M19 4.6C13.6 4.6 8.4 8.6 6.9 14.6L5.8 19.4"/><path d="M19 4.6c.9 5.6-2.8 10.4-8.7 11.2"/><path d="M9.3 11.9h4.4M7.9 15h3.5"/>',
+    'book-review': '<rect x="4.5" y="5.5" width="12.5" height="15" rx="1.8"/><path d="M7.5 5.5v15"/><path d="M17.8 2.6l.8 1.7 1.9.3-1.4 1.3.3 1.9-1.6-.9-1.7.9.3-1.9-1.3-1.3 1.9-.3z" fill="currentColor" stroke="none"/>',
+  };
+  const GT_ART_FALLBACK = '<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4.5"/>';
+  const gtLook = (id) => GT_LOOK[id] || { t: 'rgba(255,255,255,.6)', k: '#64748b' };
+  function gtArtEl(id) {
+    // D.el, not a bare el — top-level helpers sit outside register()'s
+    // destructure, the mount guard would swallow the ReferenceError silently
+    const s = D.el('span', { class: 'gt-pick-art', 'aria-hidden': 'true' });
+    s.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+      + 'stroke-linecap="round" stroke-linejoin="round">' + (GT_ART[id] || GT_ART_FALLBACK) + '</svg>';
+    return s;
+  }
   const gtBandName = (id) => (GT_BANDS.find((b) => b[0] === id) || [null, ''])[1];
 
   // Eight pale fills, drawn from the accents already in use across the set: each
@@ -745,8 +792,10 @@
           const grid = el('div', { class: 'gt-pick' });
           for (const def of gtDefaults()) {
             const words = GT_LANG.reduce((n, [k]) => n + (def.language[k] || []).length, 0);
+            const look = gtLook(def.id);
             grid.append(el('button', {
               class: 'gt-pick-card',
+              style: '--gt-tint:' + look.t + ';--gt-ink:' + look.k,
               onclick: () => {
                 p.genre = def;
                 p.src = def.id;
@@ -755,6 +804,7 @@
                 api.refresh();
               },
             },
+            gtArtEl(def.id),
             el('span', { class: 'gt-pick-name' }, def.name),
             el('span', { class: 'gt-pick-sub' }, def.items.length + ' criteria · ' + words + ' words')));
           }

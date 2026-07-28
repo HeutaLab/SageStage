@@ -3342,3 +3342,34 @@ Diary's checklist walk and word-bank face, the settings genre row at twelve
 chips, the swap confirm wiping reveals on the way to Playscript, its checklist
 rendering with colours. No console errors. english-packs.js v4;
 genre-toolkit-design.md §2/§13 updated.
+
+## 2026-07-28 (later still) — The genre picker learns to dress for children
+
+Glenn, on the twelve grey-white picker cards: "colour and appeal needs to
+sharpen drastically. Sure, it's a classroom tool but it's still student
+facing." Fair — the picker read as a settings dialog.
+
+The redesign: every genre now wears a solid Soft Daylight tint with a
+deep-ink drawing of its own text-form on it — an envelope on the sky-blue
+Letter, a comedy mask on fuchsia Playscript, a quill on periwinkle Poetry,
+a dashed trail walking to a flag on amber Recount, a megaphone on red
+Persuasion, and Newspaper report deliberately the one newsprint-grey card.
+The tints extend GT_COLS's Tailwind-200 register to twelve (GT_LOOK in
+english-text.js), laid out so no grid neighbours share a hue family; the
+motifs (GT_ART) are drawn in the icons.js idiom — 24×24, stroke 1.7, round
+caps. Identity is looked up by pack id and never stored: an imported or
+renamed genre falls back to the neutral card, and position still carries no
+meaning. The counts line became a soft white pill; hover lifts the card
+with the genre's ink as border; focus-visible ring and reduced-motion
+respected. Names stay slate — the colour is the welcome, not the message.
+
+One real bug en route, and it was the SagePrint lesson repeated verbatim:
+gtArtEl called bare `el` from module top level, outside register()'s
+destructure — the mount guard swallowed the ReferenceError and the whole
+face painted blank with an empty console. D.el fixed it; the comment now
+warns the next helper. Verified live: twelve cards render at native scale,
+selection still flows (Poetry → checklist with its reveal chip), no console
+errors. Browser-pane note for the log: after resize_window with custom
+dimensions the pane's render area desynced from layout and stage clicks
+missed silently — preset + reload restored it. style.css v91,
+english-text.js v5.

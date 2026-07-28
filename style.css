@@ -5554,26 +5554,59 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
 .gtwidget .gt-dim { opacity: .55; }
 .gt-chev { padding-left: 7px; padding-right: 7px; }
 
-/* ---- the genre picker: nothing is chosen for the teacher ---- */
-.gt-pick-lead { font-weight: 700; font-size: 17px; color: #22303c; padding: 2px 2px 0; }
-.gt-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 7px; }
+/* ---- the genre picker: nothing is chosen for the teacher ----
+   Twelve solid Soft Daylight tints, one per genre (GT_LOOK, english-text.js),
+   each carrying a deep-ink drawing of its own text-form. The colour is the
+   welcome; the name and counts stay quiet slate on top of it. */
+.gt-pick-lead { font-weight: 700; font-size: 18px; color: #22303c; padding: 2px 2px 0; }
+.gt-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 9px; }
 .gt-pick-card {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 5px;
   align-items: flex-start;
   text-align: left;
-  padding: 10px 12px;
-  border: 2px solid var(--panel-border);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .6);
+  min-height: 92px;
+  padding: 12px 14px;
+  border: 2px solid rgba(34, 48, 60, .08);
+  border-radius: 14px;
+  background: var(--gt-tint, rgba(255, 255, 255, .6));
   cursor: pointer;
   font: inherit;
+  transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
 }
-.gt-pick-card:hover { border-color: #64748b; background: #fff; }
-.gt-pick-name { font-weight: 800; font-size: 16px; color: #1e293b; }
-.gt-pick-sub { font-size: 12.5px; color: #64748b; }
-.gt-pick-row { gap: 6px; flex-wrap: wrap; }
+.gt-pick-card:hover {
+  border-color: var(--gt-ink, #64748b);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(34, 48, 60, .13);
+}
+.gt-pick-card:focus-visible { outline: 3px solid var(--gt-ink, #334155); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .gt-pick-card { transition: none; }
+  .gt-pick-card:hover { transform: none; }
+}
+.gt-pick-art {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 44px;
+  height: 44px;
+  color: var(--gt-ink, #475569);
+  pointer-events: none;
+}
+.gt-pick-art svg { width: 100%; height: 100%; }
+.gt-pick-name { font-weight: 800; font-size: 17px; color: #1e293b; padding-right: 46px; }
+.gt-pick-sub {
+  margin-top: auto;
+  font-size: 12px;
+  color: #3f4c5a;
+  background: rgba(255, 255, 255, .55);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+.gt-pick-row { gap: 6px; flex-wrap: wrap; padding-top: 2px; }
 
 /* ---- checklist face ---- */
 .gt-list { display: flex; flex-direction: column; gap: 5px; }
