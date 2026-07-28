@@ -3270,3 +3270,32 @@ purpose and stays. Verified: pink boots to mint; a chosen purple gradient and
 a chosen solid colour both survive; the mint swatch shows active in the tab.
 The stage's dark teal is untouched — that difference from the prototype
 remains deliberate. app.js v57.
+
+## 2026-07-28 — The cone was a symptom: auditing all 103 icons
+
+Glenn: "the traffic light is a cone, not traffic lights." True — and the cone
+turned out to be one of a class. The app runs TWO icon sets: the hand-drawn
+originals in icons.js and 30 vendored Scarlab glyphs in icons-scarlab.js, and
+the resolver lets the vendored set win wherever names collide — shadowing 27
+hand-drawn originals as dead code. Most of the damage is vendored glyphs whose
+drawing is fine but whose meaning isn't Sage Stage's: the "traffic" cone, a
+"score" WINE GLASS on the children's Scoreboard, a "dice" that is actually a
+GAMEPAD, a "text" of unreadable quote blobs shadowing a perfectly good Aa, and
+a timer/clock/stopwatch trio of near-identical discs shadowing an hourglass
+and a proper stopwatch.
+
+Method: a rendered contact sheet of all 103 runtime glyphs + their shadowed
+originals at 64/21/15px (kept as icon-check.html beside print-check.html); a
+full usage map (every icon → every UI site and rendered size); each verdict
+adversarially verified by agents tracing SVG path geometry; a completeness
+sweep over everything rated fine. The process earned its cost in both
+directions: verification UPGRADED dice (gamepad, not "noisy die") and REFUTED
+two of my calls — the countdown birthday cake is intentional (it's an event
+countdown ending in 🎉) and happy/help/quiet aren't dead, they're the Work
+mode symbols applied dynamically. The mic on the noise meter survived its own
+counter-check: the tool literally asks to enable the microphone.
+
+Result: docs/icon-assessment.md — eight one-line deletions un-shadow every
+wrong-object icon; one redraw that matters (gear is geometrically a SUN — disc
+plus eight detached rays — fronting every settings affordance); five sweep
+minors for the next icon pass. Assessment only; nothing changed yet.
