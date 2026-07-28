@@ -9145,7 +9145,7 @@
       // §4.5 poster seam: the method's existence is the capability
       (window.SagePrint && WIDGETS[w.type]
         && (WIDGETS[w.type].toPrintable || WIDGETS[w.type].toPrintablePages))
-        ? item('print', 'Print poster…', '', () => {
+        ? item('print', 'Print…', '', () => {
             const def = WIDGETS[w.type];
             let job = null, at = 0;
             try {
@@ -9158,7 +9158,7 @@
                 job = def.toPrintable(w);
               }
             }
-            catch (err) { toast('Couldn’t prepare the poster — ' + ((err && err.message) || 'unknown error')); return; }
+            catch (err) { toast('Couldn’t prepare the page — ' + ((err && err.message) || 'unknown error')); return; }
             if (!job || (Array.isArray(job) && !job.length)) { toast('Nothing to print yet'); return; }
             SagePrint.openDialog(job, { title: def.title, current: at });
           })

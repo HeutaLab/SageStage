@@ -307,11 +307,22 @@ the reveal queue is not on the board: the class should not see what is coming.
 | All bands | Ignores the deck's year group |
 | Size | Model text board size, three steps (model text face only) |
 
-**No Print button on the bar.** The widget menu's *Print poster…* is the app-wide
-entry point and it already does the right thing (`app.js:9116`) — modelled
-writing puts one on its bar because printing is the point of that widget, whereas
-these sheets are printed once or twice a unit, not mid-lesson. Six controls is
-already a full bar.
+**Print… is the last control on the bar** (added 2026-07-28). The original rule
+here was the opposite — no Print button, on the grounds that these sheets are
+"printed once or twice a unit, not mid-lesson", unlike modelled writing where
+printing is the point. That reasoning was written against two *reference* sheets
+(the criteria poster and the word bank). The model text sheet, added the next
+day, is not reference: the class spends a session marking up the WAGOLL and the
+sheet is that work. Under the same-sheet test now fixed in
+[poster-print-design.md](poster-print-design.md) §3.1 — *would this sheet differ
+if I printed it before the lesson and again after?* — two of the three qualify,
+so the widget carries the control.
+
+It is **ghost, not solid**: solid is the one act a widget exists to perform, and
+here that is Reveal. It is unconditional and always last, never per-face — a
+control that comes and goes reflows the bar mid-lesson, and `printCurrent`
+already opens the dialog on the sheet showing. The widget menu's *Print…*
+(`app.js:9148`) stays as the second door.
 
 ## 8. The model text face
 
@@ -411,7 +422,7 @@ publishes a bank on GitHub Pages" story is secondary wherever the two pull apart
 
 **`toPrintablePages(w)`, not `toPrintable(w)`** — the plural seam, because there
 is more than one sheet and the app's existing dialog already lets the teacher tick
-which are worth the paper (`app.js:9116` → `print.js:730`). No new dialog, no new
+which are worth the paper (`app.js:9148` → `print.js:730`). No new dialog, no new
 option UI. The pages, in order:
 
 | # | Sheet | Present when |

@@ -5553,6 +5553,9 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
 .gtwidget .gt-active { background: var(--acc, #c7d2fe); border-color: transparent; font-weight: 700; }
 .gtwidget .gt-dim { opacity: .55; }
 .gt-chev { padding-left: 7px; padding-right: 7px; }
+/* icon + word, like modelled writing's print pill — layout only, so the button
+   keeps whatever weight its class gives it (ghost here, solid there) */
+.gt-print { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ---- the genre picker: nothing is chosen for the teacher ----
    Twelve solid Soft Daylight tints, one per genre (GT_LOOK, english-text.js),

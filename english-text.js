@@ -1291,6 +1291,33 @@
               onclick: () => { p.allBands = !p.allBands; commit(); },
             }, p.allBands ? 'All years' : gtBandName(band)));
           }
+
+          // Print, last on the bar and unconditional (poster-print-design.md
+          // §3.1). This widget earns a bar control because two of its three
+          // sheets carry what the class did — the criteria in the order they
+          // met them, and the model text with their marks on it. Ghost, not
+          // solid: solid is the one act a widget exists to perform, and here
+          // that is Reveal. Never conditional on the face — a control that
+          // comes and goes reflows the bar mid-lesson; printCurrent already
+          // opens the dialog on the sheet showing.
+          quick.append(el('button', {
+            class: 'btn ghost small gt-print',
+            title: 'Print — pick the pages worth the paper',
+            onclick: () => {
+              if (!window.SagePrint) { toast('Print engine not loaded'); return; }
+              const def = WIDGETS.genretoolkit;
+              let job = null, at = 0;
+              try {
+                job = def.toPrintablePages(w);
+                at = def.printCurrent(w);
+              } catch (err) {
+                toast('Couldn’t prepare the page — ' + ((err && err.message) || 'unknown error'));
+                return;
+              }
+              if (!job || !job.length) { toast('Nothing to print yet'); return; }
+              SagePrint.openDialog(job, { title: def.title, current: at });
+            },
+          }, iconEl('print'), el('span', { class: 'gt-print-lab' }, 'Print…')));
         }
 
         function openRevealMenu(anchor) {

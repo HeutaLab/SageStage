@@ -122,14 +122,78 @@ window.SagePrint = {
 Two touch points in `app.js`:
 
 1. **Boot:** `SagePrint.init(...)` beside the existing `SageExport.init(...)`.
-2. **Menu:** the widget context menu gains `Print poster…` after `Duplicate`
+2. **Menu:** the widget context menu gains `Print…` after `Duplicate`
    (amended 2026-07-26: the generic widget menu has no `Export as PNG…` — PNG
    export is the draw pad's own item, so it cannot anchor this one), shown
-   only when the widget type's def exposes `toPrintable`. No registry, no
+   only when the widget type's def exposes **either** printable seam —
+   `toPrintable || toPrintablePages` (`app.js:9146`). No registry, no
    flags — the method's existence is the capability.
 
 Widgets never see `print.js`. `print.js` never reaches into a widget. One
 method, one direction.
+
+## 3.1 Where the control lives, and what it is called
+
+Added 2026-07-28, on Glenn's observation that "the English widgets don't have
+consistent print language — one has a green print button, the other has to go
+into the ellipsis." He was right twice: the placement differed, and one action
+had four names (`Print poster…` in the menu, `Print…` on a bar, `Print poster —`
+in the dialog header, `sage-stage-poster.pdf` in the downloads folder). The root
+cause was in this engine: the size control was labelled *Poster size* and its
+first option is one sheet of A4. **A poster was always a size, never the
+action** — naming the feature after the big end of one control is what let three
+entry points drift into three labels.
+
+**The word.** The action is **`Print…`** everywhere: widget menu, widget bar,
+dialog header, PDF filename. Inside the flow, **page** is one artefact the
+teacher ticks, **sheet** is one piece of paper, and **poster** is a size only —
+what you get when you spend more than one sheet. The word stays in the assembly
+hints and the multi-sheet options, where it is honest, and nowhere else.
+
+**Where it lives — the same-sheet test.** For each sheet a widget can print,
+ask: *if I printed this sheet before the lesson and again after it, would the
+two differ because of what the class did?* Yes for **at least one** sheet, and
+the widget carries `Print…` on its own bar; no for **every** sheet, and the
+widget menu carries it alone. In practice you answer it by reading your own
+widget — is the printed content mutated by a class-facing bar control, or is it
+settled by a pack and the ⚙ panel?
+
+**The threshold.** One qualifying sheet earns the control; a non-qualifying
+sheet never takes it away. Do not split the control per face — that grows a bar
+item that appears and disappears mid-lesson, which `modelwrite.js:1893` already
+forbids by name ("tier 1 must not grow a control that only sometimes applies —
+that is the reflow defect this widget already fixed once"). Nothing is lost:
+`printCurrent` is face-aware, so the dialog opens on the sheet showing.
+
+**The shape.** Always present, always **last** on the bar, always the bar's own
+scale. **Weight is per bar: `Print…` takes the solid accent only where printing
+is the widget's whole purpose, and is ghost everywhere else** (Glenn's call,
+2026-07-28 — modelled writing's green pill is the affordance he pointed at as
+the *good* one, and demoting it to buy symmetry would have taken away the thing
+that prompted the fix). Solid still means one per bar: modelled writing's lead
+verb is printing, the genre toolkit's is Reveal.
+
+**The menu item never disappears** when a bar control is added — both doors,
+always.
+
+**Preset jobs are not print controls.** A dialog opened pre-configured —
+modelled writing's *Compare Cold & Hot* (`modelwrite.js:1932`, `{ only,
+contact }`) — is named for the teaching, never "Print", and sits beside the
+thing it prints.
+
+Applied at the time of writing:
+
+| Widget | Control | Why |
+|---|---|---|
+| `modelwrite` | bar, **solid** | Every stroke changes the sheet; printing is the widget's purpose. |
+| `genretoolkit` | bar, ghost | The criteria print in the order the class met them and the model text carries their marks. Its lead verb is Reveal. |
+| `phonemetiles` | menu only | `ptSoundMatSvg` is built from the phonics pack and the deck's year group (`english-word.js:87`) — every Year 1 teacher gets the identical mat. Nothing of the class is in it. |
+
+Pre-answered, so nobody re-litigates it a fourth time: **bar** when built — word
+bank, sentence builder, word class sorter, story map. **Menu only** — letter
+formation, and every non-English candidate (QR, prompt cards, symbols, agenda,
+text signs, price labels, number line): all typed in setup, none changed by the
+class.
 
 ## 4. The print dialog
 
@@ -403,7 +467,8 @@ that knob was always *whether* there is an overlap, not how wide.
 
 | Condition | Behaviour |
 |---|---|
-| Widget has no `toPrintable` | No menu item (wiring level; nothing to fail) |
+| Widget has neither `toPrintable` nor `toPrintablePages` | No menu item (wiring level; nothing to fail) |
+| Plural seam returns an empty list | `Nothing to print yet` toast; the dialog never opens (`app.js:9162`) |
 | `toPrintable()` throws / returns non-SVG | Toast `Couldn't prepare the poster — <message>`; no dialog |
 | SVG contains user `<image>` raster | Amber line: `Contains an imported picture — pictures may soften at poster size.` Printing allowed |
 | `<script>` / `<foreignObject>` / external ref / no `viewBox` | Red line naming the offender; Print disabled (§2 enforcement) |
@@ -511,7 +576,7 @@ SagePrint ships alone; widgets adopt by adding `toPrintable()` and ticking the
 | `print-check.html` | New — standalone geometry harness (§9) |
 | `print-pdf.html` | New — PDF harness (§9); renders the real print root for headless Chrome |
 | `style.css` | Dialog styles + the `@media print` / `@page` block |
-| `app.js` | Boot `SagePrint.init(...)`; `Print poster…` in the widget menu after `Duplicate` |
+| `app.js` | Boot `SagePrint.init(...)`; `Print…` in the widget menu after `Duplicate` |
 | `index.html` | One `<script src="print.js">` tag |
 
 Build note: SagePrint is independent of the §14 phase ladder — it can land

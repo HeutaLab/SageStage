@@ -705,9 +705,9 @@
         await new Promise((r) => setTimeout(r, 0));
       }
     }
-    doc.setProperties({ title: title || 'Sage Stage poster', creator: 'Sage Stage' });
-    const name = String(title || 'sage-stage-poster').replace(/[^\w\- ]+/g, '').trim()
-      .replace(/\s+/g, '-') || 'poster';
+    doc.setProperties({ title: title || 'Sage Stage print', creator: 'Sage Stage' });
+    const name = String(title || 'sage-stage-print').replace(/[^\w\- ]+/g, '').trim()
+      .replace(/\s+/g, '-') || 'print';
     const url = URL.createObjectURL(doc.output('blob'));
     const a = document.createElement('a');
     a.href = url;
@@ -742,7 +742,7 @@
     // §8: nothing usable toasts and never opens the dialog (nodeName guard
     // typed, so a truthy non-element can't crash the guard itself)
     if (!docs.length) {
-      D.toast('Couldn’t prepare the poster — the widget didn’t produce an SVG');
+      D.toast('Couldn’t prepare the page — the widget didn’t produce an SVG');
       return;
     }
     const multi = docs.length > 1;
@@ -802,7 +802,7 @@
         .filter((x) => state.sel.has(x.i) && x.p.ok)
         .map((x) => x.p));
 
-    D.openModal('Print poster — ' + ((opts && opts.title) || 'widget'), (body, finish) => {
+    D.openModal('Print — ' + ((opts && opts.title) || 'widget'), (body, finish) => {
       const preview = D.el('div', { class: 'sp-prev' });
       const pageList = D.el('div', { class: 'sp-pages' });
       const readout = D.el('div', { class: 'sp-readout' });
@@ -929,7 +929,7 @@
         if (!picked.length) {
           readout.textContent = plans.some((p) => p.ok)
             ? 'No pages ticked — nothing would print.'
-            : 'This poster can’t print until the widget’s output is fixed.';
+            : 'This page can’t print until the widget’s output is fixed.';
           return;
         }
         readout.textContent = describeJob(picked);
@@ -995,7 +995,7 @@
           const was = pdfBtn.textContent;
           pdfBtn.disabled = true;
           try {
-            await exportPdf(picked, state.guides, jobTitle || 'Sage Stage poster',
+            await exportPdf(picked, state.guides, jobTitle || 'Sage Stage print',
               (m) => { pdfBtn.textContent = m; });
             D.toast('PDF saved to your downloads');
           } catch (err) {
@@ -1012,7 +1012,11 @@
         D.el('div', { class: 'sp-ctrl' },
           pageList,
           contactRow,
-          D.el('div', { class: 'sp-lab' }, 'Poster size'), budgetSeg,
+          // "Size", not "Poster size": the first option is one sheet of A4, so
+          // poster names only the big end of this control, never the control
+          // (and never the action). Matches its sibling labels, which are
+          // single nouns — Paper, Assembly.
+          D.el('div', { class: 'sp-lab' }, 'Size'), budgetSeg,
           D.el('div', { class: 'sp-lab' }, 'Paper'), paperSeg,
           D.el('div', { class: 'sp-lab' }, 'Assembly'), asmSeg, asmHint,
           D.el('label', { class: 'sp-guides-row' }, guidesTick, ' Assembly guides'),
@@ -1062,7 +1066,7 @@
     document.body.classList.add('sp-printing');
 
     const prevTitle = document.title;
-    if (title) document.title = title + ' poster'; // names the job and the Save-as-PDF file
+    if (title) document.title = title; // names the job and the Save-as-PDF file
     const cleanup = () => {
       root.remove();
       document.body.classList.remove('sp-printing');

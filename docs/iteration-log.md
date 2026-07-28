@@ -3407,3 +3407,60 @@ three-row key at 4-sheets-about-A2. No console errors. Marks were staged
 via localStorage for the print check (synthetic taps would not paint — the
 marking interaction itself is untouched by this change and shipped
 verified in v1). style.css v92, english-text.js v6.
+
+## 2026-07-28 (night) — One print language, and the green button stays
+
+Glenn: "There are some pages that are for printing and many that are not. The
+English widgets don't have consistent print language — one has a green print
+button, the other has to go into the ellipsis and print from there."
+
+Both halves were real, and the second ran deeper than the button. A survey of
+all 49 registered widgets found the scope gap first: exactly three can print,
+all three English, while english-widgets-design.md gives TEN widgets a
+"Prints:" line. Word bank, word class sorter and sentence builder are shipped
+and mute — a coverage debt against the founding principle that the wall is the
+output. Left for a separate pass; word bank is the obvious next adopter since
+gtBankSvg is already a working template for the card grid it needs.
+
+The language half had a root cause in the engine. One action carried four
+names — "Print poster…" in the menu, "Print…" on modelwrite's bar, "Print
+poster — " in the dialog header, sage-stage-poster.pdf in downloads — and
+print.js labelled its size control "Poster size" while its first option is
+"1 sheet · A4". A poster was always a SIZE, never the action; naming the
+feature after the big end of one control is what let three entry points drift.
+So: Print… everywhere, page = one artefact ticked, sheet = one piece of paper,
+poster = a size only (and it stays in the assembly hints and multi-sheet
+options, where it is honest). Six strings in print.js, one in app.js. The
+engine, tiling, budgets, guides and the one-page-ticked default are untouched.
+
+Placement is now a written rule in poster-print-design.md §3.1 — the same-sheet
+test: would this sheet differ if I printed it before the lesson and again
+after, because of what the class did? Yes for at least one sheet, the widget
+carries Print… on its bar; no for every sheet, the menu carries it alone. One
+qualifying sheet earns the control and a non-qualifying sheet never removes it
+— never split it per face, because modelwrite.js:1893 already forbids controls
+that come and go, and printCurrent opens the dialog on the face showing.
+The genre toolkit's written exemption had expired: it was argued on 07-27
+against two REFERENCE sheets, and the model text sheet added on 07-28 is not
+reference — the class spends a session marking up the WAGOLL and the sheet is
+that work. It gains a ghost Print… pill, last on the bar. Phoneme tiles stays
+menu-only, now for a stated reason rather than an oversight: its sound mat is
+generated from the phonics pack and the deck's year group, so every Year 1
+teacher gets the identical sheet. Nothing of the class is in it.
+
+**Glenn's call on the weight.** All three independent proposals wanted to
+demote modelled writing's solid green pill to ghost for symmetry, on the
+"one solid per bar" grammar. He said keep the green — and he was right that it
+was the affordance he'd pointed at as the GOOD one. So the rule reads: Print…
+takes the solid accent only where printing is the widget's whole purpose,
+ghost everywhere else. Neither bar breaks one-solid-per-bar today anyway
+(modelwrite's lead verb is printing, the toolkit's is Reveal). modelwrite.js
+is not touched by this change at all.
+
+Verified live: toolkit bar pill is `btn ghost small gt-print`, label "Print…",
+last on the bar; its ⋮ still carries "Print…" as the second door (10 items,
+while the Clock's menu correctly has 9 and no print); dialog header reads
+"Print — Genre toolkit"; the size label reads "Size"; Model text pre-ticked on
+the text face. Computed backgrounds confirm the split — modelwrite
+rgb(15,118,110) solid, toolkit rgba(15,118,110,.1). No console errors.
+app.js v58, print.js v14, english-text.js v7, style.css v93.
