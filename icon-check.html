@@ -26,8 +26,8 @@
 <body>
 <h1>Runtime glyphs (V = vendored Scarlab wins · H = hand-drawn) — 64px inspect · 21px dock · 15px title-bar</h1>
 <div class="grid" id="grid"></div>
-<script src="icons-scarlab.js?v=5"></script>
-<script src="icons.js?v=24"></script>
+<script src="icons-scarlab.js?v=6"></script>
+<script src="icons.js?v=25"></script>
 <script>
   // reach the hand-drawn originals even where vendored shadows them: rebuild
   // the hand-only lookup by asking icon() with the vendored set masked
@@ -38,7 +38,7 @@
   const HAND = {};
   const probe = document.createElement('div');
   // no registry export, so harvest by regex over the fetched source
-  fetch('icons.js?v=24').then(r => r.text()).then(src => {
+  fetch('icons.js?v=25').then(r => r.text()).then(src => {
     const handNames = new Set();
     for (const m of src.matchAll(/^\s{4}([a-z0-9]+):/gm)) { handNames.add(m[1]); names.add(m[1]); }
     for (const n of names) HAND[n] = window.SageIcons.icon(n);

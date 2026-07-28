@@ -3299,3 +3299,18 @@ Result: docs/icon-assessment.md — eight one-line deletions un-shadow every
 wrong-object icon; one redraw that matters (gear is geometrically a SUN — disc
 plus eight detached rays — fronting every settings affordance); five sweep
 minors for the next icon pass. Assessment only; nothing changed yet.
+
+## 2026-07-28 (later) — Eight deletions and one honest cog
+
+The assessment's step 1 and 2, shipped. Deleting eight keys from
+icons-scarlab.js un-shadowed the hand-drawn originals: the Traffic light got
+its traffic light back, the Scoreboard traded its wine glass for a medal, the
+Dice widget stopped wearing a gamepad, Text became Aa across all eight of its
+sites, and the timer/clock/stopwatch disc trio broke up — hourglass and
+proper stopwatch restored. The scarlab header now documents the deletions so
+a future regeneration can't silently resurrect them. And gear is finally a
+gear: accent ring, hub, eight teeth ATTACHED to the ring — the sun it used to
+be was one detached-ray away from the canonical brightness icon, on every
+settings affordance in the app. Verified at 96/21/14px on the contact sheet
+and live in dock, tiles and settings sites; SagePrint 91/91; no console
+errors. icons.js v25, icons-scarlab.js v6.

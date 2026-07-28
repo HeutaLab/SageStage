@@ -96,4 +96,8 @@ sweep over everything rated fine.
 2. **Redraw `gear`** (toothed ring + hub) in the hand style.
 3. The sweep's five minors, whenever an icon pass next happens.
 
-Un-done on purpose: nothing was changed in this assessment — it is findings only.
+**Done 2026-07-28** (same day, follow-up commit): steps 1 and 2 shipped — the eight
+vendored keys are deleted (with a do-not-regenerate note in icons-scarlab.js's header)
+and `gear` is redrawn as a true cog (accent ring r5.6, hub r2.1, eight attached teeth).
+Verified on the contact sheet at 96/21/14px and live in the dock/tiles/settings sites;
+SagePrint 91/91. The sweep minors (step 3) remain open.
