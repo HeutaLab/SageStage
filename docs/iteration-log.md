@@ -3373,3 +3373,37 @@ errors. Browser-pane note for the log: after resize_window with custom
 dimensions the pane's render area desynced from layout and stage clicks
 missed silently — preset + reload restored it. style.css v91,
 english-text.js v5.
+
+## 2026-07-28 (evening) — The chips read in full, and the WAGOLL reaches the wall
+
+Two Glenn calls on the model text face, from live use with Kipling on the
+board. First: the criteria chips — "the surrogate learning intention" — were
+ellipsizing at 210px, so the class read "Words that start with the sa…" and
+a mouse-only tooltip held the rest. The truncation is simply gone: chips
+wrap now (white-space normal, left-aligned, the tooltip deleted as
+redundant). If a revealed criterion costs two lines of chip, that is the
+cost of the class reading it.
+
+Second: the marked-up model text itself now prints. gtTextSvg lays the
+text out against measured widths — source line breaks are hard breaks
+(a poem's line breaks ARE the form), a blank source line is a stanza gap,
+and a wrap only ever happens where the source had a space, so punctuation
+stays glued to its word. Highlights paint behind their runs with the
+gap-between-tokens rule the screen and the snippet groups already use
+(painted only when one mark covers both sides), and below a divider the
+sheet carries its own colour key: swatch + full criterion wording, reveal
+order, only for criteria the class actually evidenced — the sheet stands
+alone on the wall. It joins toPrintablePages as "Model text" between the
+criteria poster and the word bank, so it gets the whole SagePrint dialog
+(sheet budgets, assembly guides, A4 1:1) for free. printCurrent became
+face-aware while keeping the paper-waste principle: one page ticked, and
+it is the sheet of the face the teacher is looking at.
+
+Verified in the browser with Glenn's exact setup — Poetry, The Way through
+the Woods, his highlights plus one multi-word run: chips full-width on the
+face; print dialog shows three pages with Model text pre-ticked; the
+preview renders title, byline, stanza gap, every highlight and the
+three-row key at 4-sheets-about-A2. No console errors. Marks were staged
+via localStorage for the print check (synthetic taps would not paint — the
+marking interaction itself is untouched by this change and shipped
+verified in v1). style.css v92, english-text.js v6.

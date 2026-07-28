@@ -5659,12 +5659,13 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
 /* ---- model text face ---- */
 .gt-chips { display: flex; flex-wrap: wrap; gap: 4px; flex-shrink: 0; }
 .gt-chips-none { font-size: 13px; color: #64748b; padding: 3px 2px; }
+/* The chips are the class's learning intentions in surrogate — they read in
+   full or they aren't doing their job. Wrap, never ellipsize. */
 .gt-chip {
-  max-width: 210px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 5px 10px;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.3;
+  padding: 5px 12px;
   border-radius: 999px;
   border: 2px solid transparent;
   font: inherit;

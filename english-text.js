@@ -542,6 +542,108 @@
     return gtSvg(parts.join(''), Math.max(y + GT_PAD, 300));
   }
 
+  // §11 addendum (Glenn, 2026-07-28): the marked-up WAGOLL itself prints. The
+  // class spent a session finding the evidence; the sheet is that work — the
+  // text with its highlights, and a colour key of the criteria they point at,
+  // so the artefact stands alone on the wall. Source line breaks are hard
+  // breaks (a poem's line breaks ARE the form); everything else wraps against
+  // measured widths, and a break only ever happens where the source had a
+  // space, so punctuation stays glued to its word.
+  function gtTextSvg(p) {
+    const g = p.genre;
+    if (!g || !p.text) return null;
+    const toks = gtTokens(p.text);
+    if (!toks.length) return null;
+    const marks = gtNormMarks(p.marks, toks.length);
+    const size = 30, lh = 44;
+    const avail = GT_W - GT_PAD * 2;
+
+    // lines of segments { s, item } — item is a mark's criterion id or null.
+    // A gap between two tokens is painted only when one mark covers both sides
+    // (object identity: marks are ranges, so the same mark means the same run).
+    const lines = [];
+    let segs = [], x = 0;
+    const put = (s, item) => {
+      if (!s) return;
+      const last = segs[segs.length - 1];
+      if (last && last.item === item) last.s += s;
+      else segs.push({ s, item });
+      x += gtWidth(s, size, item ? 500 : 400);
+    };
+    const flush = () => { lines.push(segs); segs = []; x = 0; };
+    for (let i = 0; i < toks.length; i++) {
+      const t = toks[i];
+      const nl = ((t.pre || '').match(/\n/g) || []).length;
+      if (nl && (segs.length || lines.length)) {
+        flush();
+        if (nl > 1) lines.push(null); // stanza / paragraph gap, one spacer
+      }
+      const m = gtMarkAt(marks, i);
+      const item = m ? m.item : null;
+      const gap = nl ? '' : (t.pre || '').replace(/\s+/g, ' ');
+      const gapItem = gap && i > 0 && m && gtMarkAt(marks, i - 1) === m ? item : null;
+      if (segs.length && gap && x + gtWidth(gap + t.s, size, 400) > avail) {
+        flush();
+        put(t.s, item);
+      } else {
+        put(gap, gapItem);
+        put(t.s, item);
+      }
+    }
+    flush();
+
+    const parts = [];
+    let y = gtHead(parts, g.name + ' — model text', GT_PAD) + 26;
+    for (const ln of lines) {
+      if (!ln || !ln.length) { y += Math.round(lh * 0.55); continue; }
+      let lx = GT_PAD;
+      for (const seg of ln) {
+        const s = gtHardSpaces(seg.s);
+        const wSeg = gtWidth(s, size, seg.item ? 500 : 400);
+        if (seg.item) {
+          parts.push('<rect x="' + (lx - 3) + '" y="' + (y + 3) + '" width="' + (wSeg + 6)
+            + '" height="38" rx="6" fill="' + gtColOf(g, seg.item) + '"/>');
+        }
+        parts.push('<text x="' + lx + '" y="' + (y + size) + '" xml:space="preserve" font-family="'
+          + GT_FONT + '" font-size="' + size + '"' + (seg.item ? ' font-weight="500"' : '')
+          + ' fill="#0f172a">' + xmlEsc(s) + '</text>');
+        lx += wSeg;
+      }
+      y += lh;
+    }
+
+    // the colour key: every criterion the class actually evidenced, reveal
+    // order first — the order they met them in, the poster's rule
+    const marked = [];
+    const seen = new Set();
+    for (const id of p.revealed || []) {
+      if (!seen.has(id) && marks.some((m) => m.item === id)) { seen.add(id); marked.push(id); }
+    }
+    for (const m of marks) {
+      if (!seen.has(m.item)) { seen.add(m.item); marked.push(m.item); }
+    }
+    if (marked.length) {
+      y += 16;
+      parts.push('<path d="M' + GT_PAD + ' ' + y + 'H' + (GT_W - GT_PAD)
+        + '" stroke="#94a3b8" stroke-width="2" fill="none"/>');
+      y += 14;
+      const sw = 26, tx = GT_PAD + sw + 14, tw = GT_W - GT_PAD - tx;
+      for (const id of marked) {
+        const it = (g.items || []).find((q) => q.id === id);
+        if (!it) continue;
+        const ls = gtWrap(it.t, tw, 24, 500);
+        parts.push('<rect x="' + GT_PAD + '" y="' + (y + 6) + '" width="' + sw + '" height="' + sw
+          + '" rx="6" fill="' + gtColOf(g, id) + '" stroke="#64748b" stroke-width="1.5"/>');
+        ls.forEach((l, k) => {
+          parts.push('<text x="' + tx + '" y="' + (y + 26 + k * 32) + '" font-family="' + GT_FONT
+            + '" font-size="24" font-weight="500" fill="#0f172a">' + xmlEsc(l) + '</text>');
+        });
+        y += ls.length * 32 + 10;
+      }
+    }
+    return gtSvg(parts.join(''), Math.max(y + GT_PAD, 300));
+  }
+
   function gtBankSvg(p) {
     const g = p.genre;
     if (!gtHasBank(g)) return null;
@@ -698,15 +800,25 @@
         const pages = [];
         const poster = gtPosterSvg(p);
         if (poster) pages.push({ svg: poster, label: 'Success criteria' });
+        const text = gtTextSvg(p);
+        if (text) pages.push({ svg: text, label: 'Model text' });
         const bank = gtBankSvg(p);
         if (bank) pages.push({ svg: bank, label: 'Word bank' });
         for (const pg of gtColdHotPages(w)) pages.push(pg);
         return pages;
       },
-      // page 0 and only page 0 — SagePrint ticks one page on purpose, because
-      // paper waste is the point of the feature (print.js:751), and a widget that
-      // quietly queued four sheets would be arguing with that
-      printCurrent() { return 0; },
+      // One page ticked — SagePrint's paper-waste principle (print.js:751) —
+      // and it is the CURRENT face's sheet: the screen is already the control.
+      // Index arithmetic mirrors toPrintablePages' order; a stale face falls
+      // back to 0 and the dialog clamps out-of-range anyway.
+      printCurrent(w) {
+        const p = w.props || {};
+        const poster = p.genre && (p.revealed || []).length ? 1 : 0;
+        const text = p.genre && p.text ? 1 : 0;
+        if (p.face === 'text' && text) return poster;
+        if (p.face === 'bank' && gtHasBank(p.genre)) return poster + text;
+        return 0;
+      },
 
       mount(body, w, api) {
         body.classList.add('mntray', 'gtwidget');
@@ -927,7 +1039,6 @@
             chipsEl.append(el('button', {
               class: 'gt-chip' + (p.active === it.id ? ' on' : ''),
               style: 'background:' + colOf(it.id),
-              title: it.t,
               onclick: () => {
                 p.active = p.active === it.id ? null : it.id;
                 save();
