@@ -3314,3 +3314,31 @@ be was one detached-ray away from the canonical brightness icon, on every
 settings affordance in the app. Verified at 96/21/14px on the contact sheet
 and live in dock, tiles and settings sites; SagePrint 91/91; no console
 errors. icons.js v25, icons-scarlab.js v6.
+
+## 2026-07-28 (later) — Twelve of twelve: the eight remaining genre packs
+
+The follow-up pass the genre toolkit build promised: recount, diary, letter,
+instructions, non-chronological report, playscript, poetry and book review,
+pure data in english-packs.js, no code touched. Each follows the house shape
+the first four set — a KS1→UKS2 band arc (KS1 gets the whole text down, UKS2
+controls how it lands on a reader), 14–15 criteria, a boxing-up structure for
+the Story Map to consume later, and an 8 openers · 8 connectives · 10
+vocabulary word bank. model stays empty everywhere: a school's WAGOLL is a
+school's own.
+
+The packs now sit in §9's canonical order, which repositioned newspaper report
+and persuasion in the picker — safe, because everything references packs by
+id, and props hold copies. Some deliberate wording calls: diary teaches
+"past tense for events, present for feelings" and hindsight; playscript's
+connectives are spoken discourse markers (anyway, mind you) because that is
+what dialogue actually joins with; poetry's criteria are framed as choices,
+not rules ("rhymes — if the poem wants them"); instructions ends on the
+stranger test. Letter carries the sincerely/faithfully rule; non-chron report
+keeps "facts, not a story about you", the KS1 trap.
+
+Verified headless (a node check of every cap, band, id and duplicate against
+gtNormalize's table — PASS) and in the browser: twelve cards in the picker,
+Diary's checklist walk and word-bank face, the settings genre row at twelve
+chips, the swap confirm wiping reveals on the way to Playscript, its checklist
+rendering with colours. No console errors. english-packs.js v4;
+genre-toolkit-design.md §2/§13 updated.

@@ -69,12 +69,14 @@ shape §8.5, §9 and §11:
 3. **It reaches the wall.** Prints as its own sheet, not folded into the criteria
    poster.
 
+**Landed since (2026-07-28):** the other eight default packs — recount, diary,
+letter, instructions, non-chronological report, playscript, poetry, book review.
+The data-only follow-up pass this section promised; all twelve of the English
+design's §9 list now ship in `english-packs.js`, in §9's order. The four built
+with the widget had proven the machinery against real variety first.
+
 **Deferred, with reasons:**
 
-- **The other eight default packs** (recount, diary, letter, instructions,
-  non-chronological report, playscript, poetry, book review). Pure data, no code
-  — a follow-up pass Glenn can review in one sitting. The four chosen here span
-  the text types so the machinery is proven against real variety.
 - **Feeding the `wordbank` widget.** §8.1 routes genre language lists to the word
   bank and the Big Write prompt chips. That is a third consumer for the docking
   question §16.4 parks, and this widget displaying and printing its own lists
@@ -504,11 +506,19 @@ Existing deps cover everything needed — `el`, `iconEl`, `save`, `toast`, `uid`
 `deck`, `snapshotBefore`. No new dep, no change to `app.js` beyond the four
 lines above.
 
-## 13. The four default packs
+## 13. The default packs
 
 Ours or National Curriculum wording (Crown copyright, OGL v3). NC *terminology*
 — fronted adverbial, relative clause, expanded noun phrase, modal verb — is used
 freely; no scheme's phrasing appears anywhere.
+
+The four below shipped with the widget and are recorded in prose because their
+shape was agreed in dialogue. The other eight (recount, diary, letter,
+instructions, non-chronological report, playscript, poetry, book review) landed
+2026-07-28 as the data-only follow-up; their wording lives in
+`english-packs.js`, which is the source of truth for all twelve — same band
+arc (KS1 gets the whole text down, UKS2 controls how it lands on a reader),
+same 8 openers · 8 connectives · 10 vocabulary word bank, `model` empty.
 
 ### 13.1 Narrative (`narrative`)
 
