@@ -3589,3 +3589,54 @@ be discovered in a lesson — two-column PDFs come out in an unpredictable order
 the measure it was typeset to, because poems forbid unwrapping.
 
 doctext.js new; zip.js v2, english-text.js v10, style.css v96.
+
+## 2026-07-29 (later) — The button that cost an afternoon, and a bar that stays put
+
+Glenn went to put a Word document into the Genre Toolkit, clicked *Open a pack
+file…*, and watched every file in his Downloads folder grey out. Five hours and
+a wasted day. The document reader worked; it was behind a different button, on
+a different face, under a nearly identical name. That is a design failure, not
+a user error, and it is the more useful half of the day's lesson: **I tested
+that the feature worked and never tested that anyone could find it.**
+
+Three changes, because renaming alone would have left the trap half-set. The
+pack buttons are now *Load a genre pack…* — a different verb from *open*, and a
+noun that says what the file is. The picker's hint says what a pack contains
+AND where the model text goes. And **Model text is the default face**, so the
+document opener is the first thing a teacher meets after picking a genre. That
+last one also matches the teaching order Glenn asked for on the same message —
+faces now read **Model text · Word bank · Checklist**, which is the sequence a
+unit actually runs in: pull the WAGOLL apart, gather the words, build the
+checklist from what you found.
+
+**The bar.** "Once the text is uploaded, the button height and placement goes
+awry." Measured on a 700×520 widget, it did: one centred flex-wrap row whose
+membership changes with the face and the state — Cover on two faces, Size and
+New text only once a text is in, undo only on first reveal — so every change
+re-centred every row and orphaned whatever fell off the end. Loading a text put
+"Size 2 · Print…" alone on a centred second line.
+
+This is the sentence builder's V0.1 finding arriving a second time: a wrapping
+toolbar is design by accident. Same remedy — explicit rows with anchored ends.
+Row 1 is the faces pinned left and Print pinned right with the per-face tools
+between them; row 2 is Reveal taking the full width with the chevron and undo
+fixed at its end. Undo is now always present and disabled when there is nothing
+to take back, rather than appearing on first reveal and shoving its neighbours.
+Verified: row tops, bar height and both anchors are byte-identical across all
+four states (empty text, text loaded, checklist, word bank) — 364/419, 105px,
+left 33, right 623, in every one.
+
+Two things also came off the board. *New text…* moved from a row under the
+model text onto the bar, so the reading surface holds the text and nothing
+else; and the empty paste box fills its face instead of sitting in the top
+third with a dead void beneath it, which was the first thing a teacher saw on
+this face.
+
+Finally the genre's own colour follows it in: the tint from the picker card
+sets the widget's --acc, so the active face wears the colour the class chose
+the unit by, and the coloured picker no longer leads to a grey tool. An
+imported genre has no tint and falls back to the widget accent, as --acc
+already did.
+
+Spec updated at genre-toolkit-design.md §8.7. english-text.js v11,
+style.css v98.

@@ -326,8 +326,13 @@ already opens the dialog on the sheet showing. The widget menu's *Print…*
 
 ## 8. The model text face
 
+- **The default face** (changed 2026-07-29). The unit starts here: the class
+  pulls the WAGOLL apart, and the criteria and the words come out of it. It is
+  also the only route to opening a document, which is what made the old default
+  a discoverability failure — see §8.7.
 - **Empty:** a paste target — "Paste your model text" — plus ***Open a
-  document…*** (`.txt`, `.md`, **`.docx`, `.pdf`**).
+  document…*** (`.txt`, `.md`, **`.docx`, `.pdf`**). The paste box fills the
+  face rather than sitting in the top third of it.
 
   **Amended 2026-07-29, Glenn's call, superseding "plain text only, no rich
   text, no PDF; `bookpage` is where documents belong".** His reasoning:
@@ -424,6 +429,54 @@ RunLength bombs, CMap explosions, 6000-page files, cyclic page trees, damaged
 xrefs, zero-byte files — ends in either correct text or a teacher-facing error,
 in seconds, with bounded memory. The reason is the classroom: a frozen tab
 takes the lesson with it.
+
+## 8.7 The bar, and finding things (2026-07-29)
+
+Glenn lost an afternoon to this widget, and both causes were ours.
+
+**The buttons were a trap.** The picker offered *"Open a pack file…"*, which
+reads exactly like the way to put a model text in and only ever accepted
+`.genre` files — so a teacher with a `.docx` open in the file dialog watched
+every one of their files grey out. The document opener was two clicks away on
+another face under a nearly identical name. Three changes, because one would
+not have been enough:
+
+1. The pack buttons are **"Load a genre pack…"** — a different verb from
+   *open*, and a noun that says what the file is.
+2. The picker's hint says what a pack is *and where the model text goes*.
+3. **Model text is the default face**, so the opener is the first thing a
+   teacher meets after choosing a genre.
+
+**The bar moved.** It was one centred `flex-wrap` row, and its membership
+changes with the face and the state — Cover on two faces, Size and New text
+only once a text is in, undo only once something is revealed. Every change
+re-centred every row and orphaned whatever fell over the edge; measured on a
+700×520 widget, loading a text put "Size 2 · Print…" alone on a centred second
+line. This is the sentence builder's V0.1 finding — *a wrapping toolbar is
+design by accident* (iteration log, 2026-07-25) — and the same remedy applies:
+
+```
+row 1   [ Model text | Word bank | Checklist ]········[ tools ][ Print… ]
+row 2   [ Reveal: the whole criterion ................][ › ][ ↺ ]
+```
+
+The faces are pinned left and **Print is pinned right**, so the two controls a
+teacher reaches for without looking never move. Reveal owns row 2, which is
+what lets it carry a criterion in full without shoving anything sideways. Undo
+is always present and disabled when there is nothing to take back, rather than
+appearing on first reveal and pushing its neighbours. Verified: row positions,
+bar height, and the left and right anchors are **byte-identical across all four
+states** (empty text, text loaded, checklist, word bank).
+
+**Two other things came off the board.** *New text…* moved from a row under the
+model text onto the bar — the reading surface should hold the text and nothing
+else — and the empty paste box now fills its face instead of leaving a dead
+void under it.
+
+**The genre's colour comes with it.** The tint from the picker card sets the
+widget's `--acc`, so the active face wears the colour the class chose the unit
+by. An imported or renamed genre has no tint and falls back to the widget
+accent, exactly as `--acc` already did.
 
 ## 9. The editor
 

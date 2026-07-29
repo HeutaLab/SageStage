@@ -825,7 +825,7 @@
     WIDGETS.genretoolkit = {
       title: 'Genre toolkit', icon: 'genretoolkit', accent: '#c7d2fe', w: 780, h: 560,
       defaults: () => ({
-        genre: null, src: null, face: 'list',
+        genre: null, src: null, face: 'text',
         revealed: [], ticked: [], text: '', marks: [], active: null,
         allBands: false, size: 1, coverList: false, coverBank: false,
       }),
@@ -891,7 +891,7 @@
         // 'bank' on a genre with three empty lists falls back, because §8.5 hides
         // that face rather than showing a blank panel
         if (!['list', 'text', 'bank'].includes(p.face) || (p.face === 'bank' && !gtHasBank(g))) {
-          p.face = 'list';
+          p.face = 'text';
         }
 
         const toks = gtTokens(p.text);
@@ -963,10 +963,15 @@
               el('button', {
                 class: 'btn ghost small',
                 onclick: () => gtOpenPack(w, api),
-              }, 'Open a pack file…')),
-            el('div', { class: 'hint' }, 'Every criterion here is our wording or the National '
-              + 'Curriculum’s — no scheme’s. Change all of it in Settings: your school words its '
-              + 'toolkits its own way, and this expects you to.'),
+              }, 'Load a genre pack…')),
+            // says what a pack IS, because the alternative reading cost a
+            // teacher an afternoon: "Open a pack file…" sat here looking like
+            // the way to put a model text in, and it only ever took .genre
+            // files. The model text goes in on the Model text face.
+            el('div', { class: 'hint' }, 'A genre pack is a set of criteria and a word bank — '
+              + 'a school’s own, saved from here. Your model text goes in on the Model text '
+              + 'face once a genre is picked. Every criterion here is our wording or the '
+              + 'National Curriculum’s — no scheme’s, and Settings lets you change all of it.'),
           );
         }
 
@@ -1106,19 +1111,10 @@
             tkEls.push({ tk, gap });
           }
           wrap.addEventListener('pointerdown', onDown);
-          face.append(chips, wrap,
-            el('div', { class: 'gt-textbar' },
-              el('button', {
-                class: 'btn ghost small',
-                onclick: () => {
-                  D.confirmDialog('Put a different model text in? This clears the highlights on the '
-                    + 'current one — they are tied to its words.', () => {
-                    if (typeof D.snapshotBefore === 'function') D.snapshotBefore(w, 'Genre toolkit');
-                    p.text = ''; p.marks = [];
-                    api.refresh();
-                  }, { label: 'Clear the text', danger: true });
-                },
-              }, 'New text…')));
+          // chips, then the board. "New text…" used to sit under the text on its
+          // own row; it lives on the bar now, so this face is the criteria the
+          // class is marking with and the words they are marking — nothing else.
+          face.append(chips, wrap);
           restyle(0, toks.length - 1);
         }
 
@@ -1276,11 +1272,37 @@
         }
 
         // ---------------------------------------------------------- the bar
+        /* TWO DELIBERATE ROWS, not one row that happens to wrap.
+           Glenn, 2026-07-29: "once the text is uploaded, the button height and
+           placement goes awry." Measured, it did: the bar was one centred
+           flex-wrap row whose membership changes with the face and the state
+           (Cover on two faces, Size and New text only once a text is in, undo
+           only once something is revealed), so every change re-centred every
+           row and orphaned whatever fell over the edge — "Size 2 · Print…"
+           alone on a second line. This is the sentence builder's V0.1 lesson
+           applied here: a wrapping toolbar is design by accident, and the fix
+           is explicit rows with anchored ends (iteration log, 2026-07-25).
+
+           Row 1  [ faces ]················[ tools ][ Print… ]
+           Row 2  [ Reveal: the criterion ..........][ › ][ ↺ ]
+
+           The faces are pinned left and Print is pinned right on row 1, so the
+           two things a teacher reaches for without looking never move. Reveal
+           owns row 2 outright, which is what lets it carry a criterion in full
+           without shoving anything. */
         function paintQuick() {
           quick.replaceChildren();
           if (!g) return;
-          const faces = [['list', 'Checklist'], ['text', 'Model text']];
+
+          // ---- row 1: where you are, and the tools for being there
+          const rowNav = el('div', { class: 'gt-row gt-row-nav' });
+          // Model text first: it is where the unit starts — the class pulls the
+          // WAGOLL apart, and the criteria and words come out of it. It is also
+          // where a document is opened, which is the thing that was impossible
+          // to find (Glenn's order, 2026-07-29).
+          const faces = [['text', 'Model text']];
           if (gtHasBank(g)) faces.push(['bank', 'Word bank']);
+          faces.push(['list', 'Checklist']);
           const seg = el('div', { class: 'gt-seg' });
           for (const [id, label] of faces) {
             seg.append(el('button', {
@@ -1289,42 +1311,17 @@
               onclick: () => { p.face = id; save(); paintAll(); },
             }, label));
           }
-          quick.append(seg);
+          rowNav.append(seg, el('span', { class: 'grow' }));
 
-          const next = queue()[0] || null;
-          quick.append(next
-            ? el('button', {
-              // in full, never clipped: the children read this to know what
-              // they are about to be shown, and it is often the lesson's
-              // learning intention. It wraps and takes the room it needs
-              // (Glenn, 2026-07-29 — the same call as the chips).
-              class: 'btn small gt-reveal',
-              onclick: () => { p.revealed.push(next.id); commit(); },
-            }, 'Reveal: ' + next.t)
-            : el('button', {
-              class: 'btn ghost small gt-dim',
-              title: 'Nothing left to reveal in this band — the chevron reveals from any year',
-              onclick: () => toast(items().length ? 'All of this band is revealed' : 'No criteria yet'),
-            }, 'All revealed'));
-
-          // a chevron rather than a long-press: long-press on a board is a coin
-          // toss, and this list is how a criterion gets revealed out of band
-          quick.append(el('button', {
-            class: 'btn ghost small gt-chev',
-            title: 'Reveal a particular criterion',
-            onclick: (e) => openRevealMenu(e.currentTarget),
-          }, iconEl('chevr')));
-
-          if (p.revealed.length) {
-            quick.append(el('button', {
-              class: 'btn ghost small',
-              title: 'Un-reveal the last one — a misfire in front of thirty children needs one tap back',
-              onclick: () => {
-                const id = p.revealed.pop();
-                if (p.active === id) p.active = null;
-                commit();
-              },
-            }, iconEl('undo')));
+          const tools = el('div', { class: 'gt-tools' });
+          const band = deckBand();
+          if (band) {
+            tools.append(el('button', {
+              class: 'btn ghost small' + (p.allBands ? ' gt-active' : ''),
+              title: p.allBands ? 'Reveal walks every year'
+                : 'Reveal walks ' + gtBandName(band) + ' — this deck’s year group',
+              onclick: () => { p.allBands = !p.allBands; commit(); },
+            }, p.allBands ? 'All years' : gtBandName(band)));
           }
 
           // no Cover on the model text face: covering the WAGOLL is what the mask
@@ -1334,7 +1331,7 @@
           // writing from, and switching face must not carry a cover across.
           if (p.face !== 'text') {
             const key = p.face === 'bank' ? 'coverBank' : 'coverList';
-            quick.append(el('button', {
+            tools.append(el('button', {
               class: 'btn ghost small' + (p[key] ? ' gt-active' : ''),
               title: p.face === 'bank' ? 'Cover the words' : 'Cover the criteria',
               onclick: () => { p[key] = !p[key]; commit(); },
@@ -1342,7 +1339,7 @@
           }
 
           if (p.face === 'text' && p.text) {
-            quick.append(el('button', {
+            tools.append(el('button', {
               class: 'btn ghost small',
               title: 'Text size on the board',
               // a class swap, not a rebuild — the tokens and the scroll stay put
@@ -1353,27 +1350,33 @@
                 paintQuick();
               },
             }, 'Size ' + (p.size + 1)));
+            // moved off the reading surface and onto the bar: the board should
+            // hold the model text and nothing else, and a button floating over
+            // the last line of it was the only thing on that face that was not
+            // the text
+            tools.append(el('button', {
+              class: 'btn ghost small',
+              title: 'Put a different model text in',
+              onclick: () => {
+                D.confirmDialog('Put a different model text in? This clears the highlights on the '
+                  + 'current one — they are tied to its words.', () => {
+                  if (typeof D.snapshotBefore === 'function') D.snapshotBefore(w, 'Genre toolkit');
+                  p.text = ''; p.marks = [];
+                  api.refresh();
+                }, { label: 'Clear the text', danger: true });
+              },
+            }, 'New text…'));
           }
 
-          const band = deckBand();
-          if (band) {
-            quick.append(el('button', {
-              class: 'btn ghost small' + (p.allBands ? ' gt-active' : ''),
-              title: p.allBands ? 'Reveal walks every year'
-                : 'Reveal walks ' + gtBandName(band) + ' — this deck’s year group',
-              onclick: () => { p.allBands = !p.allBands; commit(); },
-            }, p.allBands ? 'All years' : gtBandName(band)));
-          }
-
-          // Print, last on the bar and unconditional (poster-print-design.md
-          // §3.1). This widget earns a bar control because two of its three
-          // sheets carry what the class did — the criteria in the order they
-          // met them, and the model text with their marks on it. Ghost, not
-          // solid: solid is the one act a widget exists to perform, and here
-          // that is Reveal. Never conditional on the face — a control that
-          // comes and goes reflows the bar mid-lesson; printCurrent already
-          // opens the dialog on the sheet showing.
-          quick.append(el('button', {
+          // Print, pinned to the right-hand end and unconditional
+          // (poster-print-design.md §3.1). This widget earns a bar control
+          // because two of its three sheets carry what the class did — the
+          // criteria in the order they met them, and the model text with their
+          // marks on it. Ghost, not solid: solid is the one act a widget exists
+          // to perform, and here that is Reveal. Never conditional on the face —
+          // a control that comes and goes reflows the bar mid-lesson;
+          // printCurrent already opens the dialog on the sheet showing.
+          tools.append(el('button', {
             class: 'btn ghost small gt-print',
             title: 'Print — pick the pages worth the paper',
             onclick: () => {
@@ -1391,6 +1394,51 @@
               SagePrint.openDialog(job, { title: def.title, current: at });
             },
           }, iconEl('print'), el('span', { class: 'gt-print-lab' }, 'Print…')));
+          rowNav.append(tools);
+
+          // ---- row 2: the act
+          const rowAct = el('div', { class: 'gt-row gt-row-act' });
+          const next = queue()[0] || null;
+          rowAct.append(next
+            ? el('button', {
+              // in full, never clipped: the children read this to know what
+              // they are about to be shown, and it is often the lesson's
+              // learning intention. It wraps and takes the room it needs
+              // (Glenn, 2026-07-29 — the same call as the chips).
+              class: 'btn small gt-reveal',
+              onclick: () => { p.revealed.push(next.id); commit(); },
+            }, 'Reveal: ' + next.t)
+            : el('button', {
+              class: 'btn ghost small gt-dim gt-reveal',
+              title: 'Nothing left to reveal in this band — the chevron reveals from any year',
+              onclick: () => toast(items().length ? 'All of this band is revealed' : 'No criteria yet'),
+            }, 'All revealed'));
+
+          // a chevron rather than a long-press: long-press on a board is a coin
+          // toss, and this list is how a criterion gets revealed out of band
+          rowAct.append(el('button', {
+            class: 'btn ghost small gt-chev',
+            title: 'Reveal a particular criterion',
+            onclick: (e) => openRevealMenu(e.currentTarget),
+          }, iconEl('chevr')));
+
+          // Always present, disabled when there is nothing to take back, so the
+          // end of row 2 does not move the first time a criterion is revealed.
+          const canUndo = p.revealed.length > 0;
+          rowAct.append(el('button', {
+            class: 'btn ghost small gt-undo' + (canUndo ? '' : ' gt-dim'),
+            title: canUndo
+              ? 'Un-reveal the last one — a misfire in front of thirty children needs one tap back'
+              : 'Nothing revealed yet',
+            onclick: () => {
+              if (!canUndo) return;
+              const id = p.revealed.pop();
+              if (p.active === id) p.active = null;
+              commit();
+            },
+          }, iconEl('undo')));
+
+          quick.append(rowNav, rowAct);
         }
 
         function openRevealMenu(anchor) {
@@ -1426,8 +1474,16 @@
         }
 
         function paintAll() {
+          // the genre's own colour off the picker card, carried into the
+          // widget: the face you are on wears the tint the class chose the unit
+          // by, so picker and toolkit read as one thing rather than a coloured
+          // menu leading to a grey tool. An imported or renamed genre has no
+          // entry and falls back to the widget's own accent, which is what
+          // --acc already defaulted to.
+          const look = p.src ? GT_LOOK[p.src] : null;
+          body.style.setProperty('--acc', (look && look.t) || '#c7d2fe');
           if (!g) { paintPick(); quick.replaceChildren(); return; }
-          if (p.face === 'bank' && !gtHasBank(g)) p.face = 'list';
+          if (p.face === 'bank' && !gtHasBank(g)) p.face = 'text';
           if (p.face === 'text') paintText();
           else if (p.face === 'bank') paintBank();
           else paintList();
@@ -1442,7 +1498,7 @@
         if (!p.genre) {
           box.append(el('div', { class: 'hint' }, 'Pick a genre on the widget first.'),
             el('button', { class: 'btn ghost small', onclick: () => gtOpenPack(w, api) },
-              'Open a pack file…'));
+              'Load a genre pack…'));
           return;
         }
         const g = p.genre;
@@ -1523,7 +1579,7 @@
             g.language[key] = String(ta.value || '').split('\n')
               .map((s) => gtStr(s, GT_CAP.word)).filter(Boolean).slice(0, GT_CAP.lang);
           }
-          if (!gtHasBank(g) && p.face === 'bank') p.face = 'list';
+          if (!gtHasBank(g) && p.face === 'bank') p.face = 'text';
           if (over) toast('Kept the first ' + GT_CAP.items + ' criteria');
           save();
           api.refresh();
@@ -1579,7 +1635,7 @@
             el('button', {
               class: 'btn ghost small',
               onclick: () => gtOpenPack(w, api),
-            }, 'Open a pack file…')),
+            }, 'Load a genre pack…')),
           el('div', { class: 'hint' }, 'A pack is one plain file you own — hand it to next year’s '
             + 'teacher, or keep it as yours. Opening one replaces the criteria and the word bank here.'),
         );

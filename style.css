@@ -5547,7 +5547,29 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
   min-height: 0;
   overflow: auto;
 }
-.gt-quick { padding-top: 2px; }
+/* TWO DELIBERATE ROWS (english-text.js paintQuick). The bar used to be one
+   centred wrapping row, so every control that comes and goes with the face —
+   Cover, Size, New text, undo — re-centred the whole thing and orphaned
+   whatever fell over the edge. Rows with anchored ends instead: the faces are
+   pinned left and Print is pinned right, so the two controls a teacher reaches
+   for without looking are always in the same place. */
+/* align-items:stretch overrides .tclock-quick's centring, which would otherwise
+   shrink each row to its contents and centre it — and a shrink-wrapped row
+   cannot pin anything to an edge. */
+.gt-quick {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  padding-top: 4px;
+}
+.gt-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.gt-row-nav { flex-wrap: wrap; }
+.gt-tools { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+/* Reveal owns its row and takes everything the chevron and undo do not, which
+   is what lets it carry a criterion in full without shoving anything sideways. */
+.gt-row-act > .gt-reveal { flex: 1; min-width: 0; }
+.gt-row-act > .btn:not(.gt-reveal) { flex-shrink: 0; }
 .gt-seg { display: flex; gap: 2px; padding: 2px; border-radius: 11px; background: rgba(34, 48, 60, .07); }
 .gt-seg .btn.small { border-radius: 9px; }
 .gtwidget .gt-active { background: var(--acc, #c7d2fe); border-color: transparent; font-weight: 700; }
@@ -5730,9 +5752,12 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
 .gt-size2 { font-size: 33px; }
 .gt-tk { cursor: pointer; padding: 3px 0; border-radius: 3px; }
 .gt-gap { padding: 3px 0; }
-.gt-textbar { display: flex; justify-content: flex-end; flex-shrink: 0; }
-.gt-empty { display: flex; flex-direction: column; gap: 7px; }
-.gt-paste { height: auto; min-height: 120px; }
+/* The empty model-text face fills its face instead of sitting in the top
+   third of it with a dead void underneath — the paste box takes the room, so
+   what a teacher sees is somewhere to put the text rather than a gap. */
+.gt-empty { display: flex; flex-direction: column; gap: 7px; flex: 1; min-height: 0; }
+.gt-paste { flex: 1; height: auto; min-height: 96px; resize: none; }
+.gt-empty .hint { flex-shrink: 0; }
 
 /* ---- word bank face ---- */
 .gt-bank { display: flex; flex-direction: column; gap: 10px; }
