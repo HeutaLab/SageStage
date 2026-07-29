@@ -1256,10 +1256,13 @@
           const next = queue()[0] || null;
           quick.append(next
             ? el('button', {
-              class: 'btn small',
-              title: next.t,
+              // in full, never clipped: the children read this to know what
+              // they are about to be shown, and it is often the lesson's
+              // learning intention. It wraps and takes the room it needs
+              // (Glenn, 2026-07-29 — the same call as the chips).
+              class: 'btn small gt-reveal',
               onclick: () => { p.revealed.push(next.id); commit(); },
-            }, 'Reveal: ' + (next.t.length > 26 ? next.t.slice(0, 25) + '…' : next.t))
+            }, 'Reveal: ' + next.t)
             : el('button', {
               class: 'btn ghost small gt-dim',
               title: 'Nothing left to reveal in this band — the chevron reveals from any year',
