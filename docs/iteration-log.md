@@ -3706,3 +3706,55 @@ one nobody reads.
 The tap-off handler stays local to this widget: the app-wide dismiss work is
 happening in another chat, and two handlers for one gesture is how they end up
 fighting. english-text.js v13, style.css v101.
+
+## 2026-07-29 (late) — What a tick means, and Reveal arming its own criterion
+
+A five-lens assessment of the toolkit came back with two items Glenn took, and
+the first is the one that mattered.
+
+**A tick meant two things at once.** A criterion ticked itself the moment it
+had a highlight, then refused to come off while the highlight existed — and
+gtPosterSvg printed that tick. So the class hunts the WAGOLL in lesson one,
+highlights eight features, and the criteria poster goes up on the wall that
+afternoon with all eight boxes already ticked. Three weeks before any of it is
+taught. It was the one place the widget made a claim in front of a class that
+was not true, and it came from putting "we found this in the model" and "we can
+do this" in the same box.
+
+A tick is now a hand action and nothing else sets it. The marks have not gone
+anywhere: they show as a count beside the box — evidence that the feature is in
+the text, sitting next to the separate question of whether the class can use it
+yet. From one upwards, because "found once" is exactly as much evidence as the
+old rule needed to tick outright. The count is slate rather than the tick's
+green so it reads as a fact, and it is covered along with the criterion text
+under Cover, since a count of what is behind the cover is a clue. The poster
+follows the same rule. In-flight decks are deliberately not migrated — a
+toolkit mid-unit loses ticks it never earned and keeps its counts, which is the
+correction arriving rather than a loss; hand ticks were always stored
+separately in p.ticked and are untouched.
+
+Worth recording that the old behaviour was itself a considered fix, for a real
+problem: a tap that silently set a flag under a mark-driven tick, so the box
+appeared not to respond. That reasoning was about the interaction. This change
+is about what the box CLAIMS, which is a different question, and the interaction
+problem disappears once only one thing can set it.
+
+**Reveal now arms what it reveals.** Pressing Reveal makes that criterion
+active, so the next tap on the model text paints with it — the commonest next
+move used to cost a hunt for a chip that always lands last in a strip capped at
+42% of the face. The armed chip is scrolled into view by moving the strip's own
+scrollTop and nothing else: scrollIntoView() walks up and scrolls every
+scrollable ancestor, and the ancestors here are the widget and the stage, so a
+board that jumps because a chip needed twenty pixels would break the
+spatial-stability rule for the sake of keeping it. Deliberately NOT wired to the
+chevron menu — that reveals several at once, so arming the last-tapped one would
+be arbitrary, and the menu covers the strip anyway.
+
+Verified live: three revealed with marks on two and no hand ticks now shows
+counts 2 and 1 against three empty boxes (all three would have been ticked
+before); the box toggles freely both ways with marks present and no toast; the
+poster prints exactly one tick where one criterion is hand-ticked and two others
+carry highlights. Reveal arms the criterion it revealed, the strip auto-scrolls
+to it at thirteen chips (scrollTop 105, chip fully visible), and the chevron
+menu leaves the arming alone. Specs updated: genre-toolkit-design.md §6 and new
+§7.1, english-widgets-design.md §8.4. english-text.js v14, style.css v102.

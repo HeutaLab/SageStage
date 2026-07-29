@@ -505,8 +505,13 @@ The genre pack's face, and the working wall's most-photographed artefact.
 
 - **Ingredients checklist** (the pack's toolkit items) beside a **model-text
   panel** (paste text or import).
-- **Highlight-to-tick:** mark a feature in the WAGOLL with a toolkit item's
-  colour and the item ticks itself.
+- **Highlight-to-evidence:** mark a feature in the WAGOLL with a toolkit item's
+  colour and the item shows a count of how many times the class found it.
+  (Amended 2026-07-29 — this said *highlight-to-tick*, "and the item ticks
+  itself". Built that way, it conflated "we found this in the model" with "we
+  can do this", and the criteria poster printed the day-one hunt as a completed
+  checklist. The tick is now a hand action only; see
+  [genre-toolkit-design.md](genre-toolkit-design.md) §6.)
 - **Reveal-as-taught:** items start hidden and reveal as each is taught —
   working walls grow, they don't arrive finished.
 - **Cold/Hot awareness:** links to modelled-writing pages tagged cold/hot for

@@ -302,10 +302,29 @@ The default face, and the one that lives on the board for three weeks.
 - Items whose band does not match the deck's year group are out of the reveal
   queue — not deleted, just not offered. `allBands` puts them back.
 - Tapping a row makes that item active (and switches nothing — the face stays).
-- **Ticks have two sources.** The box toggles by hand into `ticked`. It *also*
-  shows ticked whenever that item has marks, with a small count ("2") so it is
-  obvious why. Un-ticking never deletes marks; it clears the manual flag and the
-  mark-driven tick stays, which is honest rather than surprising.
+- **A tick has ONE source: a hand** (changed 2026-07-29, Glenn's call —
+  supersedes "ticks have two sources"). The box toggles into `ticked` and
+  nothing else sets it. A tick means *the class can do this now*.
+
+  It used to tick itself as soon as an item had marks, and then refuse to come
+  off while they existed. That put two different claims in one box —
+  **"we found this in the WAGOLL"**, which happens in the first lesson, and
+  **"we can do this"**, which takes three weeks — and because `gtPosterSvg`
+  printed the tick, the poster that went up on day one went up with every box
+  the class had just found already ticked. It was the one place the widget made
+  a claim in front of a class that was not true.
+
+  The marks are still shown, as a **count beside the box** (`.gt-ev`), from one
+  upwards — the evidence that the feature is in the model text, sitting next to
+  the separate question of whether the class can use it yet. The count is
+  covered along with the criterion text under Cover, since a count of what is
+  behind the cover is a clue.
+
+  The poster follows the same rule: hand ticks only.
+
+  **In-flight decks are deliberately not migrated.** A toolkit mid-unit loses
+  ticks it never earned and keeps its counts. Hand ticks were always stored
+  separately in `ticked`, so nothing a teacher actually did is lost.
 - **Cover** blanks every criterion's text and leaves the swatches, for recall.
   No Flash — a criteria list has nothing to flash, and principle 8's grammar is
   a menu to choose from, not a checklist to satisfy.
@@ -495,6 +514,20 @@ void under it.
 widget's `--acc`, so the active face wears the colour the class chose the unit
 by. An imported or renamed genre has no tint and falls back to the widget
 accent, exactly as `--acc` already did.
+
+### 7.1 Reveal arms what it reveals (2026-07-29)
+
+Pressing **Reveal** now also makes that criterion the active one, so the next
+tap on the model text paints with it. "Here is today's criterion — now find it
+in the text" was the commonest next move and it used to cost a hunt for a chip
+that always lands last in a strip capped at 42% of the face. The armed chip is
+scrolled into view, by moving the strip's own `scrollTop` and nothing else —
+`scrollIntoView()` walks up and scrolls every scrollable ancestor it finds, and
+the ancestors here are the widget and the stage.
+
+**Only the Reveal button does this, never the chevron menu.** The menu reveals
+several at once, so arming whichever happened to be tapped last would be
+arbitrary — and the menu covers the chip strip that would show it.
 
 ## 8.8 The reveal-any menu (2026-07-29)
 

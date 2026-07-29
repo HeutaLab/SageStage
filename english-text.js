@@ -524,7 +524,10 @@
       const bx = GT_W - GT_PAD - boxW;
       parts.push('<rect x="' + bx + '" y="' + (y + 1) + '" width="' + boxW + '" height="' + boxW
         + '" rx="6" fill="#ffffff" stroke="#64748b" stroke-width="2"/>');
-      if ((p.ticked || []).includes(it.id) || mine.length) {
+      // hand ticks only, the same rule the checklist face now follows: the
+      // poster is the thing that goes on the wall, so a box ticked here is the
+      // class saying they can do it, never the widget saying it found evidence
+      if ((p.ticked || []).includes(it.id)) {
         parts.push('<path d="M' + (bx + 7) + ' ' + (y + 17) + 'l7 7 11-13" stroke="#0f172a"'
           + ' stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>');
       }
@@ -999,42 +1002,53 @@
                 ? 'Nothing revealed yet — press Reveal when you have taught the first one.'
                 : 'No criteria yet. Add some in Settings.'));
           }
+          /* A TICK IS THE CLASS SAYING "WE CAN DO THIS NOW". Nothing else sets
+             it (Glenn, 2026-07-29).
+
+             It used to tick itself the moment a criterion had a highlight, and
+             then refuse to come off while the highlight existed. That conflated
+             two different claims into one box: "we found this in the WAGOLL" and
+             "we can do this". The first happens in the first lesson of the unit,
+             the second takes three weeks — so the poster that went up on day one
+             went up with every box the class had just found already ticked, and
+             the tick printed too (gtPosterSvg). The one place the widget made a
+             claim in front of a class that wasn't true.
+
+             The highlights have not gone anywhere; they are shown next to the
+             box as a COUNT, which is what they always were — evidence that the
+             feature is in the model text, sitting beside the separate question
+             of whether the class can use it yet. From one upwards, because
+             "found once" is exactly as much evidence as the old rule needed to
+             tick the box outright.
+
+             In-flight decks are not migrated on purpose. A toolkit mid-unit
+             loses the ticks it never earned and keeps its counts, which is the
+             correction arriving rather than a loss. Hand ticks were always
+             stored separately in p.ticked and are untouched. */
           for (const it of shown) {
             const n = marksOf(it.id).length;
-            const on = p.ticked.includes(it.id) || n > 0;
+            const on = p.ticked.includes(it.id);
             list.append(el('div', {
               class: 'gt-row' + (p.active === it.id ? ' gt-on' : ''),
               onclick: () => { p.active = p.active === it.id ? null : it.id; commit(); },
             },
             el('span', { class: 'gt-sw', style: 'background:' + colOf(it.id) }),
             el('span', { class: 'gt-crit' }, it.t),
+            n ? el('span', {
+              class: 'gt-ev',
+              title: n === 1 ? 'Found once in the model text' : 'Found ' + n + ' times in the model text',
+            }, String(n)) : null,
             el('button', {
               class: 'gt-tick' + (on ? ' on' : ''),
-              title: n ? 'Ticked by ' + n + ' highlight' + (n === 1 ? '' : 's') + ' in the model text'
-                : 'Tick this criterion',
+              title: on ? 'The class can do this — tap to take it back'
+                : 'Tick when the class can do this',
               onclick: (e) => {
                 e.stopPropagation();
                 const at = p.ticked.indexOf(it.id);
-                // A mark-driven tick is not a toggle. The box shows ticked whenever
-                // the criterion has highlights, so tapping it used to silently set
-                // the manual flag underneath — a tap that changed nothing visible,
-                // and a second tap that appeared to do the un-ticking. Now the tap
-                // says why it is ticked and leaves the state alone; un-ticking means
-                // unpainting the evidence, which is the honest thing to ask for.
-                if (n && at < 0) {
-                  toast('Ticked by ' + (n === 1 ? 'a highlight' : n + ' highlights')
-                    + ' in the model text — unpaint them to clear it');
-                  return;
-                }
                 if (at < 0) p.ticked.push(it.id); else p.ticked.splice(at, 1);
-                if (n && at >= 0) {
-                  toast('Still ticked — ' + (n === 1 ? 'there is 1 highlight' : 'there are ' + n + ' highlights')
-                    + ' for it in the model text');
-                }
                 commit();
               },
-            }, on ? iconEl('tick') : null,
-            n > 1 ? el('span', { class: 'gt-tick-n' }, String(n)) : null)));
+            }, on ? iconEl('tick') : null)));
           }
           face.append(list);
         }
@@ -1074,6 +1088,25 @@
         // the scroller, so rebuilding it sends a teacher who has scrolled to
         // paragraph three back to the first line. That happens on every chip tap,
         // every Reveal and every Hide last — the core loop of a WAGOLL session.
+        /* Bring the armed chip into view after a reveal. The strip is capped at
+           42% of the face and a new chip always lands last, so on a full unit
+           the thing just armed is the one thing off the bottom.
+
+           Scrolls the STRIP and nothing else — deliberately not
+           scrollIntoView(), which walks up and scrolls every scrollable
+           ancestor it finds, and the ancestors here are the widget and the
+           stage. A board that jumps because a chip needed 20px is the
+           spatial-stability rule broken for the sake of keeping it. */
+        function showActiveChip() {
+          if (p.face !== 'text' || !chipsEl) return;
+          const chip = chipsEl.querySelector('.gt-chip.on');
+          if (!chip) return;
+          const box = chipsEl.getBoundingClientRect();
+          const r = chip.getBoundingClientRect();
+          if (r.top < box.top) chipsEl.scrollTop -= (box.top - r.top);
+          else if (r.bottom > box.bottom) chipsEl.scrollTop += (r.bottom - box.bottom);
+        }
+
         function paintChips() {
           if (!chipsEl) return;
           chipsEl.replaceChildren();
@@ -1416,7 +1449,19 @@
               // learning intention. It wraps and takes the room it needs
               // (Glenn, 2026-07-29 — the same call as the chips).
               class: 'btn small gt-reveal',
-              onclick: () => { p.revealed.push(next.id); commit(); },
+              // Revealing ARMS it (Glenn, 2026-07-29). "Here is today's
+              // criterion — now find it in the text" was the commonest next
+              // move and it cost a hunt for a chip that always lands last in a
+              // strip capped at 42% of the face. Deliberately only here and not
+              // in the chevron menu: that reveals several at once, so arming
+              // whichever happened to be tapped last would be arbitrary, and
+              // the menu covers the strip that would show it.
+              onclick: () => {
+                p.revealed.push(next.id);
+                p.active = next.id;
+                commit();
+                showActiveChip();
+              },
             }, 'Reveal: ' + next.t)
             : el('button', {
               class: 'btn ghost small gt-dim gt-reveal',

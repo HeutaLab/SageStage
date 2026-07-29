@@ -5696,7 +5696,26 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
 }
 .gt-tick .ic { width: 20px; height: 20px; }
 .gt-tick.on { background: #dcfce7; border-color: #16a34a; }
-.gt-tick-n { font-size: 12px; font-weight: 800; color: #15803d; }
+/* The evidence count: how many times the class found this feature in the model
+   text. It sits OUTSIDE the tick box and reads as a fact, not as a claim — the
+   tick beside it is the separate question of whether the class can do it yet.
+   Slate rather than the tick's green, and sized to be read from the room
+   rather than squinted at (it was 12px inside the box, which is where it got
+   mistaken for part of the tick). */
+.gt-ev {
+  flex: 0 0 auto;
+  min-width: 26px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(34, 48, 60, .09);
+  color: #3f4c5a;
+  font-weight: 800;
+  font-size: 14px;
+  font-size: clamp(13px, 1.9cqw, 20px);
+  text-align: center;
+}
+/* covered along with the words: a count of what is behind the cover is a clue */
+.gt-covered .gt-ev { color: transparent; }
 /* Cover: the words go, the swatches and the ticks stay — it has to read as
    covered, not as broken */
 .gt-covered .gt-crit,
