@@ -5833,6 +5833,21 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
 .gt-menu-it .gt-sw { width: 16px; height: 16px; border-radius: 5px; }
 .gt-menu-it .ic { width: 16px; height: 16px; margin-left: auto; color: #16a34a; }
 .gt-menu-t { flex: 1; min-width: 0; }
+/* says the menu stays open, because a menu that used to shut on the first tap
+   has taught every teacher who met it that one tap is all they get */
+.gt-menu-foot {
+  /* sticky, because a twenty-criterion menu scrolls and an instruction that
+     only appears once you have scrolled to the end is an instruction nobody
+     reads */
+  position: sticky;
+  bottom: -6px;
+  font-size: 12px;
+  color: #64748b;
+  padding: 7px 7px 9px;
+  margin-top: 3px;
+  background: var(--panel-bg, #fff);
+  border-top: 1px solid var(--panel-border);
+}
 
 /* ---- the editor, in the settings side panel ---- */
 .gt-edit-lab { font-size: 12px; font-weight: 700; color: #64748b; margin-top: 4px; }

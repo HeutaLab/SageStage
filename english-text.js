@@ -1427,9 +1427,11 @@
           // a chevron rather than a long-press: long-press on a board is a coin
           // toss, and this list is how a criterion gets revealed out of band
           rowAct.append(el('button', {
-            class: 'btn ghost small gt-chev',
-            title: 'Reveal a particular criterion',
-            onclick: (e) => openRevealMenu(e.currentTarget),
+            // stays lit while its menu is open, and a commit rebuilds this
+            // button underneath an open menu, so the state is read here too
+            class: 'btn ghost small gt-chev' + (revealMenu ? ' gt-active' : ''),
+            title: 'Reveal any criterion — pick as many as you need',
+            onclick: () => openRevealMenu(),
           }, iconEl('chevr')));
 
           // Always present, disabled when there is nothing to take back, so the
@@ -1451,13 +1453,40 @@
           quick.append(rowNav, rowAct);
         }
 
-        function openRevealMenu(anchor) {
-          const menu = el('div', { class: 'gt-menu' });
-          const close = () => {
-            menu.remove();
-            document.removeEventListener('pointerdown', away, true);
-          };
-          const away = (e) => { if (!menu.contains(e.target) && e.target !== anchor) close(); };
+        /* The reveal-out-of-order menu STAYS OPEN while criteria are picked
+           (Glenn, 2026-07-29). It used to close on the first tap, so putting up
+           four criteria at the start of a lesson meant opening it four times.
+           Each tap still reveals immediately — the act is live, and nothing is
+           held back waiting for an OK that a dismissed menu would lose — but the
+           menu repaints its own ticks in place and waits for the next one.
+
+           Three ways out, and no fourth: the chevron toggles it shut, a tap
+           anywhere off it closes it, Escape closes it. (The app-wide
+           tap-off-to-close work is happening elsewhere; this is the widget's own
+           handler and stays local so the two do not collide.) */
+        let revealMenu = null;
+
+        // The chevron's open/shut look is a class swap on the live element, NOT
+        // a paintQuick(). closeRevealMenu runs from a capture-phase pointerdown,
+        // and rebuilding the bar there would detach whatever the teacher was
+        // actually pressing before its click could fire — tapping Print while
+        // the menu was open would silently do nothing.
+        const markChev = (open) => {
+          const cv = quick.querySelector('.gt-chev');
+          if (cv) cv.classList.toggle('gt-active', open);
+        };
+
+        function closeRevealMenu() {
+          if (!revealMenu) return;
+          revealMenu.el.remove();
+          document.removeEventListener('pointerdown', revealMenu.away, true);
+          document.removeEventListener('keydown', revealMenu.key, true);
+          revealMenu = null;
+          markChev(false);
+        }
+
+        function paintRevealMenu(menu) {
+          menu.replaceChildren();
           for (const [bid, label] of GT_BANDS) {
             const inBand = items().filter((it) => it.band === bid);
             if (!inBand.length) continue;
@@ -1467,20 +1496,50 @@
               menu.append(el('button', {
                 class: 'gt-menu-it' + (on ? ' on' : ''),
                 onclick: () => {
-                  close();
                   if (on) {
                     p.revealed = p.revealed.filter((x) => x !== it.id);
                     if (p.active === it.id) p.active = null;
                   } else p.revealed.push(it.id);
-                  commit();
+                  commit();          // the board, the chips and the bar
+                  paintRevealMenu(menu); // and this menu's own ticks, in place
                 },
               }, el('span', { class: 'gt-sw', style: 'background:' + colOf(it.id) }),
               el('span', { class: 'gt-menu-t' }, it.t), on ? iconEl('tick') : null));
             }
           }
-          if (!menu.children.length) menu.append(el('div', { class: 'gt-menu-lab' }, 'No criteria yet'));
+          if (!menu.children.length) {
+            menu.append(el('div', { class: 'gt-menu-lab' }, 'No criteria yet'));
+            return;
+          }
+          menu.append(el('div', { class: 'gt-menu-foot' },
+            'Tap as many as you need — the arrow closes this.'));
+        }
+
+        function openRevealMenu() {
+          if (revealMenu) { closeRevealMenu(); return; } // the chevron toggles
+          const menu = el('div', { class: 'gt-menu' });
+          const away = (e) => {
+            if (menu.contains(e.target)) return;
+            // the chevron is a NEW element after every commit, so it is
+            // recognised by class rather than by identity — otherwise the first
+            // reveal orphans the anchor and the toggle stops working
+            if (e.target.closest && e.target.closest('.gt-chev')) return;
+            closeRevealMenu();
+          };
+          const key = (e) => { if (e.key === 'Escape') closeRevealMenu(); };
+          revealMenu = { el: menu, away: away, key: key };
+          paintRevealMenu(menu);
+          // clear of the WHOLE bar, measured rather than assumed: the bar is two
+          // rows now and grows again when a long criterion wraps, and the fixed
+          // offset this used to carry put the menu over the model text — the one
+          // thing §11 says it must never cover
+          menu.style.bottom = (quick.offsetHeight + 12) + 'px';
           body.append(menu);
-          setTimeout(() => document.addEventListener('pointerdown', away, true), 0);
+          markChev(true);
+          setTimeout(() => {
+            document.addEventListener('pointerdown', away, true);
+            document.addEventListener('keydown', key, true);
+          }, 0);
         }
 
         function paintAll() {

@@ -3671,3 +3671,38 @@ Verified in the browser across the model text face (four chips, four
 highlights), the checklist swatches, and the print preview, where the evidence
 snippets keep their text legible on the denser fills. english-text.js v12,
 style.css v99.
+
+## 2026-07-29 (night) — The reveal menu stops closing on you
+
+Glenn: the option to choose more than one criterion from the chevron menu in
+one go, then close it with the arrow or by tapping off.
+
+It closed on the first tap, so four criteria at the start of a lesson meant
+opening it four times. Now it stays open: each tap still reveals immediately —
+a reveal is a live act, and nothing is held back waiting for an OK that a
+stray tap could lose — and the menu repaints its own ticks in place. Three ways
+out and no fourth: the chevron toggles it, a tap off it closes it, Escape
+closes it, and the chevron stays lit while it is open.
+
+Two things that only show up once the menu outlives a reveal. The chevron is
+now found by class rather than held as an element, because every reveal rebuilds
+the bar underneath the open menu — holding the anchor would orphan it on the
+first tap and kill the toggle. And closing deliberately does NOT call
+paintQuick: the close runs from a capture-phase pointerdown, so rebuilding the
+bar there would detach whatever the teacher was actually pressing before its
+click could fire. Tapping Print… with the menu open would have closed the menu
+and done nothing else. The open/shut look is a class swap on the live element
+instead, and it is verified: with the menu open, a press on Print closes the
+menu AND opens the print dialog.
+
+While in there: the menu now clears the whole bar, measured at open time. The
+bar is two rows since this morning and grows again when a long criterion wraps,
+and the old fixed 46px offset had quietly started laying the menu over the
+model text — the one surface §11 says it must never cover. And the footer hint
+("Tap as many as you need — the arrow closes this") is sticky, because a
+twenty-criterion menu scrolls and an instruction you only meet at the bottom is
+one nobody reads.
+
+The tap-off handler stays local to this widget: the app-wide dismiss work is
+happening in another chat, and two handlers for one gesture is how they end up
+fighting. english-text.js v13, style.css v101.

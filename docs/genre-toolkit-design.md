@@ -496,6 +496,36 @@ widget's `--acc`, so the active face wears the colour the class chose the unit
 by. An imported or renamed genre has no tint and falls back to the widget
 accent, exactly as `--acc` already did.
 
+## 8.8 The reveal-any menu (2026-07-29)
+
+The chevron beside Reveal opens the out-of-band list, and it **stays open while
+criteria are picked**. It used to close on the first tap, so putting four
+criteria up at the start of a lesson meant opening it four times.
+
+- **Each tap reveals immediately.** Nothing is held back waiting for an OK — a
+  reveal is a live classroom act, and a menu dismissed by a stray tap must not
+  be able to lose work. The menu repaints its own ticks in place.
+- **Three ways out and no fourth:** the chevron toggles it shut, a tap anywhere
+  off it closes it, Escape closes it. The chevron stays lit while its menu is
+  open.
+- The chevron is **recognised by class, not by identity**, because every reveal
+  rebuilds the bar underneath the open menu — holding the element would orphan
+  the anchor on the first tap and break the toggle.
+- Closing **never rebuilds the bar**. `closeRevealMenu` runs from a
+  capture-phase `pointerdown`, so a rebuild there would detach whatever the
+  teacher was actually pressing before its click could fire — tapping *Print…*
+  with the menu open would have silently done nothing. The open/shut look is a
+  class swap on the live element instead. Verified: with the menu open, a press
+  on Print closes the menu **and** opens the print dialog.
+- The menu clears the **whole** bar, measured at open time rather than by a
+  fixed offset — the bar is two rows now and grows again when a long criterion
+  wraps, and the old fixed offset had started laying the menu over the model
+  text, the one thing it must never cover.
+
+The tap-off handler is the widget's own and deliberately local; the app-wide
+dismiss work is happening separately, and two handlers for one gesture is how
+they end up fighting.
+
 ## 9. The editor
 
 Duplicate-and-edit, per §4.4: every pack opens in an editor because every school
