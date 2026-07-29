@@ -80,14 +80,24 @@
   }
   const gtBandName = (id) => (GT_BANDS.find((b) => b[0] === id) || [null, ''])[1];
 
-  // Eight pale fills, drawn from the accents already in use across the set: each
+  // Eight fills, drawn from the accents already in use across the set: each
   // legible with dark slate on top, each printing without turning to mud. Colour
   // is NEVER stored on an item — it is the item's index into this list, so an
   // edited or reordered list can't orphan a mark to a dead colour. Past eight the
   // list cycles; identity lives in marks[].item, and tapping a highlight names
   // its criterion, so a repeated colour is a cosmetic collision, never a data one.
-  const GT_COLS = ['#fde68a', '#a7f3d0', '#bfdbfe', '#fbcfe8',
-    '#ddd6fe', '#fed7aa', '#d9f99d', '#bae6fd'];
+  //
+  // Stepped up one register 2026-07-29 (Glenn: "the colours of the pills need to
+  // be slightly more prominent — it's dim on the board even on dynamic
+  // setting"). These were the palest usable tints, which is exactly the trap the
+  // word bank already recorded: an interactive whiteboard is badly
+  // colour-calibrated and a tasteful tint disappears on a projector. One step
+  // is the whole change: 20% denser on average, and measured against the slate
+  // the chips and rows are set in the worst of the eight is still 7.9:1 — above
+  // AAA — so nothing on the board or the poster loses legibility, and the hues
+  // stay as widely separated as before because every one moved together.
+  const GT_COLS = ['#fcd34d', '#6ee7b7', '#93c5fd', '#f9a8d4',
+    '#c4b5fd', '#fdba74', '#bef264', '#7dd3fc'];
 
   // C0 controls other than tab/newline/return are illegal in XML 1.0, so a pack
   // carrying one produces a poster SVG the print dialog cannot parse — the
@@ -1482,6 +1492,10 @@
           // --acc already defaulted to.
           const look = p.src ? GT_LOOK[p.src] : null;
           body.style.setProperty('--acc', (look && look.t) || '#c7d2fe');
+          // the same genre's deep ink, so the face you are on is stated in the
+          // text and the ring as well as the fill — a pale fill alone was too
+          // quiet across a projector (Glenn, 2026-07-29)
+          body.style.setProperty('--acc-ink', (look && look.k) || '#4338ca');
           if (!g) { paintPick(); quick.replaceChildren(); return; }
           if (p.face === 'bank' && !gtHasBank(g)) p.face = 'text';
           if (p.face === 'text') paintText();

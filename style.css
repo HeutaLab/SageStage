@@ -5572,7 +5572,16 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
 .gt-row-act > .btn:not(.gt-reveal) { flex-shrink: 0; }
 .gt-seg { display: flex; gap: 2px; padding: 2px; border-radius: 11px; background: rgba(34, 48, 60, .07); }
 .gt-seg .btn.small { border-radius: 9px; }
-.gtwidget .gt-active { background: var(--acc, #c7d2fe); border-color: transparent; font-weight: 700; }
+/* The face you are on, said three ways — fill, ring and ink — because a pale
+   fill on its own reads as "slightly lighter" across a badly calibrated
+   projector rather than as "this one". The ring is what carries it at the back
+   of the room; the ink also lifts the label off its own fill. */
+.gtwidget .gt-active {
+  background: var(--acc, #c7d2fe);
+  border-color: var(--acc-ink, #4338ca);
+  color: var(--acc-ink, #4338ca);
+  font-weight: 800;
+}
 .gtwidget .gt-dim { opacity: .55; }
 .gt-chev { padding-left: 7px; padding-right: 7px; }
 /* The Reveal button carries the criterion the class is about to be shown —

@@ -3640,3 +3640,34 @@ already did.
 
 Spec updated at genre-toolkit-design.md §8.7. english-text.js v11,
 style.css v98.
+
+## 2026-07-29 (evening) — The pills, one register up
+
+Glenn: "the colours of the pills need to be slightly more prominent. it's dim
+on the board even on dynamic setting."
+
+The criteria palette was the palest usable tint of each hue — Tailwind's 200s —
+which is precisely the trap the word bank work recorded back in July: an
+interactive whiteboard is badly colour-calibrated, and a tasteful tint
+disappears on a projector. That rule was written about grouping colours in a
+different widget and never applied here, which is how the toolkit shipped with
+eight fills that look right on a laptop and vanish on a wall.
+
+One step up, all eight together, so the hues stay as widely separated as they
+were: amber, emerald, blue, pink, violet, orange, lime and sky at their 300
+level. Measured rather than eyeballed — 20% denser on average, and against the
+slate the chips and rows are set in the worst of the eight is 7.9:1, which is
+above AAA. So nothing lost legibility on the board or on the poster, and the
+same edit moved all five places these colours appear: the chips, the highlights
+in the text, the checklist swatches, and both printed sheets.
+
+The active face pill went up with them, because it had the same problem for the
+same reason. It now states itself three ways instead of one — the genre's tint
+as the fill, the genre's deep ink as both the ring and the label. A pale fill on
+its own reads as "slightly lighter" from the back of a room; the ring is what
+actually carries "this is the face you are on" across a projector.
+
+Verified in the browser across the model text face (four chips, four
+highlights), the checklist swatches, and the print preview, where the evidence
+snippets keep their text legible on the denser fills. english-text.js v12,
+style.css v99.

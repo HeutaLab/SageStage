@@ -204,15 +204,33 @@ criterion.
 eight, so an edited list never orphans a mark to a dead colour:
 
 ```js
-const GT_COLS = ['#fde68a', '#a7f3d0', '#bfdbfe', '#fbcfe8',
-                 '#ddd6fe', '#fed7aa', '#d9f99d', '#bae6fd'];
+const GT_COLS = ['#fcd34d', '#6ee7b7', '#93c5fd', '#f9a8d4',
+                 '#c4b5fd', '#fdba74', '#bef264', '#7dd3fc'];
 ```
 
-Eight pale fills drawn from the accents already in use across the English set,
-each legible with dark slate text on top and each printing without turning to
-mud. Past eight items the palette cycles; identity still lives in `marks[].item`,
-and tapping a highlight names its criterion, so a repeated colour is a cosmetic
+Eight fills drawn from the accents already in use across the English set, each
+legible with dark slate text on top and each printing without turning to mud.
+Past eight items the palette cycles; identity still lives in `marks[].item`, and
+tapping a highlight names its criterion, so a repeated colour is a cosmetic
 collision and never a data one.
+
+**Stepped up one register 2026-07-29** — Glenn: *"the colours of the pills need
+to be slightly more prominent. it's dim on the board even on dynamic setting."*
+The first set was the palest usable tint of each hue, which is exactly the trap
+the word bank work already recorded: **an interactive whiteboard is badly
+colour-calibrated, and a tasteful tint disappears on a projector** (iteration
+log, 2026-07-24). One step was the whole change — 20% denser on average, with
+the worst of the eight still at 7.9:1 against the slate the chips and rows are
+set in, so nothing on the board or the poster lost legibility. Every hue moved
+together, so they stay as widely separated as before. The same fills carry the
+chips, the highlights in the text, the checklist swatches and both printed
+sheets, so one edit moved all five.
+
+The **active face pill** was strengthened at the same time and for the same
+reason: it now states itself three ways — the genre's tint as fill, the genre's
+deep ink as both ring and label (`--acc` / `--acc-ink`, set from `GT_LOOK` in
+`paintAll`) — because a pale fill alone reads as "slightly lighter" at the back
+of a classroom rather than as "this one".
 
 **Mount-time coercion**, the `phonemetiles`/`wordsort` pattern
 (`english-word.js:661`) — props may be years old or hand-edited:
