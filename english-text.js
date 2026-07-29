@@ -1135,29 +1135,67 @@
             p.marks = [];
             api.refresh();
           };
+          // SageDocText reads Word and PDF as well as plain text (doctext.js).
+          // Almost no teacher has a .txt of their WAGOLL — it is a Word file,
+          // or a PDF that came round in an email — and asking for a conversion
+          // in the ninety seconds before a lesson is asking them not to bother
+          // (Glenn, 2026-07-29). If the module is somehow absent the old
+          // plain-text path still works, so this face never dies.
+          const DT = window.SageDocText;
           const fileIn = el('input', {
             type: 'file', style: 'display:none;',
-            accept: '.txt,.md,.text,text/plain,text/markdown',
+            accept: (DT && DT.EXT) || '.txt,.md,.text,text/plain,text/markdown',
           });
+          const openBtn = el('button', {
+            class: 'btn ghost small',
+            onclick: () => { if (!openBtn.disabled) fileIn.click(); },
+          }, DT ? 'Open a document…' : 'Open a text file…');
           fileIn.addEventListener('change', () => {
             const f = (fileIn.files || [])[0];
             fileIn.value = '';
             if (!f) return;
-            if (f.size > GT_CAP.text * 8) { toast('That file is too big to read here'); return; }
-            const fr = new FileReader();
-            fr.onerror = () => toast('Could not read that file');
-            fr.onload = () => { ta.value = String(fr.result || '').slice(0, GT_CAP.text * 2); take(); };
-            fr.readAsText(f);
+            if (!DT) {
+              if (f.size > GT_CAP.text * 8) { toast('That file is too big to read here'); return; }
+              const fr = new FileReader();
+              fr.onerror = () => toast('Could not read that file');
+              fr.onload = () => { ta.value = String(fr.result || '').slice(0, GT_CAP.text * 2); take(); };
+              fr.readAsText(f);
+              return;
+            }
+            // a forty-page PDF takes a moment, and a button that looks dead is
+            // how a teacher ends up opening the file three times
+            openBtn.disabled = true;
+            openBtn.textContent = 'Reading…';
+            const done = () => {
+              openBtn.disabled = false;
+              openBtn.textContent = 'Open a document…';
+            };
+            DT.read(f, { maxChars: GT_CAP.text * 2 }).then((res) => {
+              done();
+              ta.value = res.text;
+              take();
+              // said after the text is in, not instead of it: the note is
+              // always about something dropped, never about a failure
+              if (res.note) toast(res.note);
+            }).catch((err) => {
+              done();
+              toast((err && err.message) || 'Could not read that file');
+            });
           });
           face.append(el('div', { class: 'gt-empty' },
             ta,
             el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap;' },
               el('button', { class: 'btn small', onclick: take }, 'Use this text'),
-              el('button', { class: 'btn ghost small', onclick: () => fileIn.click() }, 'Open a text file…'),
+              openBtn,
               fileIn),
-            el('div', { class: 'hint' }, 'Plain text — a page or two is plenty. Once it is in, tap a '
-              + 'word to mark it with whichever criterion is chosen, or drag across a phrase. '
-              + 'Punctuation taps on its own, so a comma or an apostrophe can be marked by itself.')));
+            el('div', { class: 'hint' }, DT
+              ? 'Paste it, or open a Word document, a PDF or a text file — the words come '
+                + 'across, nothing else. A page or two is plenty. Once it is in, tap a word to '
+                + 'mark it with whichever criterion is chosen, or drag across a phrase. '
+                + 'Punctuation taps on its own, so a comma or an apostrophe can be marked by itself.'
+              : 'Plain text — a page or two is plenty. Once it is in, tap a '
+                + 'word to mark it with whichever criterion is chosen, or drag across a phrase. '
+                + 'Punctuation taps on its own, so a comma or an apostrophe can be marked by itself.')));
         }
 
         const idxAt = (ev) => {

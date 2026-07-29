@@ -3514,3 +3514,78 @@ widest chip 794px against a 794px face, no sideways scroll anywhere).
 Verified live across all three: worst case, realistic full unit, and normal use
 with the word bank face pre-ticking the word bank sheet. No console errors.
 english-text.js v8, style.css v95.
+
+## 2026-07-29 — The Reveal pill reads in full, and Word and PDF come in
+
+Two amendments from Glenn on the Genre Toolkit.
+
+**The Reveal pill was still clipped** at 26 characters with the rest in a
+mouse-only tooltip. His reason for caring is the one that decides it: "While
+it's primarily a teacher's tool, it's also for children to be able to read it
+to know what they're about to reveal. This may be a learning intention." So the
+slice is gone and the pill wraps, taking its own row on the bar when it needs
+one. Measured at the 200-character cap: full text, fits the bar exactly, no
+sideways scroll, face keeps 432px of 541. Same call as the chips two days ago —
+these read in full or they are not doing their job.
+
+**Documents.** "Teachers rarely use text files (.txt) unless it's exported
+deliberately from another app. .Docx is the most common then PDF… it's a real
+option needed for teachers — especially in the moment and uploading live in the
+classroom." A teacher asked for a .txt ninety seconds before a lesson is a
+teacher who does not bother.
+
+New sibling module `doctext.js` (`window.SageDocText`), in the zip.js/print.js
+pattern so bookpage and the Story Map get it free. **.docx needs nothing
+vendored** — it is a zip and SageZip.read already opens it. **.pdf is
+hand-rolled**: there is no PDF reader in vendor/ and adding one is a dependency
+decision that is Glenn's, not mine, so the whole thing — xref tables and xref
+streams, object streams, Flate/LZW/ASCII85/RunLength, /Differences encodings,
+/ToUnicode CMaps, form XObjects, page geometry — is in the file. DOM-free
+throughout, which is what let all of it be regression-tested under plain node.
+
+The build was worth the ceremony. A real corpus first (textutil, cupsfilter,
+sips, the repo's own vendored jsPDF), two independent PDF implementations
+judged against each other on files neither author made, then three adversarial
+passes. The judge picked the xref-first reader and grafted the scan reader's
+baseline projection into it; it also found, in neither author's report, that
+the gap rule's median was poisoned by exactly the shape of the corpus's own
+poem. The adversarial passes then found ten more defects, five of which
+**killed the tab**: an O(n²) shift() that hung Chrome for minutes on a 9 KB
+docx (JavaScriptCore is fine — a Chrome-only cliff), a RunLength bomb that
+SIGABRTed V8 uncatchably from 8 KB, a CMap that froze for 30 s from 1.4 KB, a
+per-page content re-walk that took two minutes on a 429 KB file, and inflate
+with no output budget reaching 2.1 GB from 499 KB. All fixed and measured: 61
+hostile inputs, 0 bad outcomes, worst case 3 s and 284 MB, every failure a
+sentence a teacher can act on.
+
+Then the recheck caught two regressions the page-furniture stripper had
+introduced, and one of them is the lesson worth keeping. **It was deleting a
+ballad's refrain.** A refrain closing each page repeats in the bottom band, and
+a stanza gap detaches it, so it satisfied every furniture test and went — with
+a note calling it a footer. Fixed by demanding corroboration that a line is
+furniture rather than verse: it says which page it is, or carries a number that
+changes between pages, or is set smaller than the body. A refrain is
+body-sized, digit-free and identical on every page, so it fails all three. The
+cost is a numberless letterhead surviving onto the board, which is the right
+way round to be wrong — **deleted words are silent and unrecoverable; a leaked
+header is visible and one tap to fix.** The same fix corrected a false positive
+the build had already recorded as a known limit (a worksheet's "How many did
+you get?" line). The second regression: a one-page worksheet titled "Page 3"
+lost its title, so the worded page-mark now has to agree with the page it sits
+on, exactly as the bare number already did.
+
+zip.js gained OPTIONAL size limits and is otherwise byte-for-byte the old path;
+the word bank passes no options. Verified by round-tripping a set through
+write/read in the browser, zero-length entry included.
+
+Verified live in the browser, not just in node: a real poem.docx goes in and
+lands on the board with its title, stanza gap and lines intact; formatted.docx
+does not break "The quick brown fox" across its formatting runs; entities,
+tables and multipage PDFs are right; scanned.pdf reaches the teacher as "it's a
+picture of the page… select the text and paste it in" and the button recovers.
+Known limits are written into genre-toolkit-design.md §8.6 rather than left to
+be discovered in a lesson — two-column PDFs come out in an unpredictable order
+(detected and reported, not repaired), and PDF prose arrives hard-wrapped at
+the measure it was typeset to, because poems forbid unwrapping.
+
+doctext.js new; zip.js v2, english-text.js v10, style.css v96.

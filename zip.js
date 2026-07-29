@@ -129,16 +129,55 @@
     return b.length >= 4 && b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04;
   };
 
-  async function inflateRaw(bytes) {
+  /* `limit` is OPTIONAL and defaults to no limit, which is the path this
+     function has always taken, byte for byte. Deflate reaches 1032:1, so half
+     a megabyte of archive can be half a gigabyte of entry; a caller that is
+     about to put the contents on a screen can say how much it is willing to
+     take, and then the stream is drained a chunk at a time and abandoned the
+     moment it goes over rather than after the allocation has already happened.
+     Callers that pass nothing — the word bank — get exactly what they did
+     before, including the one-shot Response.arrayBuffer(). */
+  async function inflateRaw(bytes, limit) {
     if (typeof DecompressionStream !== 'function') throw new Error('deflate not supported here');
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-    return new Uint8Array(await new Response(stream).arrayBuffer());
+    if (!(limit > 0)) return new Uint8Array(await new Response(stream).arrayBuffer());
+    const reader = stream.getReader();
+    const chunks = [];
+    let n = 0;
+    for (;;) {
+      const r = await reader.read();
+      if (r.done) break;
+      chunks.push(r.value);
+      n += r.value.length;
+      if (n > limit) {
+        try { await reader.cancel(); } catch (e) { /* already finished */ }
+        throw tooBig();
+      }
+    }
+    const out = new Uint8Array(n);
+    let o = 0;
+    for (const c of chunks) { out.set(c, o); o += c.length; }
+    return out;
+  }
+
+  function tooBig() {
+    const e = new Error('zip contents exceed the limit the caller gave');
+    e.code = 'ZIP_TOO_BIG';   // so a caller can tell "too big" from "damaged"
+    return e;
   }
 
   /* Reads an archive into a Map of name -> Uint8Array. Entries are found
      through the central directory rather than by scanning for headers, which
-     is what makes a stray "PK" inside a JPEG harmless. */
-  async function read(buffer) {
+     is what makes a stray "PK" inside a JPEG harmless.
+
+     opts is OPTIONAL and defaults to today's behaviour in every respect:
+       { maxEntryBytes } — refuse a single entry that decompresses past this;
+       { maxTotalBytes } — refuse once the entries add up past this.
+     Either one, when tripped, throws an Error with code 'ZIP_TOO_BIG'. */
+  async function read(buffer, opts) {
+    const maxEntry = (opts && opts.maxEntryBytes > 0) ? opts.maxEntryBytes : 0;
+    const maxTotal = (opts && opts.maxTotalBytes > 0) ? opts.maxTotalBytes : 0;
+    let total = 0;
     const buf = buffer instanceof ArrayBuffer ? buffer : buffer.buffer;
     const view = new DataView(buf);
     const len = buf.byteLength;
@@ -172,9 +211,15 @@
       if (start + compSize > len) continue;
       const raw = new Uint8Array(buf, start, compSize);
       if (name.endsWith('/')) continue; // a folder entry carries no data
-      if (method === 0) out.set(name, raw);
-      else if (method === 8) out.set(name, await inflateRaw(raw));
+      let data = null;
+      if (method === 0) data = raw;
+      else if (method === 8) data = await inflateRaw(raw, maxEntry);
       // any other method (bzip2, lzma…) is left out rather than guessed at
+      if (!data) continue;
+      if (maxEntry && data.length > maxEntry) throw tooBig();
+      total += data.length;
+      if (maxTotal && total > maxTotal) throw tooBig();
+      out.set(name, data);
     }
     return out;
   }

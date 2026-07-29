@@ -326,9 +326,26 @@ already opens the dialog on the sheet showing. The widget menu's *Print…*
 
 ## 8. The model text face
 
-- **Empty:** a paste target — "Paste your model text" — plus *open a text file*
-  (`.txt`, `.md`; plain text only, no rich text, no PDF; `bookpage` is where
-  documents belong).
+- **Empty:** a paste target — "Paste your model text" — plus ***Open a
+  document…*** (`.txt`, `.md`, **`.docx`, `.pdf`**).
+
+  **Amended 2026-07-29, Glenn's call, superseding "plain text only, no rich
+  text, no PDF; `bookpage` is where documents belong".** His reasoning:
+  *"Teachers rarely use text files (.txt) unless it's exported deliberately
+  from another app. .Docx is the most common then PDF… it's a real option
+  needed for teachers — especially in the moment and uploading live in the
+  classroom."* A teacher asked for a `.txt` ninety seconds before a lesson is
+  a teacher who does not bother. This does not move documents into this
+  widget's job: only the WORDS come across — no styling, no images, no
+  layout — so the widget still holds one model text and nothing else, and
+  `bookpage` remains where a document is *read* rather than stripped.
+
+  The reading lives in [`doctext.js`](../doctext.js) (`window.SageDocText`),
+  a sibling module in the `zip.js` / `print.js` pattern, so `bookpage` and the
+  Story Map can use it unchanged when they land. `.docx` needs nothing
+  vendored — it is a zip, and `SageZip.read` already opens it. `.pdf` is
+  hand-rolled for the same reason the rest of this app is: no new dependency,
+  nothing on the network. Its honest limits are in §8.6.
 - **Pasted:** tokens rendered at one of three board sizes, generous line height,
   the widget's own scroll.
 - A strip above the text holds the revealed items as coloured chips; tapping one
@@ -360,6 +377,53 @@ v1 and the three rules it follows.
 - Nothing on this face is revealed-as-taught. A word bank is reference the class
   reads from on day one; the reveal discipline belongs to success criteria, which
   are claims about what the class can now do.
+
+## 8.6 What the document reader can and cannot do
+
+Written 2026-07-29 from a measured adversarial pass, so the limits are on the
+record rather than discovered in a lesson. `SageDocText.read` returns
+`{ text, kind, note }`; **`note` is how a shortfall reaches the teacher** — one
+sentence, after the text is in, never instead of it. A file it genuinely cannot
+read throws, and every thrown message says what to do instead.
+
+**Word (`.docx`) is the strong path.** Runs split by formatting rejoin with no
+separator (the "the qu ick fox" trap), `xml:space="preserve"` is honoured, an
+empty `<w:p/>` is a stanza gap, `<w:br/>` is a line break. Headers, footers,
+footnotes, endnotes, comments and tracked changes are all deliberately left
+out — a school template's letterhead has no business on the board — and a
+document with tracked changes says so in `note`. Tables flatten to one line per
+row with `·` between cells, and say so.
+
+**PDF is best-effort, and these are its edges:**
+
+- **Two columns come out in an unpredictable order.** Same-baseline columns
+  merge; staggered ones interleave, which reads as fluent but scrambled text.
+  Detected and reported in `note` rather than repaired — a gutter is not
+  reliably distinguishable from a table.
+- **Prose arrives hard-wrapped** at whatever measure the PDF was typeset to,
+  because a source newline is a hard break in this widget. The same text as
+  `.docx` arrives as one line per paragraph. Poems forbid unwrapping, so the
+  format the teacher happens to have decides this.
+- **Running headers, footers and page numbers are stripped**, but only on
+  corroborating evidence: the line has to sit in the top or bottom band, stand
+  clear of the body, AND either say which page it is, carry a number that
+  changes from page to page, or be set smaller than the body. **A repeated
+  body-sized line with no number in it is left alone** — that rule exists
+  because a ballad refrain closing each page satisfied every other test and was
+  being deleted with a note calling it a footer. Deleted words are silent and
+  unrecoverable; a leaked letterhead is visible and one tap to fix. Wrong in
+  the safe direction, on purpose.
+- **A scan has no text to give.** It says so and tells the teacher to select
+  and paste instead. Encrypted, truncated and no-`/ToUnicode` files each get
+  their own message rather than being lumped in as "no text".
+- Fonts with no `/Widths` and unusual tracking can lose or gain a space; a
+  glyph that fails to map shows as `�` and is counted in `note`.
+
+**Safety is not best-effort.** Every hostile shape found — deflate bombs,
+RunLength bombs, CMap explosions, 6000-page files, cyclic page trees, damaged
+xrefs, zero-byte files — ends in either correct text or a teacher-facing error,
+in seconds, with bounded memory. The reason is the classroom: a frozen tab
+takes the lesson with it.
 
 ## 9. The editor
 
