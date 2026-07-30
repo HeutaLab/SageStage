@@ -3758,3 +3758,255 @@ carry highlights. Reveal arms the criterion it revealed, the strip auto-scrolls
 to it at thirteen chips (scrollTop 105, chip fully visible), and the chevron
 menu leaves the arming alone. Specs updated: genre-toolkit-design.md §6 and new
 §7.1, english-widgets-design.md §8.4. english-text.js v14, style.css v102.
+
+## 2026-07-29 (later still) — The undo that could never be pressed
+
+Glenn: the "Put it back" pill in the toast does nothing when you click it.
+
+It did nothing because nothing could click it. `#toast` carries
+`pointer-events: none`, which is right for a message that floats over the stage
+— a toast should never eat a click meant for the widget underneath it. But
+pointer-events inherits, and the rule was written when the toast was text only.
+The button arrived later, on purpose, as the no-awareness-required path back
+from a mis-clicked X: no menu to find, no reading, no knowing where things go
+when they are closed. It rendered, it lingered its nine seconds, and every click
+aimed at it passed straight through to the dashboard behind.
+
+The tell was the hover. The `:hover` rule that lightens the pill could not fire
+either, so the button never lit up under the pointer — a dead hover on a styled
+button is pointer-events, not a missing handler, every time.
+
+Nothing was wrong below the CSS. `el()` attaches onclick with addEventListener,
+`toast()` wires the button to onAction, and `restoreFromBin` was provably fine:
+the *same* function is what the Put it back buttons in Your data → Recently
+closed call, and those have always worked, because they sit in an ordinary modal
+with nothing blocking them. One function, two callers, one of them unreachable.
+
+The button alone takes clicks back, and only under `.show`. The scoping is the
+part worth recording: the toast rests at `opacity: 0`, and a fully transparent
+element is still hit-testable, so `#toast .toast-action` unscoped would have
+left an invisible dead target parked mid-screen for the other twenty-three hours
+— the same class of bug, moved rather than fixed. The container keeps
+`pointer-events: none`, so a plain toast still lets a click through to the stage.
+
+Verified by hit test rather than by eye, since the defect was hit-testing: at
+the pill's centre, `elementFromPoint` returns the button while the toast is
+shown and the dashboard grid once it is hidden, and a real mouse click fires the
+handler. Hover lights the pill again.
+
+One thing this does not change: the toast only appears when the widget reached
+the bin at all, and `binWidget` bails on anything `widgetWorthKeeping` says is
+empty. Closing a blank widget has never toasted and still does not. That is the
+intended rule, but it is the other reason a teacher sees no pill, and worth
+knowing before reading silence as this bug returning.
+
+style.css v103 — the cache-buster is load-bearing here: a stylesheet held at
+v=102 keeps the dead pill.
+
+## 2026-07-29 (last) — The dock panels learn to let go
+
+Open Maths, read the row of widgets, decide against all of them, click the stage
+to get on with the lesson — and a 560px slab stays sitting over the screen. The
+only way out was to remember which dock tab had lit it up and press that same
+tab again. Same for the Background drawer: 400px down the right-hand edge until
+you found the ✕ or the tool that opened it.
+
+Nothing was broken, which is why it survived this long. `toggleMorePanel` and
+`toggleBackgroundPanel` are honest toggles, and `closePanels()` does exactly what
+its name says. It just had eight callers, every one of them a deliberate act —
+opening another panel, entering the dashboard, turning on annotation. Not one of
+them was a click on the stage, because there was no listener watching for one.
+
+The app already knew how to do this in two other places. The widget ⋮ menu has
+had a document-level `pointerdown` since it was written, and the deck card menus
+have the same on `click`. The dock's panels were the odd ones out.
+
+Capture phase, not bubble. A widget stops `pointerdown` from bubbling the moment
+a drag starts, and a press that begins a drag is precisely the press that should
+put the panel away — a bubble-phase listener would sit there and never hear it.
+Verified against a real widget, not reasoned about: press the clock while the
+Maths panel is open and the panel goes.
+
+The dock is exempt from the handler. Its buttons toggle, so closing on the way
+down would let the click that followed reopen what it meant to shut — the panel
+would appear to ignore you. Tabs still swap cleanly (Maths → Games), pinning
+from inside still rebuilds the panel in place, and pressing the same tab twice
+still closes it.
+
+The geometry drawer is deliberately left alone. It opens from the annotate bar,
+not the dock, and its "outside" is the canvas it configures — dismissing it on
+every stroke would break the adjust-draw-adjust loop it exists for.
+
+Escape now reaches these panels too. It already closed the dashboard, the
+settings panel and the widget menu; the dock's panels were simply missing from
+the list. It calls the same narrow closer, not `closePanels()`, so an open modal
+still leaves through its own path with its `onClose` intact.
+
+## 2026-07-29 (after that) — The front page opens the same list editor the widgets do
+
+Two editors sat over one `state.lists`, and only one of them could take a class.
+
+The widgets were fine. Name picker's "Edit lists" and Group maker's "Lists" both
+open `openListManager` — a textarea, one name per line, split on `\n` as you
+type. Paste a register into it and thirty children arrive.
+
+The front page had its own thing: name chips, and a single-line `＋ Add name…`
+that commits on Enter. Paste a register into a single-line input and the browser
+flattens the newlines for you. The teacher gets one name, thirty children long,
+and no clue why. That is the bug Glenn found, and it is a bug of the worst kind —
+the app looks like it worked.
+
+So the front page stops having an opinion and opens the same modal. A "Paste a
+class list" pill in the Name lists header, and "Paste names…" on each card's ⋮.
+The card's version passes the list it belongs to, which is the whole of the new
+argument: `openListManager(onDone, startList)`. Widgets still call it with one
+argument and land where they always did.
+
+The chip input stays. Adding one child who joined in March is a real thing to
+want, and it is the faster way to do it.
+
+Two smaller things fell out of pointing the front page at that modal. With no
+lists at all, `current` is null and the textarea silently discards every
+keystroke — so the header pill asks for the class name first, and `paintArea`
+disables the box when there is nothing to commit to. A teacher's first-ever
+click on that pill now ends with somewhere to paste.
+
+Verified in the browser: eleven names in, eleven chips out, count 8 → 11, and
+"Paste names…" on a second list opens on that list rather than the first. The
+empty-lists branch is reasoned, not driven — the sandbox blocked both ways I had
+of reaching a store with no lists in it without destroying the local data.
+
+## 2026-07-29 (later again) — One way to name a list, one way to read a register
+
+Two jobs from the assessment: stop the creation paths losing data, and let a
+register arrive in the shape it actually has.
+
+### The clash check that wrote to the wrong key
+
+`if (!name || state.lists[name]) return; state.lists[name.trim()] = [];`
+
+Checked raw, wrote trimmed. So " My class" — a leading space off a copy-paste —
+found nothing at `state.lists[" My class"]`, passed the gate, and then landed on
+`state.lists["My class"]`. Eight children replaced with an empty array, no
+confirm, no toast, no undo. Verified before the fix by doing it: 8 → 0. The card
+kebab's Rename had the identical mismatch; the modal's two were internally
+consistent and so could not overwrite, but never trimmed at all, which is how
+you end up with "Year 4R" and "Year 4R " as two classes.
+
+Four call sites, three prompt strings, two trimming rules. Now one
+`createList` and one `renameListTo`, both over `normListName` — collapse runs of
+whitespace, trim, then check the key you are about to write. The clash is a
+toast naming the list rather than a silent return, because a teacher who typed a
+name and saw nothing happen has been told nothing.
+
+### The register, in the shape it arrives in
+
+`split('\n')` assumes a clean column. Registers are not that. They are two
+columns out of Excel, a row per child out of the MIS, a numbered list out of
+Word, "Surname, Forename" in any of them — and `Raman,Priya,4R,Female,EAL`
+became a child of that name, which the picker then put on the wall at display
+size. A child's EAL status, projected, because a teacher pasted their register.
+
+`parseNames` reads one line at a time: one delimiter chosen for the whole paste
+(a tab anywhere means spreadsheet columns, so a comma is then part of a name),
+Word's numbering off the front, the first two cells as the name, repeats dropped
+case-insensitively, a 200 cap. Flipping reorders cells and never words inside a
+cell — "Ahmed, Yusuf" flips, "Mary Jane Smith" is left alone, because guessing
+which part is the surname is worse than not guessing.
+
+It runs at the paste boundary and nowhere else. Typing stays literal: reflowing
+a line while someone is halfway through it is its own kind of broken.
+
+What comes back is a row under the box — "6 names · 1 repeat dropped · numbering
+removed" — with two ways out. Undo restores the text as it was. The flip offer
+names its result rather than its rule: "Flip to “Yusuf Ahmed”" is a thing to
+recognise, "Surname first" is a thing to work out. Both belong to the box they
+were pasted into, so switching class clears them.
+
+Names already in the box count against the paste, so pasting the same register
+twice adds nobody and says so.
+
+And the `＋ Add name…` input on the dashboard card — the single-line input that
+started all this by flattening a register into one very long name — now sends a
+paste with any shape to it through the same reader.
+
+Verified in the browser end to end: the messy nine-line sample in, six names
+out, the MIS row down to "Raman Priya", the flip, the undo, the second paste
+adding nothing, and the overwrite refused with the list intact at eight.
+
+## 2026-07-30 — The register arrives as a file, because that is what it is
+
+Glenn: hard to see how a teacher makes a list from a pre-made CSV or Excel
+sheet. He was right, and in two different ways.
+
+Copying a column out of Excel and pasting it already worked — parseNames was
+built for tab-separated cells and CRLF, which is exactly what Excel puts on the
+clipboard. Nothing anywhere said so. The pill read "Paste a class list", which a
+teacher holding Year4R.xlsx has no reason to think is about them. And there was
+no file route at all: the drop handler had answered .pptx and nothing else since
+the day it was written.
+
+### Reading a spreadsheet
+
+An .xlsx is a zip and SageZip already opens deflated archives, so the reader
+went into doctext.js beside the .docx and .pdf ones — one module that answers
+"give me the text out of this teacher's file". It comes back tab-separated, a
+row per line, because the name reader on the other side was built for what
+Excel puts on the clipboard and that is tab-separated too. A register opened
+from a file and a register copied out of a window now arrive in the same shape
+and are read by the same code.
+
+Two things a naive walk gets wrong, and both were in the first version of my
+test fixture before they were in the reader. Cell text mostly is not in the
+sheet — `t="s"` is an index into xl/sharedStrings.xml, and reading the index as
+the name gives a register of numbers. And cells are sparse: an empty column is
+simply absent from the XML, so a cell has to be placed by the column in its `r`
+reference or every row after a gap shifts left.
+
+Which sheet? Following workbook.xml through its relationships is correct and is
+a lot of code for a question a register never asks. The sheet with the most text
+in it is right whenever only one matters, and beats "sheet1.xml" when a workbook
+opens on an empty tab.
+
+doctext used to turn a spreadsheet away with "copy the cells you want and paste
+them in" — honest, and the ninety-seconds-before-a-lesson conversion the rest of
+that file exists to refuse. Now only .xls gets advice, and it gets its own
+sentence about Excel rather than the .doc one about Word: the two share an OLE
+signature, so the filename is all there is to tell them apart.
+
+### What a real file does to a parser
+
+Three things bit, each caught by running it rather than by reading it.
+
+Excel writes a byte order mark, so the first child was called ﻿Ada. The word
+bank learned this one already; the comment there is what pointed at it.
+
+An export quotes a name that holds a comma — `"Ahmed, Yusuf",4R` — and "first
+two cells" then stapled the reg group onto the child. A first cell containing a
+comma is a whole name on its own, so it is split on its own comma and the next
+column is left alone. Quoted fields also mean the text cannot be cut into lines
+before it is cut into cells, since a quoted field may contain a newline.
+
+And a sheet has a header row. "Surname Forename" standing at the front of the
+class is a poor first impression. The first rule — every cell must be a known
+heading — did not survive one real register: a Notes column, and the header
+walked in as a child called "Name Reg". A labelled *name* column is the tell,
+so a row opening with Surname or Forename or Pupil is a header. A child whose
+surname is "Surname" is not a risk worth the brittle rule.
+
+A row with no letters in it at all is dropped too. That is the column of
+admission numbers, and it was never a column we were meant to read.
+
+### The two ways in
+
+"Open a file…" sits above the box, and a file dropped anywhere on the window
+lands the same way. The drop has to guess a class, so it guesses out loud: the
+editor opens on the deck's list with the names in it, the count above them and
+Undo paste beside it. Both routes go through the same reader as a paste, and get
+the same count, the same flip and the same undo — a file is just another way for
+text to arrive.
+
+Verified end to end against a built .xlsx (shared strings, a split run, an
+entity, a gap column, an inline string, a numeric row) and a .csv as Excel saves
+one (BOM, CRLF, quoted names, a header, a repeat): four names and three names
+respectively, headers ignored, repeats dropped, admission numbers left out.

@@ -708,6 +708,12 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .btn.small { padding: 4px 10px; font-size: 14px; }
 .btn.danger { background: #fee2e2; color: var(--danger); }
+/* The class list editor's action row runs green → amber → red. Inks are picked
+   the way --danger-ink was: #166534 is 6.5:1 on its tint and #92400e is 6.4:1,
+   both clear of 4.5:1. These say what the button does, unlike the --tint-*
+   swatches, which stay decorative. */
+.btn.go { background: #dcfce7; color: #166534; }
+.btn.warn { background: #fef3c7; color: #92400e; }
 
 .text-input, select.text-input {
   border: 1px solid var(--panel-border);
@@ -1465,6 +1471,13 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
 .lists-side button:hover { background: rgba(15, 118, 110, 0.08); }
 .lists-side button.active { background: var(--accent-soft); color: var(--accent); }
 .names-area { width: 100%; height: 240px; resize: vertical; border: 1px solid var(--panel-border); border-radius: 10px; padding: 9px; font-size: 14px; }
+.names-area:disabled { background: var(--accent-soft); cursor: not-allowed; }
+.names-src { margin-bottom: 8px; }
+/* what the paste did, and the two ways back out of it. The count is the whole
+   point of the row, so it wraps rather than ellipsing — the buttons drop to the
+   next line on a narrow modal instead */
+.names-paste { margin-top: 8px; }
+.names-paste .hint { flex: 1 1 auto; min-width: 24ch; }
 
 /* ---------- Drawing overlay ---------- */
 /* the ink layer is always visible so annotations persist over the lesson;
@@ -5283,6 +5296,13 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
   border: 1px solid rgba(255, 255, 255, .5); border-radius: 999px;
   background: rgba(255, 255, 255, .16); color: inherit; font: inherit; font-weight: 650; }
 #toast .toast-action:hover { background: rgba(255, 255, 255, .3); }
+/* #toast is pointer-events:none so a message floating over the stage never eats
+   a click meant for a widget underneath — but that inherits, and it was killing
+   the one button we most need pressed. The button alone takes clicks back, and
+   only while .show is on: the toast sits at opacity 0 the rest of the time, and
+   a transparent element is still hit-testable, so an unscoped rule would leave
+   an invisible target parked mid-screen. */
+#toast.show .toast-action { pointer-events: auto; }
 
 /* the paper panel: swatches are real renders of the candidate paper, through
    the same mwPageInner the page and the print use — a swatch cannot lie */

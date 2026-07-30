@@ -843,6 +843,133 @@
     return { text, note: notes.join(' ') };
   }
 
+  /* ============================================================== SPREADSHEET
+
+     Plain text out of an .xlsx.
+
+     WHY THIS EXISTS
+     A class register is a spreadsheet. Not usually a Word document, almost
+     never a .txt — it is the file the office emailed round in September, or an
+     export from the MIS opened once in Excel and saved. Until now this module
+     recognised one and turned it away with "copy the cells you want and paste
+     them in", which is honest and is also the ninety-seconds-before-a-lesson
+     conversion that the rest of this file exists to refuse.
+
+     An .xlsx is a zip like a .docx, so SageZip already opens it. What comes out
+     is deliberately tab-separated: the name reader on the other side was built
+     for what Excel puts on the clipboard, and that is tab-separated too, so a
+     register opened from a file and a register copied out of a window arrive
+     the same way and are read by the same code.
+
+     Two things a naive walk gets wrong. Cell text mostly is not in the sheet:
+     `t="s"` means the value is an index into xl/sharedStrings.xml, and reading
+     the index as the name gives a register of numbers. And cells are sparse —
+     an empty column is simply absent, so cells have to be placed by the column
+     in their `r` reference or every row after a gap shifts left. */
+
+  const XL_MAX_ROWS = 5000;
+
+  // "BC7" -> 54. Letters only; the row number is not our business here.
+  function colOf(ref) {
+    let n = 0;
+    for (let i = 0; i < ref.length; i++) {
+      const c = ref.charCodeAt(i);
+      if (c < 65 || c > 90) break; // not A-Z: the digits have started
+      n = n * 26 + (c - 64);
+    }
+    return n > 0 ? n - 1 : 0;
+  }
+
+  /* The shared string table: one <si> per entry, and an entry can be split
+     across several <t> runs when part of it was styled differently, so the
+     runs inside one <si> are concatenated rather than taken separately. */
+  function sharedStrings(xml) {
+    const out = [];
+    if (!xml) return out;
+    const re = /<si\b[^>]*>([\s\S]*?)<\/si>|<si\b[^>]*\/>/g;
+    let m;
+    while ((m = re.exec(xml))) {
+      const inner = m[1] || '';
+      let s = '';
+      const tre = /<t\b[^>]*>([\s\S]*?)<\/t>/g;
+      let t;
+      while ((t = tre.exec(inner))) s += decodeEntities(t[1]);
+      out.push(s);
+    }
+    return out;
+  }
+
+  function sheetRows(xml, shared, maxChars) {
+    const rows = [];
+    let chars = 0;
+    const rowRe = /<row\b[^>]*>([\s\S]*?)<\/row>|<row\b[^>]*\/>/g;
+    let rm;
+    while ((rm = rowRe.exec(xml))) {
+      if (rows.length >= XL_MAX_ROWS || chars >= maxChars) break;
+      const inner = rm[1] || '';
+      const cells = [];
+      const cRe = /<c\b([^>]*)(?:\/>|>([\s\S]*?)<\/c>)/g;
+      let cm;
+      while ((cm = cRe.exec(inner))) {
+        const attrs = cm[1] || '';
+        const body = cm[2] || '';
+        const rAt = /\br="([A-Z]+)\d+"/.exec(attrs);
+        const at = /\bt="([a-zA-Z]+)"/.exec(attrs);
+        const type = at ? at[1] : 'n';
+        let val = '';
+        if (type === 'inlineStr') {
+          const tre = /<t\b[^>]*>([\s\S]*?)<\/t>/g;
+          let t;
+          while ((t = tre.exec(body))) val += decodeEntities(t[1]);
+        } else {
+          const v = /<v\b[^>]*>([\s\S]*?)<\/v>/.exec(body);
+          const raw = v ? decodeEntities(v[1]) : '';
+          // 's' is an index into the shared table; 'str' is a formula's own
+          // text result; anything else is already the literal in the cell
+          val = type === 's' ? (shared[+raw] || '') : raw;
+        }
+        val = val.replace(/[\t\r\n]+/g, ' ').trim();
+        const col = rAt ? colOf(rAt[1]) : cells.length;
+        while (cells.length < col) cells.push('');
+        cells[col] = val;
+        chars += val.length + 1;
+      }
+      while (cells.length && cells[cells.length - 1] === '') cells.pop();
+      rows.push(cells.join('\t'));
+    }
+    while (rows.length && !rows[rows.length - 1]) rows.pop();
+    return rows;
+  }
+
+  /* files: Map of path -> Uint8Array, as SageZip.read returns.
+     Returns { text, note }. Throws a sentence a teacher can act on. */
+  function xlsxText(files, opts) {
+    const want = (opts && opts.maxChars > 0) ? opts.maxChars : MAX_CHARS;
+    let shared = [];
+    const ss = files.get('xl/sharedStrings.xml');
+    if (ss) {
+      try { shared = sharedStrings(decodeBytes(ss)); } catch (e) { shared = []; }
+    }
+    /* Which sheet holds the register? Following workbook.xml through its
+       relationships is the correct answer and a lot of code for a question a
+       register never really asks. The sheet with the most text in it is right
+       whenever there is only one that matters, and right more often than
+       "sheet1.xml" is when a workbook opens on an empty tab. */
+    let best = null;
+    let bestCells = -1;
+    for (const path of files.keys()) {
+      if (path.indexOf('xl/worksheets/') !== 0 || !/\.xml$/i.test(path)) continue;
+      let rows;
+      try { rows = sheetRows(decodeBytes(files.get(path)), shared, want); } catch (e) { continue; }
+      const filled = rows.reduce((n, r) => n + r.split('\t').filter(Boolean).length, 0);
+      if (filled > bestCells) { bestCells = filled; best = rows; }
+    }
+    if (!best) throw new Error('That spreadsheet has no sheet in it that I could read.');
+    const notes = [];
+    if (best.length >= XL_MAX_ROWS) notes.push('That is a very long sheet, so only the first part has been brought in.');
+    return { text: best.join('\n'), note: notes.join(' ') };
+  }
+
   /* ================================================================= PDF
 
      Plain text out of a PDF, hand-rolled, no dependencies.
@@ -3639,22 +3766,25 @@
      it. Left out of the accept string, the picker greys the file out and says
      nothing at all, so the advice could only ever fire if they happened to
      drag the file in instead. Greying out a file is not a message. */
-  const EXT = '.txt,.md,.text,.markdown,.docx,.pdf,.doc,.rtf,'
-    + 'text/plain,text/markdown,application/pdf,'
+  const EXT = '.txt,.md,.text,.markdown,.csv,.tsv,.docx,.xlsx,.pdf,.doc,.rtf,.xls,'
+    + 'text/plain,text/markdown,text/csv,text/tab-separated-values,application/pdf,'
     + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,'
-    + 'application/msword,application/rtf,text/rtf';
+    + 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,'
+    + 'application/msword,application/vnd.ms-excel,application/rtf,text/rtf';
 
-  const RE_TEXT_EXT = /\.(txt|text|md|markdown|mdown|mkd|mkdn)$/i;
-  const RE_DOC_EXT = /\.(docx|pdf)$/i;
+  const RE_TEXT_EXT = /\.(txt|text|md|markdown|mdown|mkd|mkdn|csv|tsv)$/i;
+  const RE_DOC_EXT = /\.(docx|xlsx|pdf)$/i;
   /* The two we take in order to turn away with advice — see EXT. handles()
      must agree with the accept string, or a picker offers the file and
      whatever wired this up then refuses it before read() gets the chance to
      say anything useful. */
-  const RE_ADVICE_EXT = /\.(doc|rtf)$/i;
+  const RE_ADVICE_EXT = /\.(doc|rtf|xls)$/i;
   const MIMES = new Set([
     'text/plain', 'text/markdown', 'text/x-markdown', 'application/pdf',
+    'text/csv', 'application/csv', 'text/tab-separated-values',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/msword', 'application/rtf', 'text/rtf',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/msword', 'application/vnd.ms-excel', 'application/rtf', 'text/rtf',
   ]);
 
   /* True when read() has a reader for this. Extension and MIME are free to
@@ -3729,7 +3859,8 @@
      are what the node harness uses).
      opts: { maxBytes, maxChars, maxPages } — all optional.
 
-     Returns { text, kind, note }. `kind` is 'txt' | 'docx' | 'pdf'. `note` is
+     Returns { text, kind, note }. `kind` is 'txt' | 'docx' | 'xlsx' | 'pdf'.
+     An 'xlsx' comes back tab-separated, a row per line. `note` is
      a short teacher-facing sentence when something was dropped or nothing was
      found, and '' when the read was clean. Throws a plain Error whose message
      is a sentence a teacher can act on when the file genuinely cannot be read. */
@@ -3757,8 +3888,17 @@
         break;
       }
       case 'zip': {
-        kind = 'docx';
         const files = await openZip(bytes);
+        // a spreadsheet is a readable file now, not a wrong turn, so it is
+        // asked about before wrongZip gets to hand out advice about Word
+        if (hasSheetPart(files)) {
+          kind = 'xlsx';
+          const r = xlsxText(files, { maxChars });
+          text = r.text;
+          if (r.note) notes.push(r.note);
+          break;
+        }
+        kind = 'docx';
         if (!hasWordPart(files)) throw wrongZip(files);
         const r = docxText(files, { maxChars });
         text = r.text;
@@ -3766,6 +3906,11 @@
         break;
       }
       case 'ole':
+        // .xls and .doc share the OLE signature, so the name is all there is
+        // to go on for saying which application to open it in
+        if (/\.xls$/i.test(name)) {
+          throw new Error('That’s the older .xls format. Open it in Excel and choose Save As → .xlsx or .csv, then try again.');
+        }
         throw new Error('That’s the older .doc format. Open it in Word and choose Save As → .docx, then try again.');
       case 'rtf':
         throw new Error('That’s a Rich Text (.rtf) file. Open it, select all the text and paste it in, or save it as .docx first.');
@@ -3833,6 +3978,14 @@
     for (const name of files.keys()) if (name.indexOf('word/') === 0) return true;
     return files.has('_rels/.rels') && files.has('[Content_Types].xml') && files.has('word/document.xml');
   };
+  // a worksheet, not merely an xl/ folder: a .xlsx with charts and no sheet we
+  // can read should still fall through to wrongZip's advice
+  const hasSheetPart = (files) => {
+    for (const name of files.keys()) {
+      if (name.indexOf('xl/worksheets/') === 0 && /\.xml$/i.test(name)) return true;
+    }
+    return false;
+  };
 
   /* A zip that isn't a Word document is usually a recognisable one, and naming
      it saves the teacher a guess.
@@ -3880,9 +4033,11 @@
     read,
     EXT,
     // The pure inner readers, exported so the node harness can drive them
-    // directly without a File: _docxText takes the Map that SageZip.read
-    // returns, _pdfText takes the file's bytes and an { inflate } hook.
+    // directly without a File: _docxText and _xlsxText take the Map that
+    // SageZip.read returns, _pdfText takes the file's bytes and an { inflate }
+    // hook.
     _docxText: docxText,
+    _xlsxText: xlsxText,
     _pdfText: pdfText,
   };
 })();

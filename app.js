@@ -9182,7 +9182,7 @@
     if (sketchKeyHook && sketchKeyHook(e)) return;
     if (e.key === 'Escape') {
       if (dashEl && !modal) { closeDashboard(); return; }
-      closeSettingsPanel(); closeWidgetMenu(); return;
+      closeSettingsPanel(); closeWidgetMenu(); closeDockPanels(); return;
     }
     if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
     if (!lastActiveId || !instances.has(lastActiveId)) return;
@@ -9685,7 +9685,7 @@
         class: 'icon-btn deck-close', title: 'Export screens…',
         onclick: () => { deckSelect = selecting ? null : new Set([screen().id]); renderDeck(); },
       }, iconEl('save')),
-      el('button', { class: 'icon-btn deck-close', title: 'All decks & name lists', onclick: () => { closeDeck(); openDashboard(); } }, iconEl('screens')),
+      el('button', { class: 'icon-btn deck-close', title: 'All decks & class lists', onclick: () => { closeDeck(); openDashboard(); } }, iconEl('screens')),
       el('button', { class: 'icon-btn deck-close', onclick: () => closeDeck() }, iconEl('close'))));
     const list = el('div', { class: 'deck-list' });
     screens().forEach((s, i) => {
@@ -9735,7 +9735,7 @@
   }
 
   // ---------------------------------------------------------------- dashboard (landing page)
-  // Full-page overlay listing every deck (per class / subject) and every name list.
+  // Full-page overlay listing every deck (per class / subject) and every class list.
   // Shown on launch so a teacher picks the class they're about to teach; a tab
   // pinned with #s=<id> skips it and goes straight to its screen.
   let dashEl = null;
@@ -9861,6 +9861,143 @@
     delete state.lists[name];
     for (const d of state.decks) if (d.classList === name) d.classList = null;
     save();
+  }
+
+  // Every place a list gets named comes through here. The old code checked for a
+  // clash against the raw string and then wrote the trimmed one, so " My class"
+  // sailed past the check and landed on "My class" — a register emptied with no
+  // confirm, no toast and no way back. Trim once, check the key you are about to
+  // write, and the whole class of that bug goes with it.
+  const normListName = (name) => String(name == null ? '' : name).replace(/\s+/g, ' ').trim();
+  function createList(name) {
+    const key = normListName(name);
+    if (!key) return null;
+    if (state.lists[key]) { toast(`There is already a list called "${key}".`); return null; }
+    state.lists[key] = [];
+    save();
+    return key;
+  }
+  function renameListTo(oldName, next) {
+    const key = normListName(next);
+    if (!key || key === oldName) return null;
+    if (state.lists[key]) { toast(`There is already a list called "${key}".`); return null; }
+    renameList(oldName, key);
+    return key;
+  }
+
+  /* One reader for every way a register arrives. The textarea keeps its plain
+     one-name-per-line behaviour while you type — this runs at the paste and
+     import boundary, where the text came from somewhere else and arrives with a
+     shape of its own.
+
+     A register is almost never a clean column. It is two columns out of Excel
+     (tabs), a row per child out of the MIS (commas, with the reg group and
+     often a good deal more beside the name), a numbered list out of Word, or
+     "Surname, Forename" in any of those. Left to split('\n'), one MIS row
+     becomes a child called "Raman,Priya,4R,Female,EAL" and the picker puts that
+     on the wall at display size — which is how a child's EAL status ends up
+     projected in front of thirty people.
+
+     Flipping reorders cells, never words inside a cell: "Ahmed, Yusuf" becomes
+     "Yusuf Ahmed", while "Mary Jane Smith" is left alone because there is no
+     way to know which part is the surname and a guess would be worse than
+     nothing. */
+  const NAME_CAP = 200; // a year group with room to spare; a class is ~30
+
+  /* Rows of cells, honouring quotes. An MIS export writes "Smith, John",4R and
+     a plain split shreds it, so the whole text is scanned in one pass rather
+     than cut into lines first — a quoted field is allowed to hold the
+     delimiter, doubled quotes, and newlines. */
+  function nameRows(text, delim) {
+    const rows = [];
+    let row = [], cell = '', quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch !== '"') { cell += ch; continue; }
+        if (text[i + 1] === '"') { cell += '"'; i++; continue; }
+        quoted = false;
+        continue;
+      }
+      if (ch === '"') { quoted = true; continue; }
+      if (ch === delim) { row.push(cell); cell = ''; continue; }
+      if (ch === '\r') continue;
+      if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; continue; }
+      cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+
+  /* The words a register puts at the top of its columns. A sheet almost always
+     has a header row, and "Surname Forename" standing at the front of the class
+     is a poor first impression of an import. */
+  const NAME_HEAD = /^(surname|last ?name|family ?name|forename|first ?name|given ?name|known ?as|preferred ?name|name|full ?name|pupil|pupil ?name|child|student|reg|reg ?group|registration|class|form|group|year|year ?group|upn|adno|dob|date ?of ?birth|gender|sex|email|notes?|comments?|photo|eal|pp|sen|house|team|no|num|number|#)$/i;
+
+  function parseNames(text, opts) {
+    const o = opts || {};
+    // Excel writes a byte order mark, and it must not become part of the first
+    // child's name — the word bank learned this one the hard way
+    const src = String(text || '').replace(/^﻿/, '');
+    // one delimiter for the whole text rather than per row: a tab anywhere means
+    // the columns came from a spreadsheet, and a comma is then part of a name
+    // rather than a separator
+    const delim = src.indexOf('\t') >= 0 ? '\t' : ',';
+    const seen = new Set((o.existing || []).map((n) => String(n).toLowerCase()));
+    const out = { names: [], blank: 0, dupes: 0, capped: 0, columns: false, numbered: false, header: false };
+    const room = Math.max(0, NAME_CAP - seen.size);
+    let atFirstRow = true;
+    for (const row of nameRows(src, delim)) {
+      let cells = row.map((c) => c.trim()).filter(Boolean);
+      /* A first cell holding a comma is a whole name on its own — an export
+         writes "Ahmed, Yusuf",4R with the name quoted precisely because the
+         comma is inside it. Reading on into the next column would staple the
+         reg group to the child. This covers the tab-delimited sheet that keeps
+         "Ahmed, Yusuf" in one cell too. */
+      if (cells.length && cells[0].indexOf(',') >= 0) {
+        cells = cells[0].split(',').map((c) => c.trim()).filter(Boolean);
+      }
+      if (!cells.length) { out.blank++; continue; }
+      if (atFirstRow) {
+        atFirstRow = false;
+        /* A labelled name column is the tell. Requiring every cell to be a
+           known heading was too brittle to survive a real register — one
+           "Notes" column and the header walked into the class as a child
+           called "Name Reg". A row that opens with Surname or Forename or
+           Pupil is a header; a child whose surname is "Surname" is not a risk
+           worth keeping the brittle rule for. */
+        if (NAME_HEAD.test(cells[0]) || cells.every((c) => NAME_HEAD.test(c))) { out.header = true; continue; }
+      }
+      // "1. Ada", "1) Ada", "12 – Ada" — Word's list numbering, pasted flat
+      const unnum = cells[0].replace(/^\d{1,3}\s*[.):\-–]\s+/, '').trim();
+      if (unnum !== cells[0]) {
+        out.numbered = true;
+        cells = (unnum ? [unnum] : []).concat(cells.slice(1));
+      }
+      if (cells.length > 1) out.columns = true;
+      // the name is the first two cells: a register leads with the child, and
+      // both "Ahmed, Yusuf" and a Surname/Forename column pair land here
+      const parts = cells.slice(0, 2);
+      const name = (o.flip ? parts.slice().reverse() : parts).join(' ').replace(/\s+/g, ' ').trim();
+      // every name has a letter in it; a leading column of admission numbers
+      // has none, and is a column we were never meant to read
+      if (!name || !/\p{L}/u.test(name)) { out.blank++; continue; }
+      const key = name.toLowerCase();
+      if (seen.has(key)) { out.dupes++; continue; }
+      if (out.names.length >= room) { out.capped++; continue; }
+      seen.add(key);
+      out.names.push(name);
+    }
+    return out;
+  }
+  // what parseNames did, in the order a teacher would notice it
+  function nameParseNote(res) {
+    const bits = [`${res.names.length} name${res.names.length === 1 ? '' : 's'}`];
+    if (res.dupes) bits.push(`${res.dupes} repeat${res.dupes === 1 ? '' : 's'} dropped`);
+    if (res.header) bits.push('header row ignored');
+    if (res.numbered) bits.push('numbering removed');
+    if (res.capped) bits.push(`${res.capped} over the ${NAME_CAP} cap`);
+    return bits.join(' · ');
   }
 
   function newDeck() {
@@ -10072,6 +10209,21 @@
         }, '×')));
       }
       const addInput = el('input', { class: 'name-add', placeholder: '＋ Add name…' });
+      // a single-line input flattens a pasted register into one very long name,
+      // which is what sent a teacher looking for the import button in the first
+      // place — so a paste with any shape to it goes through the same reader the
+      // list editor uses, and lands as a class
+      addInput.addEventListener('paste', (e) => {
+        const cb = e.clipboardData || window.clipboardData;
+        const raw = cb && cb.getData('text');
+        if (!raw || !/[\n\r\t,]/.test(raw)) return;
+        e.preventDefault();
+        const res = parseNames(raw, { existing: state.lists[name] });
+        if (!res.names.length) { toast('No names to add from that.'); return; }
+        state.lists[name] = state.lists[name].concat(res.names);
+        save(); renderDashboard();
+        toast('Added ' + nameParseNote(res));
+      });
       addInput.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') return;
         const v = addInput.value.trim();
@@ -10080,7 +10232,7 @@
         save(); renderDashboard();
       });
       const kebab = el('button', {
-        class: 'deck-kebab list-kebab', title: 'List options',
+        class: 'deck-kebab list-kebab', title: 'Class list options',
         onclick: (e) => {
           e.stopPropagation();
           if (dashMenu && dashMenu.dataset.list === name) { closeDashMenu(); return; }
@@ -10090,11 +10242,9 @@
             onclick: (ev) => { ev.stopPropagation(); closeDashMenu(); fn(); },
           }, iconEl(icon), label);
           dashMenu = el('div', { class: 'deck-menu', 'data-list': name, onclick: (ev) => ev.stopPropagation() },
+            item('list', 'Import names…', () => openListManager(renderDashboard, name)),
             item('text', 'Rename', () => {
-              const nn = prompt('List name:', name);
-              if (!nn || nn === name || state.lists[nn]) return;
-              renameList(name, nn.trim());
-              renderDashboard();
+              if (renameListTo(name, prompt('Class list name:', name))) renderDashboard();
             }),
             item('trash', 'Delete list', () => {
               confirmDialog(`Delete list "${name}"?`, () => {
@@ -10118,10 +10268,7 @@
     }
     grid.append(el('button', {
       class: 'dash-card dash-new', onclick: () => {
-        const name = prompt('New list name (e.g. "Year 4R"):');
-        if (!name || state.lists[name]) return;
-        state.lists[name.trim()] = [];
-        save(); renderDashboard();
+        if (createList(prompt('New class list name (e.g. "Year 4R"):'))) renderDashboard();
       },
     }, el('span', { class: 'deck-add-plus' }, iconEl('plus')), 'New list'));
   }
@@ -10324,7 +10471,7 @@
       el('div', { class: 'dash-tabs' },
         tab('decks', 'screens', 'Screen decks'),
         tab('templates', 'copy', 'Templates'),
-        tab('lists', 'picker', 'Name lists'),
+        tab('lists', 'picker', 'Class lists'),
         tab('background', 'background', 'Wallpaper')),
       el('button', { class: 'icon-btn dash-close', title: 'Back to the screen (Esc)', onclick: () => closeDashboard() }, iconEl('close'))));
 
@@ -10504,9 +10651,9 @@
     sortSel.value = dashSort;
     sortSel.addEventListener('change', () => { dashSort = sortSel.value; paintBody(); });
     let headLead;
+    const pill = (icon, label, onclick) => el('button', { class: 'dash-pill', onclick },
+      el('span', { class: 'dash-pill-ic' }, iconEl(icon)), label);
     if (dashTab === 'decks') {
-      const pill = (icon, label, onclick) => el('button', { class: 'dash-pill', onclick },
-        el('span', { class: 'dash-pill-ic' }, iconEl(icon)), label);
       headLead = el('div', { class: 'dash-actions' },
         el('button', { class: 'dash-primary', onclick: () => closeDashboard() },
           'Start teaching', iconEl('chevr')),
@@ -10514,7 +10661,17 @@
         pill('copy', 'From a template', () => { dashTab = 'templates'; renderDashboard(); }));
       if (window.SagePptxImport) headLead.append(pill('screens', 'Import PowerPoint', () => SagePptxImport.openDialog()));
     } else {
-      headLead = el('h3', {}, 'Name lists');
+      // the register arrives as a column of names, so the front page opens the
+      // same editor the widgets do rather than asking for one name at a time
+      headLead = el('div', { class: 'dash-actions' },
+        el('h3', {}, 'Class lists'),
+        pill('list', 'Import a class list', () => {
+          if (Object.keys(state.lists).length) { openListManager(renderDashboard); return; }
+          // nothing to paste into yet: name the class first, or the textarea
+          // would quietly swallow everything typed into it
+          const key = createList(prompt('New class list name (e.g. "Year 4R"):'));
+          if (key) openListManager(renderDashboard, key);
+        }));
     }
     page.append(el('div', { class: 'dash-section-head' },
       headLead,
@@ -10846,10 +11003,18 @@
 
   // ---------------------------------------------------------------- toolbar
   const widgetTool = (type, label, cat) => ({ id: type, glyph: WIDGETS[type].icon, accent: WIDGETS[type].accent, label, cat, run: () => addWidget(type) });
+  // the list editor opened from the bar has to refresh the widgets that read a
+  // list, the same way the "Edit lists" button inside them already does
+  const refreshListWidgets = () => {
+    save();
+    for (const w of screen().widgets) if (w.type === 'picker' || w.type === 'groups') remountWidget(w);
+  };
   const TOOLS = [
     { id: 'background', glyph: 'background', accent: '#fbcfe8', label: 'Background', run: () => toggleBackgroundPanel() },
     { id: 'spotlight', glyph: 'spot', accent: '#fde68a', label: 'Spotlight', run: () => toggleSpotlight() },
     { id: 'shades', glyph: 'shade', accent: '#c7d2fe', label: 'Screen cover', run: () => toggleShades() },
+    // shares the name picker's accent: same register, two ways in
+    { id: 'lists', glyph: 'list', accent: '#bae6fd', label: 'Class lists', run: () => openListManager(refreshListWidgets) },
     widgetTool('sketch', 'Draw pad'),
     widgetTool('text', 'Text'),
     widgetTool('clock', 'Clock'),
@@ -11002,8 +11167,11 @@
     closePanels();
     morePanelCat = cat;
     const grid = el('div', { class: 'tool-grid' });
-    for (const t of TOOLS) {
-      if ((t.cat || 'more') !== cat) continue;
+    // sorted by label, not by TOOLS order — a teacher hunting for one widget
+    // scans A–Z; the bar keeps its hand-picked order (renderToolbar)
+    const inCat = TOOLS.filter((t) => (t.cat || 'more') === cat)
+      .sort((a, b) => a.label.localeCompare(b.label, 'en', { numeric: true, sensitivity: 'base' }));
+    for (const t of inCat) {
       const pinned = state.pinned.includes(t.id);
       grid.append(el('div', { class: 'tool-cell', role: 'button', tabindex: '0', style: '--acc:' + t.accent, onclick: () => { closeMorePanel(); t.run(); } },
         el('span', { class: 'glyph' }, iconEl(t.glyph)),
@@ -11109,6 +11277,26 @@
     closeMorePanel();
     closeModal();
   }
+
+  // A dock panel used to sit there until the same dock button was pressed again:
+  // open Maths, think better of it, click the stage — and a 560px slab stayed
+  // over the lesson. Everything else here (widget ⋮, deck menus) goes away on an
+  // outside press, so the dock's panels do too.
+  // Capture phase: widgets stop pointerdown from bubbling once a drag starts, and
+  // a press that begins a drag is exactly the press that should dismiss the panel.
+  // The dock is exempt — its buttons toggle, so closing on the way down would let
+  // the click reopen what it meant to shut. The geometry drawer is left out: it
+  // belongs to the annotate bar and its "outside" is the canvas it configures.
+  function closeDockPanels() {
+    if (bgPanel) { bgPanel.remove(); bgPanel = null; }
+    closeMorePanel();
+  }
+  document.addEventListener('pointerdown', (e) => {
+    if (!morePanel && !bgPanel) return;
+    const t = e.target;
+    if (t && t.closest && t.closest('.panel, .bg-drawer, #toolbar, .mini-dock')) return;
+    closeDockPanels();
+  }, true);
 
   // ---------------------------------------------------------------- list manager
   let modal = null;
@@ -11281,12 +11469,54 @@
     return null;
   }
 
-  function openListManager(onDone) {
-    openModal('Name lists', (body) => {
-      let current = Object.keys(state.lists)[0] || null;
+  /* Whatever the register is saved as, this hands back its text.
+
+     SageDocText reads .csv, .txt, .docx, .xlsx and .pdf here on the device, and
+     turns away the two it cannot read — .doc and .xls — with the Save As that
+     fixes each. The FileReader below is the fallback for a build without the
+     module and for anything it does not claim: a plain read is still worth a
+     try before telling a teacher no. */
+  function readNameFile(file) {
+    const DT = window.SageDocText;
+    if (DT && DT.handles(file)) return DT.read(file, { maxChars: 200000 });
+    return new Promise((resolve, reject) => {
+      if (file.size > 4 * 1024 * 1024) {
+        reject(new Error('That file is too big to read here. Copy the names you want and paste them in.'));
+        return;
+      }
+      const fr = new FileReader();
+      fr.onerror = () => reject(new Error('I couldn’t read that file. A .csv, .xlsx, Word file or plain text all work.'));
+      fr.onload = () => resolve({ text: String(fr.result || ''), note: '' });
+      fr.readAsText(file);
+    });
+  }
+
+  /* A register dropped on the window. It has to land in some class, and the
+     deck's own is the only sensible guess — so the guess is made out loud: the
+     editor opens on that list with the names in it, the count above them and
+     Undo paste beside it. Guessing silently would be the version to avoid. */
+  function dropNameFile(file) {
+    let target = deckDefaultList();
+    if (!target) {
+      target = createList(prompt('Which class is this? (e.g. "Year 4R")'));
+      if (!target) return;
+    }
+    openListManager(() => { if (dashEl) renderDashboard(); }, target, file);
+  }
+
+  // startList opens the editor on a named list. The dashboard's list cards open
+  // the same textarea the picker and group maker do, so a register pasted from
+  // either place lands one name per line instead of one very long name.
+  // dropped is a File to read straight into startList — the way in for a
+  // register dragged onto the window.
+  function openListManager(onDone, startList, dropped) {
+    openModal('Class lists', (body) => {
+      let current = (startList && state.lists[startList]) ? startList : Object.keys(state.lists)[0] || null;
       const side = el('div', { class: 'lists-side' });
       const area = el('textarea', { class: 'names-area', placeholder: 'One name per line' });
       const nameRow = el('div', { class: 'row' });
+
+      const pasteRow = el('div', { class: 'row names-paste', style: 'display:none;' });
 
       const commit = () => {
         if (current && state.lists[current]) {
@@ -11295,6 +11525,101 @@
         }
       };
       area.addEventListener('input', () => { commit(); });
+
+      // A paste is the moment text arrives from somewhere else, and the only
+      // moment we are entitled to reshape it. Typing stays as literal as it has
+      // always been — reflowing a line while a teacher is halfway through it
+      // would be its own kind of broken.
+      let lastPaste = null;
+      const paintPasteRow = (res) => {
+        pasteRow.innerHTML = '';
+        if (!res || !lastPaste) { pasteRow.style.display = 'none'; return; }
+        pasteRow.style.display = '';
+        pasteRow.append(el('span', { class: 'hint' }, nameParseNote(res)));
+        if (res.columns) {
+          // the offer names the result rather than the rule: "Surname first" is
+          // a thing to work out, "Flip to Yusuf Ahmed" is a thing to recognise
+          const eg = parseNames(lastPaste.raw, { flip: !lastPaste.flip }).names[0];
+          pasteRow.append(el('button', {
+            class: 'btn ghost small',
+            onclick: () => { lastPaste.flip = !lastPaste.flip; applyPaste(); },
+          }, eg ? `Flip to “${eg}”` : 'Flip the name order'));
+        }
+        pasteRow.append(el('button', {
+          class: 'btn ghost small',
+          onclick: () => {
+            area.value = lastPaste.before;
+            lastPaste = null;
+            commit(); paintSide(); paintPasteRow(null);
+          },
+        }, 'Undo paste'));
+      };
+      const applyPaste = () => {
+        const p = lastPaste;
+        if (!p) return;
+        const head = p.before.slice(0, p.selStart);
+        const tail = p.before.slice(p.selEnd);
+        // names already in the box count against the paste, so pasting the same
+        // register twice does not give you every child twice
+        const existing = (head + '\n' + tail).split('\n').map((s) => s.trim()).filter(Boolean);
+        const res = parseNames(p.raw, { existing, flip: p.flip });
+        const joined = res.names.join('\n');
+        // a paste that turns out to be all repeats adds nothing, and should not
+        // leave the blank line that joining nothing to a separator would
+        area.value = !joined ? head + tail
+          : (head && !head.endsWith('\n') ? head + '\n' : head)
+            + joined
+            + (tail && !tail.startsWith('\n') ? '\n' + tail : tail);
+        commit(); paintSide(); paintPasteRow(res);
+      };
+      // one way in for text from anywhere: the clipboard, or a file. Both get
+      // the same reading, the same count, the same flip and the same undo
+      const takeText = (raw, selStart, selEnd) => {
+        lastPaste = { raw, before: area.value, selStart, selEnd, flip: false };
+        applyPaste();
+      };
+      area.addEventListener('paste', (e) => {
+        const cb = e.clipboardData || window.clipboardData;
+        const raw = cb && cb.getData('text');
+        // a single plain name has no shape to read — let it land as typed
+        if (!raw || !/[\n\r\t,]/.test(raw)) return;
+        e.preventDefault();
+        takeText(raw, area.selectionStart, area.selectionEnd);
+      });
+
+      const DT = window.SageDocText;
+      const fileIn = el('input', {
+        type: 'file', style: 'display:none;',
+        accept: (DT && DT.EXT) || '.csv,.tsv,.txt,text/csv,text/plain',
+      });
+      const openBtn = el('button', {
+        class: 'btn go small',
+        onclick: () => { if (!openBtn.disabled) fileIn.click(); },
+      }, 'Open a file…');
+      const importFile = (f) => {
+        if (!f) return;
+        if (!current) { toast('Make a list first, then open the file into it.'); return; }
+        // a forty-page PDF or a big sheet takes a moment, and a button that
+        // looks dead is how a teacher ends up opening the file three times
+        openBtn.disabled = true;
+        openBtn.textContent = 'Reading…';
+        const done = () => { openBtn.disabled = false; openBtn.textContent = 'Open a file…'; };
+        readNameFile(f).then((res) => {
+          done();
+          if (res.note) toast(res.note);
+          // appended, never replacing: a teacher who opens the wrong file has
+          // Undo paste sitting right there, and has lost nothing meanwhile
+          takeText(res.text, area.value.length, area.value.length);
+        }).catch((err) => {
+          done();
+          toast((err && err.message) || 'I couldn’t read that file.');
+        });
+      };
+      fileIn.addEventListener('change', () => {
+        const f = (fileIn.files || [])[0];
+        fileIn.value = '';
+        importFile(f);
+      });
 
       const paintSide = () => {
         side.innerHTML = '';
@@ -11307,26 +11632,34 @@
         side.append(el('button', {
           style: 'color:var(--accent);',
           onclick: () => {
-            const name = prompt('New list name:');
-            if (!name || state.lists[name]) return;
-            state.lists[name] = [];
-            current = name;
-            save(); paintSide(); paintArea();
+            const key = createList(prompt('New class list name (e.g. "Year 4R"):'));
+            if (!key) return;
+            current = key;
+            paintSide(); paintArea();
           },
         }, '＋ New list'));
       };
       const paintArea = () => {
         area.value = current && state.lists[current] ? state.lists[current].join('\n') : '';
+        // with no list selected there is nowhere to commit to, and typing into
+        // an enabled box that discards every keystroke reads as a broken app
+        area.disabled = !current;
+        // the undo and the flip belong to the box they were pasted into; carrying
+        // them to another class would undo the wrong register
+        lastPaste = null;
+        paintPasteRow(null);
         nameRow.innerHTML = '';
         if (current) {
+          // one row of actions under the box, read left to right: bring names in,
+          // retitle the list, throw it away
           nameRow.append(
+            openBtn,
             el('button', {
-              class: 'btn ghost small',
+              class: 'btn warn small',
               onclick: () => {
-                const name = prompt('Rename list:', current);
-                if (!name || name === current || state.lists[name]) return;
-                renameList(current, name);
-                current = name;
+                const key = renameListTo(current, prompt('Rename class list:', current));
+                if (!key) return;
+                current = key;
                 paintSide(); paintArea();
               },
             }, 'Rename'),
@@ -11343,11 +11676,19 @@
           );
         }
       };
+      // the file button has moved down to the action row; this row keeps the
+      // label on the box, and keeps the hidden input mounted whatever paintArea
+      // does to the buttons below
+      const srcRow = el('div', { class: 'row names-src' },
+        el('span', { class: 'hint' }, 'Paste the names in — one per line'), fileIn);
       paintSide(); paintArea();
       body.append(
-        el('div', { class: 'lists-cols' }, side, el('div', {}, area, nameRow)),
-        el('div', { class: 'hint' }, 'Lists are shared by the name picker and group maker on every screen.'),
+        el('div', { class: 'lists-cols' }, side, el('div', {}, srcRow, area, pasteRow, nameRow)),
+        el('div', { class: 'hint' }, 'Open your register straight from a spreadsheet (.xlsx or .csv), a Word file or a PDF — or copy the column out of Excel and paste it. Columns, numbering, header rows and repeats are all sorted out for you. Lists are shared by the name picker and group maker on every screen.'),
       );
+      // a register dragged onto the window: the list it landed in is on screen,
+      // with its count and its undo, before the teacher has to trust anything
+      if (dropped) importFile(dropped);
     }, onDone);
   }
 
@@ -11453,7 +11794,7 @@
         el('button', {
           class: 'btn danger small', style: 'align-self:start;',
           onclick: () => {
-            confirmDialog('Erase ALL screens, widgets and name lists on this device?', () => {
+            confirmDialog('Erase ALL screens, widgets and class lists on this device?', () => {
               localStorage.removeItem(LS_KEY);
               state = normalize(defaultState());
               rewardsDayTick();
@@ -12671,18 +13012,36 @@
   // ---------------------------------------------------------------- boot
   if (window.SagePptxImport) {
     SagePptxImport.init({ el, iconEl, openModal, toast, addImportedDeck, appendImportedScreens });
-    // drop a .pptx anywhere on the page to import it as a new deck
-    window.addEventListener('dragover', (e) => {
-      if (e.dataTransfer && [...e.dataTransfer.items].some((it) => it.kind === 'file')) e.preventDefault();
-    });
-    window.addEventListener('drop', (e) => {
-      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (!file) return;
-      e.preventDefault();
-      if (/\.pptx$/i.test(file.name)) SagePptxImport.openDialog(file);
-      else if (/\.ppt$/i.test(file.name)) toast('Old .ppt format — open it in PowerPoint and save as .pptx first.');
-    });
   }
+  /* Drop a file anywhere on the page. A .pptx becomes a deck; a register
+     becomes a class. Neither is nested inside a module check any more — the
+     register route only needs a file reader, and the plain-text fallback in
+     readNameFile means it works even without one. */
+  window.addEventListener('dragover', (e) => {
+    if (e.dataTransfer && [...e.dataTransfer.items].some((it) => it.kind === 'file')) e.preventDefault();
+  });
+  window.addEventListener('drop', (e) => {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file) return;
+    e.preventDefault();
+    if (/\.pptx$/i.test(file.name)) {
+      if (window.SagePptxImport) SagePptxImport.openDialog(file);
+      return;
+    }
+    if (/\.ppt$/i.test(file.name)) {
+      toast('Old .ppt format — open it in PowerPoint and save as .pptx first.');
+      return;
+    }
+    /* Only files that could hold names. Without this, a photo dropped on the
+       window opens the class editor, gets read as text, and appends whatever
+       letters happen to fall out of the JPEG to a real register. A drop we
+       don't understand does nothing at all, which is what it did before there
+       was a register route. */
+    const DT = window.SageDocText;
+    if ((DT && DT.handles(file)) || /\.(csv|tsv|txt|text|md|markdown)$/i.test(file.name)) {
+      dropNameFile(file);
+    }
+  });
   if (window.SageExport) {
     SageExport.init({ el, iconEl, openModal, toast, WIDGETS, applyTheme, paintStroke, screens, viewDeck, screenTitle, screenInk });
   }
