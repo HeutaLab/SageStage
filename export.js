@@ -171,14 +171,11 @@
   // plain-text content of text widgets — carried into PPTX speaker notes
   function textNotesFor(widgets) {
     const notes = [];
-    const strip = document.createElement('div');
     for (const w of widgets) {
       if (w.type !== 'text' || !w.props.html) continue;
-      strip.innerHTML = w.props.html;
-      const text = strip.textContent.replace(/\s+\n/g, '\n').trim();
+      const text = window.SageSanitize.text(w.props.html).replace(/\s+\n/g, '\n').trim();
       if (text) notes.push(text);
     }
-    strip.innerHTML = '';
     return notes;
   }
 

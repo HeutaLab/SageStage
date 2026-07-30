@@ -370,7 +370,10 @@
         if (r.u) rs.push('text-decoration:underline');
         if (r.color) rs.push('color:' + r.color);
         let span = `<span style="${rs.join(';')}">${esc(r.text)}</span>`;
-        if (r.link) span = `<a href="${esc(r.link)}" target="_blank" rel="noopener">${span}</a>`;
+        // a slide's hyperlink is whatever the External relationship said it
+        // was, and this markup goes straight into a text widget
+        const link = r.link && window.SageSanitize.url(r.link);
+        if (link) span = `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${span}</a>`;
         spans.push(span);
       }
       out.push(`<div style="${styles.join(';')}">${spans.length ? spans.join('') : '<br>'}</div>`);

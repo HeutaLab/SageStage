@@ -254,6 +254,13 @@
     return tx('readwrite', (os) => os.clear()).then(() => true).catch(() => false);
   }
 
+  // Separate from clearAll on purpose: "delete my snapshots" must not throw
+  // away the routes back that a teacher's undo stacks are holding. Only the
+  // erase-everything path wants both, and it asks for both.
+  function clearAux() {
+    return tx('readwrite', (os) => os.clear(), AUX).then(() => true).catch(() => false);
+  }
+
   function stats() {
     return list().then((rows) => ({
       count: rows.length,
@@ -300,7 +307,7 @@
 
   window.SageSnapshots = {
     init(deps) { D = deps || {}; idle(() => { sweep(); sweepAux(); }); },
-    take, list, get, drop, clearAll, stats, available, dayKey,
+    take, list, get, drop, clearAll, clearAux, stats, available, dayKey,
     putAux, getAux, dropAux,
     KEEP_PER_UNIT, KEEP_DAYS,
   };

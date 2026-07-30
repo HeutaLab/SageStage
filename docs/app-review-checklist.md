@@ -30,6 +30,15 @@ Each box is one fix. `file:line` points at the anchor site.
 | P5 Rendering & performance | – | 1 | 4 | – |
 | P6 Robustness & housekeeping | – | 1 | 7 | 3 |
 
+The counts above are the review as taken on 2026-07-21 and are left alone; the
+tick boxes below are the live record of what has been closed since.
+
+**Every 🔴 is now closed** (2026-07-30) — fonts, the template XSS, the erase that
+a second tab undid, and the number-line fraction labels — plus one more that the
+erase work turned up: the button had never cleared IndexedDB. Fixing them took
+four ride-alongs that shared the same code (`pvFmt` negatives, two `javascript:`
+URL entry points, and the `.pptx` href scheme).
+
 **The app is fundamentally sound** — core teaching flows work, state round-trips
 through reload cleanly, currency is integer minor-units (no float bugs), the QR
 encoder is spec-correct, the 42 built-in templates validate clean, and widget
@@ -43,7 +52,17 @@ The whole app runs from one origin with full `localStorage` access (every deck
 and **every class list of children's names**). Anything that runs script in that
 origin, or leaks data off-device, breaks the product's headline promise.
 
-- [ ] 🔴 **Stored XSS through shared templates / backups → text widget.** ✓ verified.
+- [x] 🔴 **Stored XSS through shared templates / backups → text widget.** ✓ verified ·
+  **fixed 2026-07-30** — one shared sanitizer in `sanitize.js`
+  (`SageSanitize.html/text/url`), applied at every `props.html` sink: the text
+  widget's mount, the dashboard thumbnail (now `text()`, which never builds a
+  DOM), and PPTX speaker notes in `export.js`. Also cleaned on the way in, in
+  `sanitizeTemplate` and on backup import (`scrubImportedHTML`), so a payload
+  never reaches storage. Browser-verified: `<img onerror>`, `<svg onload>`,
+  `<script>`, `on*` attributes and `javascript:` hrefs all inert from both the
+  stage and the dashboard, with `<b>`/`<div style>`/`<span style>` template and
+  PPTX markup intact. Boot deliberately does **not** rewrite the teacher's own
+  saved decks — the sinks make stored payloads harmless without mutating them.
   `sanitizeTemplate` deep-copies widget `props` verbatim and only *collects* URLs
   for the vetting dialog — it never cleans the Text widget's `html` prop
   ([`app.js:9962`](../app.js#L9962)), which is written straight to the DOM via
@@ -108,17 +127,20 @@ origin, or leaks data off-device, breaks the product's headline promise.
   same id with no re-disclosure. The URL disclosure also scans only top-level
   `['url','src','text','value']` — never `props.html`, nested `items[]`/`options[]`,
   or `javascript:` URLs.
-- [ ] 🟡 **`.pptx` slide hyperlinks aren't scheme-validated** — `javascript:`/`data:`
+- [x] 🟡 **`.pptx` slide hyperlinks aren't scheme-validated** — `javascript:`/`data:`
   href from an External relationship survives into a text widget rendered via
   `innerHTML` ([`pptx-import.js:314`](../pptx-import.js#L314)). (Slide *text* is
-  escaped, so only the href scheme is at risk.)
-- [ ] 🟡 **Text-widget "Link" button and Link widget accept `javascript:` URLs** — [`app.js:5865`](../app.js#L5865), [`app.js:6932`](../app.js#L6932); no scheme check before `createLink` / `window.open`.
+  escaped, so only the href scheme is at risk.) **Fixed 2026-07-30** —
+  `parasToHtml` runs the link through `SageSanitize.url`; a rejected scheme
+  keeps the words and drops the anchor.
+- [x] 🟡 **Text-widget "Link" button and Link widget accept `javascript:` URLs** — [`app.js:5865`](../app.js#L5865), [`app.js:6932`](../app.js#L6932); no scheme check before `createLink` / `window.open`. **Fixed 2026-07-30** — both go through `SageSanitize.url`. The sanitizer covers the stored render, but `createLink` makes a live tappable anchor and `window.open('javascript:…')` inherits this origin, so the entry points needed their own guard.
 - [ ] ⚪ **Background `url()` value isn't escaped** ([`app.js:9056`](../app.js#L9056)). ✓ verified — narrower than it looks: `element.style.background =` can't escape into new CSS rules, so the real risk is a hotlinked tracking image via a template's image background, not script injection.
 - [ ] ⚪ **No CSP meta in `index.html`.** A `default-src 'self'` policy (with the font/photo hosts allow-listed) would harden every item above. Coordinate with the Phase 2 Tauri CSP so the two don't diverge.
 
 ## P1 — Data integrity & loss
 
-- [ ] 🔴 **"Erase all local data" is silently undone by any second tab.** ✓ verified.
+- [x] 🔴 **"Erase all local data" is silently undone by any second tab.** ✓ verified ·
+  **fixed 2026-07-30.**
   The storage handler bails on `!e.newValue`
   ([`app.js:11871`](../app.js#L11871)), and erase fires `removeItem` (newValue =
   null). A forgotten `#s=` projector tab (a documented workflow) keeps its
@@ -127,6 +149,21 @@ origin, or leaks data off-device, breaks the product's headline promise.
   **Fix:** treat a `null` newValue on `LS_KEY` as an erase signal — quiesce and
   clear in-memory state instead of ignoring it. (The Tauri plan handles this for
   desktop windows in Phase 4 but not for the browser backend.)
+  Shipped as one shared `dropLocalState()` used by both the erasing tab and every
+  tab that hears the event; it also **cancels the pending debounced save**, which
+  could otherwise land after the erase. The hearing tab says so in a toast — a
+  display tab that empties itself mid-lesson without explanation reads as data
+  loss. Two-tab browser test: register in both tabs' memory → erase in one →
+  the other clears, and the save it makes next writes only the fresh default
+  state, with no register and no widget html.
+- [x] 🔴 **"Erase all local data" left every deck and register in IndexedDB.**
+  Found while fixing the item above, and not in the original review — snapshots
+  post-date it. The button emptied `localStorage` only, so the daily snapshot
+  trail and the modelled-writing undo histories kept the same decks and the same
+  children's names. **Fixed 2026-07-30** — `clearStoredHistory()` clears both
+  stores (`SageSnapshots.clearAll` + a new `clearAux`, kept separate so a future
+  "delete my snapshots" cannot throw away undo). If the IndexedDB clear fails
+  the teacher is told, rather than the toast claiming everything went.
 - [ ] 🟠 **No unload flush; "Backup restored" can be a lie.** ✓ verified.
   `save()` is a bare 250 ms debounce with no `pagehide`/`visibilitychange`
   listener ([`app.js:200`](../app.js#L200)). Close within the window and the last
@@ -178,17 +215,27 @@ origin, or leaks data off-device, breaks the product's headline promise.
 Highest pedagogical priority: these render **incorrect maths on a classroom
 screen**, which is worse than a crash.
 
-- [ ] 🔴 **Number-line fraction labels are wrong when minor ticks subdivide a fraction line.** ✓ verified.
+- [x] 🔴 **Number-line fraction labels are wrong when minor ticks subdivide a fraction line.** ✓ verified ·
+  **fixed 2026-07-30.**
   `nlTxt` rounds a fractional remainder to a whole numerator
   ([`app.js:4354`](../app.js#L4354)): on a Halves line with Halves minor-ticks, a
   true ¼ jump auto-labels **"+1/2"** and a ¾ jump labels **"2/2"**; Thirds shows a
   ⅙ jump as "+1/3". "Facts" sentences inherit it. (The decimal branch is correct —
   only fractions are wrong.)
-- [ ] 🟠 **`pvFmt` garbles negative values → "−3.−5".** ✓ verified.
+  **Fix:** a label's denominator is not `den`, it is the smallest unit the line
+  actually shows — `nlUnit()` = `den · minor / gcd(major, den · minor)`, so a
+  Halves line ticked into halves is a line of quarters. `nlParts()` now feeds
+  both `nlTxt` and `nlHTML`, so tick labels, jump arcs and Facts agree. Verified
+  in the browser: the ¼ jump reads **+¼**, the ¾ jump **+¾**, Facts
+  "0 + 1/4 + 3/4 = 1". Not reduced, deliberately — a plain Quarters line has
+  always labelled 6 as "1 2/4", and the denominator is the line's unit.
+- [x] 🟠 **`pvFmt` garbles negative values → "−3.−5".** ✓ verified ·
+  **fixed 2026-07-30** (same render path as the item above).
   `t % 1000` keeps the sign, so the trailing-zero strip leaves a truthy "-5"
   fraction part ([`app.js:3388`](../app.js#L3388); `pvFmt(-2500) === "-3.-5"`).
   Reached on the −10–10 number line with half minor-ticks → Facts like
-  "−3.−5 + 1 = …".
+  "−3.−5 + 1 = …". **Fix:** take the remainder from `Math.abs`, put the sign back
+  on the front. Browser-verified: Facts now reads "−3.5 + 1 = −2.5".
 - [ ] 🟠 **Base 10 "10 ⇄ 1" exchange is dead for thousands and above.** ✓ verified.
   The chip is offered whenever a column has ≥10 and a place exists above
   (`c.d < 6`, [`app.js:3081`](../app.js#L3081)), but `exchange()` returns

@@ -4100,3 +4100,107 @@ yet — no existing teacher's bar moves. It sits beside Name picker rather than 
 by Background, where its position in TOOLS would otherwise have put it: set the
 register, then pick from it. That position is now free to mean only that, since
 the menu sorts by label and no longer cares what order TOOLS is written in.
+
+## 2026-07-30 (reds) — Every critical finding in the review, closed
+
+Nine days after the full-app review, one of its 73 boxes was ticked. Three of the
+four 🔴s were still live in today's code, checked line by line rather than taken
+from the notes. This closes them, and the small items that turned out to be the
+same code.
+
+### One sanitizer, and the sink that was never a sink
+
+A Text widget's content is real HTML, which is what makes it worth having and
+what makes it dangerous: `innerHTML` runs an `onerror` handler without needing a
+`<script>` tag, and this app's single origin holds every deck and every class
+list of children's names. `sanitizeTemplate` deep-copied `props` verbatim, so a
+community source — a documented feature — could ship `html:"<img src=x
+onerror=…>"` and run script in-origin.
+
+`sanitize.js` is now the one answer, and DOMParser is what makes it safe to
+write at all: the document it returns is inert, so the `<img>` is examined
+without ever being loaded. The allow-lists are drawn from what the app actually
+emits — the toolbar's execCommands, the built-in templates, and `parasToHtml`'s
+`div`/`span`/`a` with inline styles — so cleaning costs nothing that was ever
+displayed. Style attributes are filtered by property, because `url()` is how a
+style attribute reaches the network; parentheses stay legal, since `foreColor`
+writes `color: rgb(15, 23, 42)`.
+
+Two of the three sinks turned out not to want HTML at all. The dashboard
+thumbnail and the PPTX speaker note both wanted the words, and both reached them
+through a detached `div`'s `innerHTML` — which fires `onerror` exactly as
+readily as a live one does. Verified in the console before trusting it. That is
+why the review found the payload "fires just from the dashboard": you never had
+to open the deck. Those two now take `SageSanitize.text()`, which builds no DOM.
+
+Cleaning happens on the way **in** at the render sink, and again on import
+(`sanitizeTemplate`, and `scrubImportedHTML` on a restored backup) so a payload
+never reaches storage. Boot deliberately does not sanitize the teacher's own
+saved decks: the sinks make a stored payload inert without touching it, and
+silently rewriting somebody's saved work at every launch is the more expensive
+mistake. Edit a widget and the cleaned version saves over the old one anyway.
+
+Three URL entry points came along, because they are uses of the same guard: the
+text toolbar's Link button, the Link widget's `window.open`, and a .pptx slide's
+hyperlink. The stored render was already covered — but `createLink` makes a live
+tappable anchor before any remount, and `window.open('javascript:…')` opens a
+window that inherits this origin. A scheme can also hide behind whitespace, so
+`SageSanitize.url` tests a stripped copy: `java\tscript:` is a scheme the parser
+accepts and a plain regex walks straight past.
+
+### The erase that a forgotten tab undid
+
+`removeItem` fires a storage event with a null `newValue`, and the handler's
+first line skipped it. So the projector tab still had the whole thing in memory,
+and put it back on its next `save()` — and a z-bump on any pointerdown is a
+`save()`. "Erase ALL screens, widgets and class lists on this device" gave the
+class lists back.
+
+Both the tab that erases and every tab that hears about it now go through one
+`dropLocalState()`, which also cancels the pending debounced save — a save queued
+before the erase would otherwise land after it. The hearing tab says so out loud:
+a display tab that empties itself mid-lesson with no explanation reads as the app
+losing the work, which is the opposite of what just happened.
+
+Tested with two real tabs on one origin, a register in both tabs' memory. Erase
+in one, and the other clears, then writes only the fresh default state — no
+register, no widget html.
+
+Fixing it turned up a bigger version of the same broken promise, and one the
+review predates: the button emptied `localStorage` only. The daily snapshot trail
+and the modelled-writing undo histories sat in IndexedDB holding the same decks
+and the same children's names. `clearStoredHistory()` clears both stores.
+`clearAux` is separate from `clearAll` on purpose — a future "delete my
+snapshots" must not throw away the routes back that an undo stack is holding —
+and if the clear fails the teacher is told, rather than the toast claiming
+everything went.
+
+### A quarter is not a half
+
+On a Halves line ticked into halves, a true ¼ jump auto-labelled **+1/2**, and
+¾ labelled **2/2**. `nlTxt` rounded a fractional remainder into a whole
+numerator, so half a line-unit became one of them. Wrong maths on a classroom
+screen, in the widget whose whole job is what a number means.
+
+The denominator a label needs is not the line's `den`, it is the smallest unit
+the line actually shows: `den · minor / gcd(major, den · minor)`. Minor ticks
+subdivide each step, so a Halves line ticked into halves **is** a line of
+quarters, and the label should say so. One `nlParts()` now feeds tick labels,
+jump arcs and the Facts sentence, so the three cannot disagree.
+
+Not reduced, deliberately. A plain Quarters line has always read 6 as "1 2/4",
+and the denominator is the line's unit — reducing is a different lesson, and the
+line in front of the class is marked in quarters.
+
+`pvFmt` came with it, from the same Facts line: `t % 1000` keeps the sign, so
+−2.5 printed as "−3.−5" on the negatives line with half ticks. The remainder now
+comes off `Math.abs` and the sign goes back on the front.
+
+Browser-verified on both: **+¼** and **+¾** on the arcs, "0 + 1/4 + 3/4 = 1"
+under the quarters line, "−3.5 + 1 = −2.5" under the negatives one.
+
+### Also
+
+`index.html`'s home button still said "All decks & name lists" — the one string
+the rename two commits ago missed, found by reading the accessibility tree while
+testing something else.

@@ -232,6 +232,21 @@
     return data;
   }
 
+  // Rich text out of an imported file, cleaned before the app adopts it. Boot
+  // deliberately does not run this over the teacher's own saved decks: the
+  // sinks already make a stored payload inert, and silently rewriting somebody
+  // else's saved work at every launch is the more expensive mistake to make.
+  function scrubImportedHTML(data) {
+    for (const d of (data.decks || [])) {
+      for (const s of (d.screens || [])) {
+        for (const w of (s.widgets || [])) {
+          if (w && w.props && typeof w.props.html === 'string') w.props.html = SageSanitize.html(w.props.html);
+        }
+      }
+    }
+    return data;
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(LS_KEY);
@@ -345,6 +360,32 @@
       } catch (e3) { /* genuinely out of room */ }
       toast('⚠️ Could not save — storage is full. Try removing large images or clearing old writing pages.');
     }, 250);
+  }
+
+  // Erasing is the one change a tab cannot make on its own. Every other tab is
+  // still holding the old state in memory — the forgotten #s= projector window
+  // is the documented case — and its next save() writes the whole thing back.
+  // A z-bump on any pointerdown is a save(), so "Erase ALL … on this device"
+  // was handing back the class lists it had just promised to destroy. The tab
+  // that erases and every tab that hears about it both come through here.
+  function dropLocalState() {
+    // a save queued before the erase would land after it and undo it
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    state = normalize(defaultState());
+    rewardsDayTick();
+    applyReadingFont(); renderStarPill();
+    renderScreen();
+    if (dashEl) renderDashboard();
+  }
+
+  // "ALL … on this device" has to include the snapshot trail and the undo
+  // histories. They live in IndexedDB, outside the store the button empties,
+  // and they hold the same decks and the same children's names.
+  function clearStoredHistory() {
+    if (!window.SageSnapshots) return Promise.resolve(true);
+    return Promise.all([SageSnapshots.clearAll(), SageSnapshots.clearAux()])
+      .then((r) => r.every(Boolean)).catch(() => false);
   }
 
   // A tab opened via "Open in new tab" carries #s=<screen id> and pins itself to
@@ -3523,10 +3564,13 @@
   const pvName = (d, n) => (n === 1 ? PV_ONE[pvI(d)] : PV_MANY[pvI(d)]);
   const pvCount = (items, d) => items.reduce((a, it) => a + (it.d === d ? 1 : 0), 0);
   const pvTotal = (items) => items.reduce((a, it) => a + PV_TH[pvI(it.d)], 0); // in thousandths
+  // The sign belongs to the whole number, not to its fraction part: taking the
+  // remainder with % keeps the minus, and −2.5 printed as "−3.−5".
   const pvFmt = (th) => {
     const t = Math.round(th);
-    const fr = String(t % 1000).padStart(3, '0').replace(/0+$/, '');
-    return Math.floor(t / 1000).toLocaleString('en-GB') + (fr ? '.' + fr : '');
+    const a = Math.abs(t);
+    const fr = String(a % 1000).padStart(3, '0').replace(/0+$/, '');
+    return (t < 0 ? '−' : '') + Math.floor(a / 1000).toLocaleString('en-GB') + (fr ? '.' + fr : '');
   };
   // counter label markup + a font size that keeps it inside the circle
   const pvFace = (d, dia, frac) => {
@@ -4482,23 +4526,39 @@
       };
       const fOf = (v) => (v - p.min) / range();
 
+      // The denominator a fraction label has to be written in: not the line's
+      // den, but the smallest unit the line actually shows. Minor ticks
+      // subdivide each step, so a Halves line ticked into halves is a line of
+      // quarters — and a quarter jump on it used to round its way to "+1/2",
+      // which is the wrong fraction on a classroom screen.
+      const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+      function nlUnit() {
+        if (!p.minor) return p.den;
+        const d = p.den * p.minor;
+        return d / (gcd(Math.abs(p.major) || 1, d) || 1);
+      }
       // exact label text: integers with thousands grouping, decimals via the
       // thousandths formatter (no float drift), fractions as mixed numbers
+      function nlParts(av) {
+        const den = nlUnit();
+        const n = Math.round((av * den) / p.den); // whole number of line units
+        const wh = Math.floor(n / den);
+        return { den, wh, rem: n - wh * den };
+      }
       function nlTxt(v) {
         if (p.den === 1) return Number.isInteger(v) ? dnFmt(v) : pvFmt(Math.round(v * 1000));
         const neg = v < 0 ? '−' : '';
         const av = Math.abs(v);
         if (!p.frac && NL_DEC.includes(p.den)) return neg + pvFmt(Math.round(av * 1000 / p.den));
-        const wh = Math.floor(av / p.den), rem = Math.round(av - wh * p.den);
-        return neg + (rem ? (wh ? `${wh} ` : '') + `${rem}/${p.den}` : dnFmt(wh));
+        const { den, wh, rem } = nlParts(av);
+        return neg + (rem ? (wh ? `${wh} ` : '') + `${rem}/${den}` : dnFmt(wh));
       }
       function nlHTML(v) {
         if (p.den === 1 || (!p.frac && NL_DEC.includes(p.den))) return nlTxt(v);
         const neg = v < 0 ? '−' : '';
-        const av = Math.abs(v);
-        const wh = Math.floor(av / p.den), rem = Math.round(av - wh * p.den);
+        const { den, wh, rem } = nlParts(Math.abs(v));
         if (!rem) return neg + dnFmt(wh);
-        return `${neg}${wh ? wh + ' ' : ''}<span class="pv-fr"><b>${rem}</b><i>${p.den}</i></span>`;
+        return `${neg}${wh ? wh + ' ' : ''}<span class="pv-fr"><b>${rem}</b><i>${den}</i></span>`;
       }
 
       const jumpAuto = (j) => (j.va == null || j.vb == null ? '' : (j.vb >= j.va ? '+' : '−') + nlHTML(Math.abs(j.vb - j.va)));
@@ -5846,7 +5906,10 @@
     }),
     mount(body, w, api) {
       const ed = el('div', { class: 'text-edit', contenteditable: 'true' });
-      ed.innerHTML = w.props.html || '';
+      // cleaned on the way in, not on the way out: a payload that arrived in a
+      // shared template or an old backup is inert the moment it is displayed,
+      // and the next edit saves the cleaned version over it
+      ed.innerHTML = SageSanitize.html(w.props.html);
       ed.spellcheck = !!textDefaults().spell;
       const apply = () => {
         ed.style.fontSize = w.props.size + 'px';
@@ -6000,8 +6063,12 @@
       });
 
       const linkBtn = tbBtn(iconEl('chain'), 'Link', () => {
-        const url = prompt('Link URL:', 'https://');
-        if (!url || url === 'https://') return;
+        const raw = prompt('Link URL:', 'https://');
+        if (!raw || raw === 'https://') return;
+        // the sink cleans a stored href on the next mount; this stops a
+        // javascript: link being live and tappable in the meantime
+        const url = SageSanitize.url(raw);
+        if (!url) { toast('⚠️ Links need to start with https:// (or mailto:).'); return; }
         ed.focus();
         document.execCommand('createLink', false, url);
         queueSave();
@@ -7063,11 +7130,19 @@
     title: 'Link', icon: 'link', accent: '#99f6e4', w: 260, h: 150,
     defaults: () => ({ label: 'Class website', url: 'https://example.com' }),
     mount(body, w) {
+      // the settings box forces an https:// prefix, but a url that arrived in a
+      // shared template never went through it — and window.open('javascript:…')
+      // runs in a window that inherits this origin
+      const open = () => {
+        const url = SageSanitize.url(w.props.url);
+        if (url) window.open(url, '_blank', 'noopener');
+        else toast('⚠️ That link isn’t a web address.');
+      };
       body.append(el('div', { class: 'link-big' },
         el('button', {
           class: 'btn',
           style: 'display:flex;align-items:center;gap:8px;',
-          onclick: () => window.open(w.props.url, '_blank', 'noopener'),
+          onclick: open,
         }, iconEl('link'), w.props.label || 'Open'),
         el('div', { class: 'link-url' }, w.props.url),
       ));
@@ -9504,8 +9579,11 @@
           style: 'object-fit:' + (w.props.fit === 'cover' ? 'cover' : 'contain'),
         });
       } else if (w.type === 'text' && w.props && w.props.html) {
-        const probe = el('div', { html: w.props.html });
-        const text = (probe.textContent || '').trim();
+        // a thumbnail wants the words, and used to reach them through a
+        // detached div's innerHTML — which fires an <img onerror> as readily
+        // as a live one, so the dashboard ran a stranger's script before a
+        // deck was ever opened
+        const text = SageSanitize.text(w.props.html).trim();
         if (text) content = el('div', { class: 'deck-mini-text' }, text.slice(0, 120));
       }
       mini.append(content || (def ? iconEl(def.icon) : ''));
@@ -10708,6 +10786,10 @@
       for (const w of (Array.isArray(s.widgets) ? s.widgets : []).slice(0, 24)) {
         if (!w || !WIDGETS[w.type]) continue;
         const props = (w.props && typeof w.props === 'object') ? JSON.parse(JSON.stringify(w.props)) : {};
+        // rich text from a stranger's file never enters storage uncleaned. The
+        // sinks sanitize too, but a payload that is never saved cannot outlive
+        // a sink this file forgets about later.
+        if (typeof props.html === 'string') props.html = SageSanitize.html(props.html);
         for (const k of URLISH_PROPS) {
           if (typeof props[k] === 'string' && /^(https?:|data:)/i.test(props[k])) {
             urls.push(props[k].length > 90 ? props[k].slice(0, 90) + '…' : props[k]);
@@ -11766,7 +11848,7 @@
                     confirmDialog('Replace everything with this backup?', () => {
                       const next = normalize(data);
                       if (!next) { toast("⚠️ That file doesn't look like a Sage Stage backup."); return; }
-                      state = next;
+                      state = scrubImportedHTML(next);
                       // old backups predate the chrome fields: stamp the rewards
                       // clock before any star lands under weekStart '', and
                       // re-apply the chrome the swapped state describes
@@ -11802,11 +11884,14 @@
           onclick: () => {
             confirmDialog('Erase ALL screens, widgets and class lists on this device?', () => {
               localStorage.removeItem(LS_KEY);
-              state = normalize(defaultState());
-              rewardsDayTick();
-              applyReadingFont(); renderStarPill();
-              renderScreen(); finish();
+              dropLocalState();
+              finish();
               toast('Everything cleared');
+              clearStoredHistory().then((ok) => {
+                if (ok) return;
+                toast('⚠️ Screens and lists are gone, but the saved snapshot history would not '
+                  + 'clear. Try again, or clear this site’s data in your browser settings.', { ms: 12000 });
+              });
             }, { label: 'Erase' });
           },
         }, 'Erase all local data'),
@@ -13002,7 +13087,16 @@
 
   // keep tabs in sync: adopt changes written by another tab instead of clobbering them
   window.addEventListener('storage', (e) => {
-    if (e.key !== LS_KEY || !e.newValue) return;
+    if (e.key !== LS_KEY) return;
+    // A null newValue is the erase in another window, not a write to skip past.
+    // Ignoring it left this tab holding the only surviving copy — and then
+    // writing it back. It says so out loud, because a display tab that empties
+    // itself mid-lesson without explanation reads as the app losing the work.
+    if (!e.newValue) {
+      dropLocalState();
+      toast('Everything on this device was erased in another window.', { ms: 9000 });
+      return;
+    }
     try {
       const incoming = normalize(JSON.parse(e.newValue));
       if (!incoming) return;
