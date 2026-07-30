@@ -136,7 +136,10 @@
   const DASH_BG_DEFAULT = 'linear-gradient(165deg,#eaf7f4,#ccfbf1)';
   const OLD_DASH_BG_DEFAULT = 'linear-gradient(140deg,#fdf2f8,#fbcfe8 50%,#c7d2fe)';
 
-  const DEFAULT_PINNED = ['background', 'sketch', 'text', 'clock', 'timer', 'traffic', 'picker', 'poll', 'sound', 'image'];
+  // only ever applied to a device with nothing pinned yet, so adding to it moves
+  // no existing teacher's bar. 'lists' earns its slot on frequency — the register
+  // is opened more than most of what is already here
+  const DEFAULT_PINNED = ['background', 'sketch', 'text', 'clock', 'timer', 'traffic', 'lists', 'picker', 'poll', 'sound', 'image'];
 
   function blankDeck(name) {
     return {
@@ -11013,8 +11016,6 @@
     { id: 'background', glyph: 'background', accent: '#fbcfe8', label: 'Background', run: () => toggleBackgroundPanel() },
     { id: 'spotlight', glyph: 'spot', accent: '#fde68a', label: 'Spotlight', run: () => toggleSpotlight() },
     { id: 'shades', glyph: 'shade', accent: '#c7d2fe', label: 'Screen cover', run: () => toggleShades() },
-    // shares the name picker's accent: same register, two ways in
-    { id: 'lists', glyph: 'list', accent: '#bae6fd', label: 'Class lists', run: () => openListManager(refreshListWidgets) },
     widgetTool('sketch', 'Draw pad'),
     widgetTool('text', 'Text'),
     widgetTool('clock', 'Clock'),
@@ -11024,7 +11025,7 @@
     widgetTool('frametiles', 'Frame tiles', 'maths'),
     widgetTool('counters', 'Counters', 'maths'),
     widgetTool('dienes', 'Base 10', 'maths'),
-    widgetTool('pvcounters', 'PV counters', 'maths'),
+    widgetTool('pvcounters', 'Place value counters', 'maths'),
     widgetTool('rekenrek', 'Rekenrek', 'maths'),
     widgetTool('numberline', 'Number line', 'maths'),
     widgetTool('partwhole', 'Part–whole', 'maths'),
@@ -11038,6 +11039,11 @@
     widgetTool('traffic', 'Traffic light'),
     widgetTool('symbols', 'Work mode'),
     widgetTool('sound', 'Noise meter'),
+    // sits with the picker rather than up by Background, which is where its
+    // declaration order would have put it on the bar. Shares the picker's accent
+    // too: same register, two ways in. The menu sorts by label, so this position
+    // only decides where it lands on the bar — set the register, then pick from it
+    { id: 'lists', glyph: 'list', accent: '#bae6fd', label: 'Class lists', run: () => openListManager(refreshListWidgets) },
     widgetTool('picker', 'Name picker'),
     widgetTool('groups', 'Group maker'),
     widgetTool('dice', 'Dice'),
@@ -11049,7 +11055,7 @@
     widgetTool('tictactoe', 'Tic tac toe', 'games'),
     widgetTool('connectfour', 'Connect four', 'games'),
     widgetTool('countdowngame', 'Numbers & letters', 'games'),
-    widgetTool('strategyboard', 'Strategy board', 'games'),
+    widgetTool('strategyboard', 'Mini strategy board', 'games'),
     widgetTool('image', 'Image'),
     widgetTool('video', 'Video'),
     widgetTool('webcam', 'Webcam'),

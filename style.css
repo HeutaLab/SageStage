@@ -1331,8 +1331,13 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
   font-size: 11px;
   font-weight: 600;
   color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
+  /* wraps rather than clips. nowrap + overflow:hidden in a 92px cell was quietly
+     eating the last word of the longest names — "Numbers & letters" lost its
+     tail long before "Place value counters" arrived to make it obvious. A widget
+     you cannot read the name of is one you cannot find. */
+  text-align: center;
+  line-height: 1.25;
+  overflow-wrap: break-word;
   max-width: 100%;
 }
 .pin-btn {

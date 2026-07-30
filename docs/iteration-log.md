@@ -4070,3 +4070,33 @@ fills and icons, --danger-ink for small red words, and every .btn.danger in the
 app is small red words. Five buttons move with it — Remove image, Clear all
 items, Remove local file, Delete list, and the data panel's — all of them
 better for it.
+
+## 2026-07-30 (last) — One name per widget, and the label that was being eaten
+
+### The two remaining mismatches
+
+"PV counters" and "Strategy board" in the menu were "Place value counters" and
+"Mini strategy board" on the widget's own title bar. Both now use the full name
+in both places, which is what the other forty-three widgets already do. PV is
+planning shorthand — the words a teacher says to a class are the whole ones, and
+"Mini" is not decoration, it is which board you are getting.
+
+### The clip nobody had noticed
+
+Lengthening them turned up something older. .tool-cell .label was nowrap with
+overflow:hidden inside a 92px cell, so a long name lost its tail with no
+ellipsis to admit it — "Numbers & letters" has been landing in the Games panel
+short of its last word for as long as it has been there. A widget whose name you
+cannot read is one you cannot find, which is the same complaint the A–Z sort
+was answering.
+
+Labels wrap now, centred, two lines where they need it. Three of the fifty-three
+take a second line; nothing is cut.
+
+### Class lists on the bar
+
+Added to DEFAULT_PINNED, which only ever applies to a device with nothing pinned
+yet — no existing teacher's bar moves. It sits beside Name picker rather than up
+by Background, where its position in TOOLS would otherwise have put it: set the
+register, then pick from it. That position is now free to mean only that, since
+the menu sorts by label and no longer cares what order TOOLS is written in.
