@@ -11039,7 +11039,7 @@
     widgetTool('symbols', 'Work mode'),
     widgetTool('sound', 'Noise meter'),
     widgetTool('picker', 'Name picker'),
-    widgetTool('groups', 'Groups'),
+    widgetTool('groups', 'Group maker'),
     widgetTool('dice', 'Dice'),
     widgetTool('poll', 'Poll'),
     widgetTool('score', 'Scoreboard'),

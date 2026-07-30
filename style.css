@@ -707,7 +707,10 @@ input, select, textarea { font: inherit; color: inherit; }
   color: var(--accent);
 }
 .btn.small { padding: 4px 10px; font-size: 14px; }
-.btn.danger { background: #fee2e2; color: var(--danger); }
+/* --danger-ink, not --danger: these are all small red words on the tint, which
+   is the case that comment was written for. #dc2626 was 4.0:1 here, under the
+   floor; #a13b4b is 5.3:1. */
+.btn.danger { background: #fee2e2; color: var(--danger-ink); }
 /* The class list editor's action row runs green → amber → red. Inks are picked
    the way --danger-ink was: #166534 is 6.5:1 on its tint and #92400e is 6.4:1,
    both clear of 4.5:1. These say what the button does, unlike the --tint-*

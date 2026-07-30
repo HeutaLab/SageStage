@@ -4010,3 +4010,63 @@ Verified end to end against a built .xlsx (shared strings, a split run, an
 entity, a gap column, an inline string, a numeric row) and a .csv as Excel saves
 one (BOM, CRLF, quoted names, a header, a repeat): four names and three names
 respectively, headers ignored, repeats dropped, admission numbers left out.
+
+## 2026-07-30 (later) — The menu in the order a teacher reads it
+
+### A–Z, and the bar left alone
+
+The widget panels listed their contents in the order the TOOLS array happened to
+be written in, which is a memory test rather than a scan. They sort by label
+now. The sort runs on a filtered copy at open time, not on TOOLS itself, so two
+things stay true: the pinned bar keeps its hand-picked order, where frequency
+beats alphabet and Draw pad has earned its slot; and the English widgets, which
+are pushed into TOOLS after load, fall into place on their own with no second
+piece of wiring to forget.
+
+### The word teachers already use
+
+Glenn: "we call them name lists here, but in the real world they are called
+class lists or group lists — on something like a name picker and class list, the
+frequency of use is usually high." A word met several times a day has to be the
+one already in the teacher's mouth, so "Name lists" is "Class lists" everywhere
+one is read: the dashboard tab and its heading, the editor's own title, the
+deck-close tooltip, the erase-everything confirm, every naming prompt.
+
+state.lists and deck.classList keep their names. The rename is what a teacher
+reads, never what a saved register is filed under — no data moves.
+
+Class lists, not group lists, because Group maker is a separate widget reading
+the same register, and "group list" beside it would read as that widget's own
+thing rather than the class.
+
+The picker could always pull from any list; the select has been there all along.
+What was missing was the way to the lists, which lived on a small button inside
+a picker or the group maker — so the editor now has its own entry in the menu,
+under C. Opened from there it has to remount the widgets that read a list, the
+way the in-widget button already did, or you edit a register and watch the
+picker on screen ignore every word of it.
+
+Also: "Groups" in the menu is "Group maker", the name its own title bar has
+always used. Two words for one widget is exactly the translation this pass is
+meant to remove, and "Groups" sitting a few rows from "Class lists" invited the
+reading that it was where you kept them.
+
+### One row of actions, and the red that was not red enough
+
+"Open a file…" has moved down out of the row above the box to sit with Rename
+and Delete list — superseding "sits above the box" in the entry before this one.
+One row now, read left to right: bring names in, retitle the list, throw it
+away. Green, amber, red.
+
+Two new .btn tints for the first two. Not the --tint-* swatches — that comment
+reserves them for decoration and says the accent and danger colours are what
+carry state — so they are inked the way --danger-ink was, and measured: 6.5:1
+and 6.4:1.
+
+Which left Delete list, on --danger, the weakest of the three at 4.0:1 — under
+the floor, and conspicuous between two that clear it comfortably. It is on
+--danger-ink now, 5.3:1, which is what that token was added for: --danger for
+fills and icons, --danger-ink for small red words, and every .btn.danger in the
+app is small red words. Five buttons move with it — Remove image, Clear all
+items, Remove local file, Delete list, and the data panel's — all of them
+better for it.
