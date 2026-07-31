@@ -4645,3 +4645,57 @@ during the corruption tests. What is still unobserved is rotation past fourteen 
 that a backup is only made before the first genuine **write** of a day: booting the app and
 not editing produces none, which is the specified behaviour and worth knowing before anyone
 reports it as a bug.
+
+## 2026-07-31 · Phase 4: two windows, and four bugs found by attacking it
+
+The projector workflow under Tauri. "Open in new tab" now creates a real second window
+(`screen-<id>`) instead of a browser tab that does not work in a webview; link widgets open in
+the system browser rather than a chrome-less webview with no way back; and after every
+successful write the writer emits `sage:written` so the other windows re-read the file. The
+event carries no payload — receivers read the file themselves, which keeps multi-MB of JSON
+out of IPC and, because the write is an atomic rename, means a reader can only ever see a
+whole file. Every browser call site is untouched: `SagePlatform` is undefined there, so the
+anchors and `window.open` still work and middle-click still works.
+
+Then it was reviewed adversarially, which was worth more than writing it. **Four real defects,
+one of them mine from phase 3 and much worse than the multi-window work itself.**
+
+**The write queue could wedge permanently.** `drain()` assigned `draining` to an async IIFE
+*after* the body had already run. With nothing pending the body has no await point, so it
+completed synchronously — setting `draining = null` on its way out — and the assignment then
+stored the already-resolved promise. `draining` stayed non-null for ever, every later
+`drain()` took the early-exit branch, and nothing was written again while `dirty` cheerfully
+reported true. Reproduced under node against a verbatim copy: after flushing a clean queue,
+persists = 0 for every subsequent write. Flushing a clean queue is precisely what the quit
+handshake does. One `await null` fixes it, and that line now carries a comment explaining
+why it must never be "tidied away".
+
+**A projector window's write could roll the main window's typing backwards.** The
+`sage:written` listener adopted unconditionally while the focus path twenty lines below
+refused to adopt when dirty. Same guard, same reason, missing in one of the two. The plan
+calls adopting-while-dirty "a harmless convergent no-op" — it converges on disk, but the
+writer's memory is the teacher's screen, and its pending thunk would then write the
+rolled-back state back out.
+
+**Erase said "Everything cleared" while the names came back.** The code removed the files and
+*then* emitted `sage:erased`; a sibling window whose debounce expired in the gap recreated the
+file in full. The comment above it described the correct order while the code did the
+opposite. Now it emits first, waits for delivery, then deletes. Erase is a privacy control, so
+it does not get to be approximately right.
+
+**Opening a projector window ran on stale state**, because nothing flushed the debounce first.
+Fixed — and it had to be sequenced after the wedge fix, because it adds a `flush()` call on a
+queue that is usually clean.
+
+Also trimmed: `persistOnce` slept 150ms after its final attempt, inside the 2s quit fuse.
+
+**Recorded, not fixed:** the Rust quit fuse is a flat 2s that never consults the reply count,
+and `flush()` can legitimately spend most of it on retry sleeps and fsynced writes when a sync
+client holds a lock. The loss is bounded by the 10s max-dirty ceiling and it needs the
+OneDrive-lock case to bite, but the fuse is budgeted against the debounce rather than against
+what flush actually does.
+
+**Untested, and it needs a person:** everything about two windows actually running. Screen
+recording is granted but accessibility is not, so the native window can be read and not
+clicked. What is verified is that the app boots, writes its file, and that the browser build
+is untouched.

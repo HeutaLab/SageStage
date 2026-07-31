@@ -155,6 +155,16 @@
     function drain() {
       if (!draining) {
         draining = (async () => {
+          // This await is load-bearing and must stay. Without it, a drain() with
+          // nothing pending runs its whole body SYNCHRONOUSLY — setting
+          // draining = null on the way out — and only then does the assignment
+          // below store the already-resolved promise. draining is left non-null
+          // for ever, every later drain() takes the `if (!draining)` false
+          // branch, and NOTHING IS EVER WRITTEN AGAIN while `dirty` cheerfully
+          // reports true. Flushing a clean queue is exactly what the quit
+          // handshake does, so this was one bad ordering away from a window that
+          // silently stopped saving.
+          await null;
           while (pending) {
             const serialize = pending;
             pending = null;
@@ -233,7 +243,13 @@
       let last = null;
       for (let i = 0; i < 3; i++) {
         try { await T.core.invoke('save_state', { json, windowLabel: label }); return; }
-        catch (e) { last = e; await new Promise((r) => setTimeout(r, 150)); }
+        catch (e) {
+          last = e;
+          // No sleep after the LAST attempt — there is nothing left to wait for,
+          // and this runs inside the quit handshake's 2s fuse, where 150ms of
+          // pointless sleeping is 150ms the write could have used.
+          if (i < 2) await new Promise((r) => setTimeout(r, 150));
+        }
       }
       throw last;
     }
@@ -287,6 +303,16 @@
       await persistOnce(json);
       lastSize = json.length;
       lastMtime = await mtimeOf(MAIN);
+      // Tell the other windows AFTER the rename, never before — the event is a
+      // "go and read the file" nudge, and the file has to be the new one by the
+      // time anyone acts on it. No payload: receivers re-read rather than have
+      // multi-MB of JSON pushed through IPC, and because the write is an atomic
+      // rename a reader can only ever see a complete file.
+      //
+      // `from` is load-bearing. Tauri v2 payloads no longer carry v1's
+      // windowLabel, so without it a window cannot tell its own echo from a real
+      // change and every save would bounce round the windows forever.
+      try { await T.event.emit('sage:written', { from: label }); } catch (e) { /* alone */ }
     }
 
     const queue = makeQueue(
@@ -399,6 +425,15 @@
 
       async erase() {
         queue.cancel();
+        // Quiesce the other windows BEFORE deleting anything, and give the event
+        // a moment to actually arrive. A display window left open on a screen
+        // holds a complete copy of everything in memory; if its debounce expires
+        // in the gap between the delete and the notification it recreates the
+        // file, in full, and the toast has already said "Everything cleared"
+        // while the children's names are back on disk. Erase is a privacy
+        // control, so it does not get to be approximately right.
+        try { await T.event.emit('sage:erased', { from: label }); } catch (e) { /* alone */ }
+        await new Promise((r) => setTimeout(r, 250));
         for (const p of [MAIN, BACKUPS]) {
           try { await fs.remove(p, { ...D, recursive: true }); } catch (e) { /* already gone */ }
         }
@@ -434,6 +469,39 @@
 
       onExternalChange(fn) {
         extCb = fn;
+
+        // Another window in THIS app saved. Same semantics as the browser's two
+        // tab behaviour: whole-state replace, re-render, last-write-wins. Per
+        // window temp files mean last-write-wins can never degrade into a torn
+        // file, so there is nothing cleverer to do here.
+        T.event.listen('sage:written', async (e) => {
+          if (!e || !e.payload || e.payload.from === label) return;   // our own echo
+          // The SAME guard the focus path uses below, and for the same reason: a
+          // window with unsaved edits must not have them replaced out from under
+          // the person typing. The plan calls adopting-while-dirty "a harmless
+          // convergent no-op" because it converges ON DISK — but the writer's
+          // memory is the teacher's screen, and its pending thunk would then
+          // write the rolled-back state back out. Let the dirty window land its
+          // own edit first; the others adopt that.
+          if (queue.dirty) return;
+          try {
+            const raw = await fs.readTextFile(MAIN, D);
+            if (!shapeOk(raw)) return;
+            lastMtime = await mtimeOf(MAIN);   // keep the conflict guard honest
+            if (extCb) extCb(raw);
+          } catch (err) { /* it will be re-read on focus */ }
+        }).catch(() => { /* single window */ });
+
+        // Another window erased everything. Drop anything of ours still queued —
+        // a pending write landing after an erase would quietly undo it — and let
+        // app.js say so, exactly as the browser's null-payload path does.
+        T.event.listen('sage:erased', (e) => {
+          if (e && e.payload && e.payload.from === label) return;
+          queue.cancel();
+          lastMtime = 0;
+          if (extCb) extCb(null);
+        }).catch(() => { /* single window */ });
+
         // Left running overnight while the other machine edited: on focus, if we
         // have nothing pending of our own, adopt whatever is on disk now.
         window.addEventListener('focus', async () => {
@@ -478,10 +546,51 @@
     };
   }
 
+  /* SagePlatform — the things a webview cannot do for itself.
+     DEFINED ONLY UNDER TAURI. Every call site is guarded by `if
+     (window.SagePlatform)`, so in a browser it is undefined and the existing
+     anchors and window.open run untouched — middle-click and copy-link keep
+     working, which they would not if this replaced them everywhere. */
+  function platform() {
+    const T = window.__TAURI__;
+    return {
+      async openScreenWindow(id) {
+        const { WebviewWindow } = T.webviewWindow;
+        const label = 'screen-' + id;
+        // getByLabel is ASYNC in v2. The v1 sync-looking form returns a Promise,
+        // which is always truthy, so skipping the await would take the "already
+        // open" branch every time and then throw on setFocus.
+        const existing = await WebviewWindow.getByLabel(label);
+        if (existing) { await existing.setFocus(); return; }
+        // Land anything still in the debounce FIRST. The new window's only truth
+        // is its own read of the file, so a teacher who arranges a screen and
+        // immediately sends it to the projector would otherwise put last
+        // second's arrangement on the wall — and if a child then touches
+        // anything there, that stale state is written back over the good one.
+        try { await window.SageStorage.flush(); } catch (e) { /* open it anyway */ }
+        // The hash is set at CREATION, before app.js runs in that window, so the
+        // new window boots already pinned to the screen rather than flashing the
+        // dashboard and jumping.
+        const win = new WebviewWindow(label, {
+          url: 'index.html#s=' + id,
+          title: 'Sage Stage — screen',
+          width: 1280,
+          height: 800,
+        });
+        win.once('tauri://error', (e) => console.error('window create failed', e));
+      },
+      openExternal(url) {
+        // The system browser, not a webview with no chrome and no way back.
+        try { T.opener.openUrl(url); } catch (e) { /* nothing sensible to fall back to */ }
+      },
+    };
+  }
+
   // Backend selection happens once, here, so app.js never branches on which one
   // it got. Tauri v2 sets window.isTauri in the webview.
   const isTauri = ('isTauri' in window && window.isTauri) || !!window.__TAURI__;
   window.SageStorage = isTauri ? fileBackend() : localBackend();
+  if (isTauri) window.SagePlatform = platform();
   if (window.SageStorage._wireQuit) {
     window.SageStorage._wireQuit().catch(() => { /* the app still runs */ });
   }

@@ -7184,7 +7184,11 @@
       // runs in a window that inherits this origin
       const open = () => {
         const url = SageSanitize.url(w.props.url);
-        if (url) window.open(url, '_blank', 'noopener');
+        // Sanitised first, either way. Under Tauri it goes to the SYSTEM browser
+        // rather than a chrome-less webview with no back button and no address
+        // bar — a class website opened inside the app is a trap for a teacher.
+        if (url && window.SagePlatform) SagePlatform.openExternal(url);
+        else if (url) window.open(url, '_blank', 'noopener');
         else toast('⚠️ That link isn’t a web address.');
       };
       body.append(el('div', { class: 'link-big' },
@@ -9683,7 +9687,13 @@
       el('a', {
         class: 'deck-menu-item', target: '_blank',
         href: location.href.split('#')[0] + '#s=' + s.id,
-        onclick: (e) => { e.stopPropagation(); closeDeckMenu(); },
+        // The anchor stays exactly as it was, so in a browser middle-click and
+        // copy-link still work. Under Tauri only, take it over: target="_blank"
+        // is unreliable in a webview, and a second SCREEN wants a second window.
+        onclick: (e) => {
+          e.stopPropagation(); closeDeckMenu();
+          if (window.SagePlatform) { e.preventDefault(); SagePlatform.openScreenWindow(s.id); }
+        },
       }, iconEl('expand'), 'Open in new tab'),
       window.SageExport ? item('save', 'Export…', () => SageExport.openDialog([i])) : null,
       item('plus', 'Add new screen', () => addScreenAfter(i)),
@@ -10180,7 +10190,13 @@
       el('a', {
         class: 'deck-menu-item', target: '_blank',
         href: location.href.split('#')[0] + '#s=' + deck.screens[clamp(deck.current, 0, deck.screens.length - 1)].id,
-        onclick: (e) => { e.stopPropagation(); closeDashMenu(); },
+        onclick: (e) => {
+          e.stopPropagation(); closeDashMenu();
+          if (window.SagePlatform) {
+            e.preventDefault();
+            SagePlatform.openScreenWindow(deck.screens[clamp(deck.current, 0, deck.screens.length - 1)].id);
+          }
+        },
       }, iconEl('screens'), 'Open in new tab'),
       item('text', 'Rename', () => {
         const name = prompt('Deck name:', deck.name || '');
