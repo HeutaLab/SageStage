@@ -1949,7 +1949,19 @@
           for (const [id, label] of pills) {
             barEl.append(el('button', {
               class: 'sm-pill f-' + id + (p.face === id ? ' on' : ''),
-              onclick: () => { p.face = id; bump(); render(); },
+              onclick: () => {
+                // Changing face SHUTS the panel, and it has to. Only the map and
+                // the graph draw one — boxing up is a VIEW of the beats and
+                // authors none — so an open beat carried onto that face is
+                // invisible and still live, and every word tapped in the bank
+                // would attach itself to a beat nobody can see. Commit first,
+                // exactly as the lock does: a half-typed beat is the class's
+                // words and changing face is not a reason to take them.
+                if (p.open) commitOpenBeat();
+                p.open = null;
+                p.face = id;
+                bump(); render();
+              },
             }, label));
           }
           barEl.append(el('span', { class: 'sm-grow' }));
@@ -2907,7 +2919,14 @@
         box.append(el('h4', {}, 'The plan'));
         box.append(el('div', { class: 'hint' },
           'Swapping a plan whole needs an empty map — re-word or add boxes instead once the class has started.'));
-        const swapShut = smPlotted(p) || smWritten(p);
+        // Asked at the moment of the tap, NEVER captured when this panel is
+        // built. The settings panel is built once and api.refresh() does not
+        // rebuild it, while bump() on the board is save() alone — so a gate read
+        // here would still say "empty map" after a whole lesson had been written
+        // into it, and the swap below would reach `p.strokes = {}` under a
+        // comment promising it destroys nothing. The reset control at the foot
+        // of this panel already does it this way, and this is the same hazard.
+        const swapShut = () => smPlotted(p) || smWritten(p);
         for (const a of smArcLib()) {
           const cur = p.arc && a.name === p.arc.name;
           box.append(el('button', {
@@ -2916,7 +2935,7 @@
               // re-picking a byte-identical spine would pool every beat into the
               // first box to get back where you started, so it does nothing
               if (cur) return;
-              if (swapShut) {
+              if (swapShut()) {
                 const bits = [];
                 if (smPlotted(p)) bits.push('plotted feelings');
                 if (smWritten(p)) bits.push('writing in a box');
@@ -2980,7 +2999,23 @@
           const row = el('div', { class: 'sm-lrow' });
           row.append(el('input', {
             type: 'text', value: t.name, maxlength: String(SM_CAP.track),
-            oninput: (e) => { t.name = gtStr(e.target.value, SM_CAP.track); save(); },
+            // An EMPTY field commits nothing. smNorm drops a nameless track and
+            // then prunes every beat value keyed to its id, so backspacing this
+            // box to blank would delete the line and the class's whole reading of
+            // the story — silently, on the next reload, with no confirm and no
+            // snapshot. Deleting a line is a deliberate act two controls along
+            // that names what it takes ("Every feeling plotted on it goes too");
+            // clearing a field to retype it is not that act.
+            oninput: (e) => {
+              const v = gtStr(e.target.value, SM_CAP.track);
+              if (!v) return;
+              t.name = v;
+              save();
+            },
+            // and the field snaps back to what is actually stored, so a teacher
+            // who tabs away from an empty box is never left looking at a blank
+            // that does not match the board
+            onblur: (e) => { e.target.value = t.name; },
           }));
           row.append(D.selectInput(SM_CH.map((c, i) => [String(i), c.name]), String(t.ch), (v) => {
             t.ch = smInt(v, 0, 2, 0); redraw();

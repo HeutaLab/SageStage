@@ -4466,6 +4466,46 @@ face, its poster and its settings are untouched; the tags ride alongside in `voc
 One authored list, two views, and no second list to drift. Verified: the toolkit
 still lists twelve genres at 26 words each.
 
+### Later the same day — three silent losses, closed
+
+An audit of the widget it had just shipped found four ways it could destroy a class's work
+without refusing, confirming or taking a snapshot. Three were one-liners and went in together;
+the fourth needs a ruling and is still open.
+
+**The swap gate was a stale boolean.** `swapShut` was computed once when the settings panel was
+built and the plan button tested that captured value — but `bump()` on the board is `save()`
+alone and never rebuilds the panel. So the sequence that breaks it is the ordinary one: open the
+gear at the side of the board, teach the lesson, tap a plan. `p.strokes = {}` then ran under a
+comment promising it destroyed nothing, because the window *had* been open when the panel was
+drawn. It is now a function asked at the moment of the tap. The reset control at the foot of the
+same panel already did it that way; the guard the panel's own comment calls mandatory had been
+applied to `p.arc` and not to the gate above it.
+
+**Backspacing a line's name deleted the line and every feeling plotted on it.** The name field
+wrote through on every keystroke with no empty guard, and the mount coercion drops a nameless
+track and then prunes every beat value keyed to its id. Silent, on the next reload. Two controls
+along, deleting a line is deliberate and says *"Every feeling plotted on it goes too."* — two
+routes to one act, only one of which admitted to it. An empty field now commits nothing and the
+field snaps back to what is stored, so clearing a box to retype it is no longer the same gesture
+as throwing the line away.
+
+**A word tapped on the boxing-up face attached to a beat nobody could see.** Only the map and the
+graph draw a beat panel — boxing up is a view of the beats and authors none — but changing face
+left `p.open` set, so the bank's tap branch found a live beat that was nowhere on screen and
+attached to it instead of climbing the word's score. Changing face now commits the open beat and
+shuts it, exactly as engaging the lock already did, because a half-typed beat is the class's words
+and switching face is not a reason to take them.
+
+Each was verified at the board rather than by reading: the panel built on an empty map, a stroke
+written into it, the plan tap refused with the writing intact; a plotted value surviving an
+emptied name across a reload; a bank tap climbing `glanced` from 1 to 2 with no beat touched. And
+the swap still *works* on a clean map — the gate is now accurate rather than merely shut.
+
+**Still open, and it needs a number rather than a fix:** `SM_CAP.strokesPerMap` is enforced only
+in the load loop, where hitting it breaks out and drops whole later boxes rather than trimming a
+tail. The pen only knows `strokesPerBox`, so sixteen boxes at 300 is 4800 against a map cap of
+1200 and the two ceilings cannot both hold. Which number moves is a decision, not an edit.
+
 ### What is not done
 
 The spec fold itself. `story-map-design.md` still describes typed cells and no
