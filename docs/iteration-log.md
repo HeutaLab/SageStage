@@ -4204,3 +4204,20 @@ under the quarters line, "−3.5 + 1 = −2.5" under the negatives one.
 `index.html`'s home button still said "All decks & name lists" — the one string
 the rename two commits ago missed, found by reading the accessibility tree while
 testing something else.
+
+## 2026-07-30 (plan) — The money, written in the order it can happen
+
+No code. A go-to-market checklist now sits beside the licensing design:
+[go-to-market-checklist.md](go-to-market-checklist.md). It orders the autumn —
+the paperwork that costs calendar time first (identity, certificates, the
+store), testers in August, Tauri through September, the gate on before v1.0
+ever ships, founders before any paid code — and it writes down the line every
+future item gets judged against: never sell data, attention, or access to a
+teacher's own work; sell capability and convenience.
+
+Two of the licensing doc's open decisions picked up recommendations along the
+way: a limited company rather than a personal name on the installer, and the
+perpetual-versus-annual question resolved as a split — teachers buy once and
+own it, departments rent seats because reassignment is the thing they are
+actually buying. Export outlives the licence in both worlds. The decisions
+stay formally open in §11; they just have shapes now.
