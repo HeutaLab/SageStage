@@ -4612,3 +4612,36 @@ unreadable left it byte-for-byte identical with no quarantine created, and the a
 the native save panel, which does not work in WKWebView — `saveExport()` and `fileInfo()` are
 implemented in the backend and simply not wired into the modal yet. The daily backup was not
 observed rotating, because that needs a second calendar day.
+
+### Later — the desktop's data panel, and an export that was doing nothing
+
+Phase 3 left the "Your data" panel still speaking browser. Three fixes, all behind
+`SageStorage.kind` so the browser build is byte-identical to before.
+
+**The export button was dead on the desktop.** WKWebView ignores a blob-anchor download, so
+the one control that backs a teacher's work up, and the only supported way to move data
+between the browser and the desktop, silently did nothing. It now goes through the native
+save panel when the backend offers one, and keeps the anchor when it does not.
+
+**"Room left" was answering a question the desktop does not have.** It probes the
+localStorage quota; on a disk with hundreds of gigabytes free that number means nothing.
+The file branch shows the size and the actual path instead, with a "Show the file" button,
+because what a teacher wants there is *where it is* — to back it up, email it, or find it
+after a reinstall.
+
+**And the panel's opening sentence said "lives only in this browser"** while running as a
+desktop app, which was simply untrue.
+
+Verified in the browser (unchanged: local backend, browser copy, "room left", no file
+button, export still fires with no error) and with the file backend's surface stubbed, which
+takes the panel's file branch: the file copy replaces the browser copy, "room left"
+disappears, the path and size render, "Show the file" calls `revealDataFile()`, and export
+routes through `saveExport()` with the right filename and says "Backup saved" rather than
+"downloaded".
+
+**A correction to the phase 3 entry.** It said daily backup rotation was unobserved. Backup
+*creation* is in fact observed — a correctly named `backups/2026-07-31.json` was produced
+during the corruption tests. What is still unobserved is rotation past fourteen days, and
+that a backup is only made before the first genuine **write** of a day: booting the app and
+not editing produces none, which is the specified behaviour and worth knowing before anyone
+reports it as a bug.

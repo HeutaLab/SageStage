@@ -11829,6 +11829,22 @@
     }, onDone);
   }
 
+  // The file backend can only answer about size and path asynchronously, and the
+  // modal builds in one pass, so this returns the element immediately and fills
+  // it a tick later. It says something useful in the meantime rather than
+  // flashing empty, because a panel that starts blank reads as a panel that is
+  // broken.
+  function dataFileHint() {
+    const box = el('div', { class: 'hint' }, 'Your data is in one file on this computer.');
+    SageStorage.fileInfo().then((info) => {
+      box.replaceChildren(
+        el('div', {}, `Current data size: ~${info.sizeKB} KB. Snapshots are stored separately and don’t count towards this.`),
+        el('code', { style: 'display:block;margin-top:6px;word-break:break-all;opacity:.85;' }, info.path),
+      );
+    }).catch(() => { /* the sentence above is still true */ });
+    return box;
+  }
+
   // ---------------------------------------------------------------- data (export / import)
   $('#dataBtn').addEventListener('click', () => {
     openModal('Your data', (body, finish) => {
@@ -11869,16 +11885,26 @@
       if (window.SageSnapshots) paintSnapshots(snapBox, finish);
 
       body.append(
-        el('p', {}, 'Everything you see lives only in this browser — no account, no server, no tracking. Back it up or move it between devices any time:'),
+        el('p', {}, SageStorage.kind === 'file'
+          ? 'Everything you see lives in one file on this computer — no account, no server, no tracking. Back it up or move it between devices any time:'
+          : 'Everything you see lives only in this browser — no account, no server, no tracking. Back it up or move it between devices any time:'),
         el('div', { class: 'row' },
           el('button', {
             class: 'btn',
-            onclick: () => {
-              const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-              const a = el('a', {
-                href: URL.createObjectURL(blob),
-                download: 'sage-stage-backup-' + new Date().toISOString().slice(0, 10) + '.json',
-              });
+            onclick: async () => {
+              const json = JSON.stringify(state, null, 2);
+              const name = 'sage-stage-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+              // WKWebView ignores a blob-anchor download, so on the desktop this
+              // button did nothing at all — silently, which is the worst way for
+              // a backup button to fail. The file backend answers with a real
+              // save panel; the browser keeps the anchor it always had.
+              if (SageStorage.saveExport) {
+                const r = await SageStorage.saveExport(name, json);
+                if (r === 'saved') toast('Backup saved');
+                return;
+              }
+              const blob = new Blob([json], { type: 'application/json' });
+              const a = el('a', { href: URL.createObjectURL(blob), download: name });
               a.click();
               URL.revokeObjectURL(a.href);
               toast('Backup downloaded');
@@ -11921,9 +11947,18 @@
         // Measured, not assumed: the ceiling is 5MB on some browsers and 50MB
         // on others, so quoting one number was wrong nearly everywhere. This
         // asks the browser whether the data would still fit alongside itself.
-        el('div', { class: 'hint' }, `Current data size: ~${usage} KB — room left: `
+        // "Room left" is a localStorage-quota answer. On the desktop the state
+        // is a file on a disk with hundreds of gigabytes free, so probing a
+        // quota would report a number that means nothing. What a teacher wants
+        // there is WHERE it is, so they can back it up, email it, or find it.
+        SageStorage.kind === 'file' ? dataFileHint() : el('div', { class: 'hint' },
+          `Current data size: ~${usage} KB — room left: `
           + headroomReport(usage * 1024).level
           + '. Pictures use it up fastest; snapshots are stored separately and don’t count towards this.'),
+        SageStorage.kind !== 'file' ? null : el('button', {
+          class: 'btn ghost small', style: 'align-self:start;',
+          onclick: () => SageStorage.revealDataFile(),
+        }, '📂 Show the file'),
         !window.SagePptxImport ? null : el('h4', {}, 'Bring in a presentation'),
         !window.SagePptxImport ? null : el('button', {
           class: 'btn ghost', style: 'align-self:start;',
