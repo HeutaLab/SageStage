@@ -1,2 +1,7 @@
 .DS_Store
 .claude/settings.local.json
+
+# Tauri desktop build
+dist/
+src-tauri/target/
+src-tauri/gen/

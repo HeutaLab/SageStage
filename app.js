@@ -382,6 +382,25 @@
   // bin-was-cleared notice arrive through here.
   SageStorage.onWriteError((msg) => toast(msg));
 
+  // A packaged desktop app has no console anyone will open, and the one failure
+  // that would silently wreck it is a Content-Security-Policy that blocks the
+  // inline style= attributes this whole UI is built from — the widget bar, every
+  // el() call, every widget position. Per the CSP spec, a nonce or hash in a
+  // directive makes the browser IGNORE 'unsafe-inline' in that same directive,
+  // and Tauri injects nonces at build time. So the app says so out loud rather
+  // than collapsing quietly and leaving a teacher to describe it over email.
+  //
+  // It fires at most once, and only for the directive that actually matters.
+  let cspToldOnce = false;
+  document.addEventListener('securitypolicyviolation', (e) => {
+    if (cspToldOnce || e.violatedDirective !== 'style-src-attr'
+      && e.violatedDirective !== 'style-src') return;
+    cspToldOnce = true;
+    console.error('CSP blocked inline styles:', e.violatedDirective, e.originalPolicy);
+    toast('⚠️ This build blocks inline styles, so the layout will be wrong. '
+      + 'dangerousDisableAssetCspModification needs "style-src".', { ms: 20000 });
+  });
+
   // Erasing is the one change a tab cannot make on its own. Every other tab is
   // still holding the old state in memory — the forgotten #s= projector window
   // is the documented case — and its next save() writes the whole thing back.
