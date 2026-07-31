@@ -4563,3 +4563,52 @@ window; and an empty store still produces the starter clock and the dashboard.
 machine, so phase 2 cannot be run — `tauri init`, `tauri dev` and `tauri build` all need
 `cargo`. Xcode's command line tools are present, so that half is ready. Until then the
 seam runs on localStorage exactly as before, which is what phase 2 asks for anyway.
+
+## 2026-07-31 · Phase 3: the state becomes a file
+
+Sage Stage now keeps its state in `Documents/Sage Stage/sage-stage.json` when it runs as a
+desktop app, and in localStorage when it runs in a browser, and `app.js` cannot tell which.
+
+**The write is atomic and durable.** One small Rust command: write a per-window temp file,
+`sync_all()`, then `rename`. The fsync is not ceremony — without it a post-rename crash can
+leave the main file zero-length once the metadata lands but the data blocks do not, which
+turns "lost the last second" into "lost the whole day", because recovery would then fall back
+to yesterday's backup. The temp name carries the window label so two windows can only ever
+produce whole-file last-write-wins; with a shared temp name, one window's half-written file
+could be renamed onto the main file by the other, installing garbage through a perfectly
+atomic rename. The label is validated in Rust because it is the one place a string from JS
+becomes a path.
+
+**The queue keeps failures dirty.** A failed persist puts the serializer back as pending, so
+`dirty` stays true and the close-time flush retries rather than discarding a teacher's last
+edit after one transient lock. Debounce is 1s, not the browser's 250ms, because every save
+rewrites the whole file and ink calls save() on every stroke-end; a 10s max-dirty guard stops
+continuous drawing from resetting the debounce forever.
+
+**Quitting flushes.** `onCloseRequested` covers the red button. Cmd+Q does not go through it
+on macOS, so the shell installs a custom Quit menu item that runs a handshake instead: Rust
+emits `sage:flush-request`, each window flushes and answers, and the app exits when they have
+all replied or after two seconds. The timeout matters more than the count — an app that
+refuses to quit is worse than one that loses a gesture the debounce had already bounded.
+
+**The governing rule of the boot path is that a file you could not READ is never harmed.**
+An OneDrive online-only placeholder throws on read; treating that as corruption would
+quarantine healthy data, boot empty, save the emptiness, and poison the cloud copy when sync
+resumed. So a failed read gives a read-only session and touches nothing. Only a file that
+read cleanly and then failed the shape check is quarantined — renamed, never deleted — after
+which recovery walks the daily backups newest-first, then OneDrive conflict copies, and
+writes the winner back through the atomic path *inside init()*, because a teacher who opens
+the app and quits without editing must not find a wiped app next time.
+
+Verified against a real build, not by reading. A first run created the file with the right
+shape and compact JSON. Renaming a deck in the file on disk and relaunching showed the new
+name on the dashboard, so the file really is the source of truth. Corrupting the file with
+readable-but-wrong JSON quarantined it as `sage-stage.corrupt-<ms>.json`, restored the seeded
+backup, and left the main file already containing the restored deck. Making the file
+unreadable left it byte-for-byte identical with no quarantine created, and the app still ran.
+
+**Not yet done:** the data panel's file branch still shows a size rather than the path and a
+"Show in Finder" button, and export still goes through the browser's blob-anchor rather than
+the native save panel, which does not work in WKWebView — `saveExport()` and `fileInfo()` are
+implemented in the backend and simply not wired into the modal yet. The daily backup was not
+observed rotating, because that needs a second calendar day.
