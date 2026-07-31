@@ -1,0 +1,1750 @@
+<title>Story map — playable mock</title>
+<style>
+:root{
+  --deep1:#1c4a48; --deep2:#2b6b64;
+  --panel:#fff; --ground:#f7faf9;
+  --ink:#1e2c33; --ink-soft:#5b6b7b; --ink-faint:#8b9aa2;
+  --line:#e4eae8; --line-firm:#cfdad7;
+  --acc:#0f766e; --acc-soft:#d8f3ef; --acc-ink:#0a544e;
+  --danger-ink:#a13b4b; --danger-soft:#fbe9ec;
+  --t1:#1d4ed8; --t2:#ea580c; --t3:#047857;
+  --st-model:#3f5a63; --st-model-bg:#eef3f4;
+  --st-together:#b4671a; --st-together-bg:#fdf1e0;
+  --st-yours:#1d7a4c; --st-yours-bg:#e6f5ec;
+  --f-map:#0d6e66; --f-map-bg:#d5f0ec;
+  --f-box:#7c3aed; --f-box-bg:#ede4fd;
+  --f-graph:#b02a5b; --f-graph-bg:#fbe3ec;
+  --fs-beat:15px; --fs-box:15.5px; --fs-hint:12.5px;
+  --tap:44px; --beatw:158px; --chip:13.5px;
+  --ui:'Quicksand','Avenir Next',system-ui,sans-serif;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--ui);background:#0c1918;color:#dfeae7;-webkit-font-smoothing:antialiased}
+button{font:inherit}
+
+/* CSS:intro */
+.hint{max-width:960px;margin:0 auto;padding:24px 20px 4px;font-size:14.5px;line-height:1.62;color:#9db1ad}
+.hint b{color:#e2ece9}
+.hint p{margin:0 0 10px}
+.hint .row{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+.hint button{font-size:13px;font-weight:600;background:#15302c;color:#a9d8d1;border:1px solid #244e49;border-radius:99px;padding:7px 14px;cursor:pointer}
+.hint button:hover{background:#1c3d38;color:#d8f0ec}
+.hint button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+
+/* CSS:board */
+.board{margin:16px auto 44px;max-width:1560px;padding:20px;border-radius:18px;
+  background:linear-gradient(158deg,var(--deep1),var(--deep2))}
+.boardbar{display:flex;align-items:center;gap:10px;margin:0 4px 15px;color:#cfe6e2;font-size:13px}
+.deckpill{background:rgba(255,255,255,.15);padding:7px 15px;border-radius:99px;font-weight:600;color:#fff;display:flex;gap:9px;align-items:center}
+.deckpill .yr{background:rgba(0,0,0,.24);padding:2px 9px;border-radius:99px;font-size:11.5px;font-weight:700;letter-spacing:.05em}
+.grow{flex:1}
+
+/* CSS:widget */
+.widget{background:var(--panel);color:var(--ink);border-radius:13px;overflow:hidden;
+  box-shadow:0 12px 38px rgba(0,0,0,.3);display:flex;flex-direction:column;min-height:700px;
+  border-top:4px solid transparent;transition:border-color .15s}
+.widget.locked{border-top-color:var(--st-yours)}
+/* THE ROOM. Everything above is sized for a wall three metres away and thirty
+   children. A teaching assistant with four children round a laptop is a different
+   room: closer, smaller, and the children SHOULD be touching it. One setting, so a
+   TA changes a distance rather than eleven separate sizes. */
+.widget.table{
+  --fs-beat:13px; --fs-box:13px; --fs-hint:11.5px;
+  --tap:36px; --beatw:124px; --chip:12px;
+}
+.widget.table .planname{font-size:16px}
+.widget.table .pill,.widget.table .barbtn{font-size:13px;padding:7px 12px;min-height:var(--tap)}
+.widget.table .stbtn{font-size:12px;padding:6px 13px;min-height:var(--tap)}
+.widget.table .thumb{height:58px}
+.widget.table .beatin{font-size:15px;min-height:40px}
+.widget.table .step{min-width:42px;min-height:38px;font-size:12px}
+.widget.table .wword{font-size:13px;padding:5px 10px 5px 7px}
+.widget.table .capin{font-size:14px;min-height:38px}
+.widget.table .face{padding:2px 12px 12px}
+.roomtag{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+  padding:3px 9px;border-radius:99px;background:#eceff1;color:#4b5563}
+.roomtag.table{background:#ede4fd;color:#5b21b6}
+@media (prefers-reduced-motion:reduce){.widget{transition:none}}
+.wtitle{display:flex;align-items:center;gap:10px;padding:10px 15px;border-bottom:1px solid var(--line);
+  font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-faint);font-weight:700}
+.wtitle .lockmark{color:var(--st-yours);letter-spacing:0;text-transform:none;font-size:12.5px}
+.wtitle .tools{margin-left:auto;display:flex;gap:6px}
+.iconbtn{font-size:13px;background:none;border:1px solid var(--line);border-radius:8px;
+  padding:5px 10px;color:var(--ink-soft);cursor:pointer}
+.iconbtn:hover{border-color:var(--acc);color:var(--acc)}
+.fhead{display:flex;align-items:baseline;gap:11px;padding:13px 18px 6px;flex-wrap:wrap}
+.planname{font-size:20px;font-weight:700;letter-spacing:-.012em}
+.bandchip{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  background:var(--acc-soft);color:var(--acc-ink);padding:4px 10px;border-radius:99px}
+.bandchip.none{background:#fdeee3;color:#94491a}
+.face{flex:1;min-height:0;overflow:auto;padding:4px 18px 18px;background:var(--ground)}
+
+/* CSS:stages */
+.stband{display:flex;align-items:center;gap:8px;padding:9px 18px;border-bottom:1px solid var(--line);
+  border-left:5px solid transparent}
+.stband.s-model{background:var(--st-model-bg);border-left-color:var(--st-model)}
+.stband.s-together{background:var(--st-together-bg);border-left-color:var(--st-together)}
+.stband.s-yours{background:var(--st-yours-bg);border-left-color:var(--st-yours)}
+.stbtn{font-size:13.5px;font-weight:700;background:rgba(255,255,255,.72);border:1.5px solid transparent;
+  color:var(--ink-soft);border-radius:99px;padding:8px 17px;cursor:pointer;min-height:42px}
+.stbtn:hover{background:#fff}
+.stbtn.on{color:#fff}
+.stbtn.on.b-model{background:var(--st-model)}
+.stbtn.on.b-together{background:var(--st-together)}
+.stbtn.on.b-yours{background:var(--st-yours)}
+.stseq{margin-left:auto;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);font-weight:700}
+
+/* CSS:bar */
+.bar{display:flex;gap:8px;align-items:center;padding:11px 15px;border-top:1px solid var(--line);background:#fff}
+.pill{font-size:15px;font-weight:800;letter-spacing:.01em;border:2.5px solid;border-radius:11px;
+  padding:10px 18px;cursor:pointer;min-height:calc(var(--tap) + 2px)}
+/* Each face owns a hue and wears it whether selected or not, so a child reads the
+   face by colour from the back of the room. Selected = saturated fill; unselected =
+   the same hue as a tint, never grey. Hues chosen away from the graph's own
+   blue/orange/green so a pill can never be mistaken for a line. */
+.pill[data-face="map"]{color:var(--f-map);border-color:var(--f-map);background:var(--f-map-bg)}
+.pill[data-face="box"]{color:var(--f-box);border-color:var(--f-box);background:var(--f-box-bg)}
+.pill[data-face="graph"]{color:var(--f-graph);border-color:var(--f-graph);background:var(--f-graph-bg)}
+.pill.on{color:#fff}
+.pill[data-face="map"].on{background:var(--f-map)}
+.pill[data-face="box"].on{background:var(--f-box)}
+.pill[data-face="graph"].on{background:var(--f-graph)}
+.pill:hover:not(.on){filter:brightness(.97)}
+.barbtn{font-size:14.5px;font-weight:700;background:#edf2f1;border:1.5px solid transparent;color:var(--ink-soft);
+  border-radius:10px;padding:10px 16px;cursor:pointer;min-height:44px}
+.barbtn.on{background:var(--ink);color:#fff}
+.barbtn.ghost{background:none;border-color:var(--line-firm)}
+.barbtn.ghost:hover{border-color:var(--acc);color:var(--acc)}
+.barbtn.lockon{background:var(--st-yours);color:#fff;border-color:transparent}
+
+/* CSS:textmap */
+.band{padding:13px 0 15px;border-top:1px solid var(--line)}
+.band:first-of-type{border-top:none}
+.bandhead{display:flex;align-items:baseline;gap:10px;margin:0 0 9px}
+.boxname{font-size:var(--fs-box);font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--acc)}
+.boxhint{font-size:var(--fs-hint);color:var(--ink-faint);font-style:italic}
+.beats{display:flex;gap:11px;align-items:flex-start;flex-wrap:wrap}
+.beat{width:var(--beatw);border:1px solid var(--line-firm);border-radius:11px;padding:8px;cursor:pointer;
+  background:#fff;text-align:left;box-shadow:0 1px 2px rgba(30,44,51,.04)}
+.beat:hover{border-color:var(--acc)}
+.beat.sel{border-color:var(--acc);border-width:2px;padding:7px;box-shadow:0 0 0 3px var(--acc-soft)}
+.beat.blank{border-style:dashed;background:#fdfefe}
+.thumb{width:100%;height:78px;border-radius:8px;background:#eff4f3;overflow:hidden}
+.thumb.ghost{border:1.5px dashed var(--line-firm);background:#f8fbfa}
+.thumb svg{width:100%;height:100%;display:block}
+.btext{font-size:var(--fs-beat);line-height:1.34;margin:7px 2px 1px;color:var(--ink);font-weight:500;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-height:2.7em}
+.btext.blank{color:var(--ink-faint);font-weight:400;font-style:italic}
+.btext.cov{background:var(--ink);color:transparent;border-radius:5px}
+.bmeta{display:flex;gap:4px;flex-wrap:wrap;margin:5px 2px 0}
+.bmeta span{font-size:11px;background:var(--acc-soft);color:var(--acc-ink);padding:2px 7px;border-radius:99px;font-weight:700}
+.bnote{font-size:11.5px;color:var(--danger-ink);margin:4px 2px 0;line-height:1.32}
+.addbeat{width:62px;min-height:118px;border:1.5px dashed var(--line-firm);border-radius:11px;background:none;
+  color:var(--ink-faint);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.addbeat:hover{border-color:var(--acc);color:var(--acc);background:var(--acc-soft)}
+.capnote{font-size:12.5px;color:var(--danger-ink);font-weight:700;padding:10px 4px;max-width:210px;line-height:1.38}
+
+/* CSS:panel */
+.panel{margin:11px 0 3px;border:2px solid var(--acc);border-radius:12px;background:#fff;
+  padding:14px 15px;max-width:690px;box-shadow:0 3px 14px rgba(15,118,110,.09)}
+.ptop{display:flex;align-items:flex-start;gap:10px;margin:0 0 3px}
+.plab{font-size:10.5px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-faint);margin:13px 0 6px}
+.plab b{color:var(--ink)}
+.pclose{font-size:17px;line-height:1;background:none;border:1px solid var(--line-firm);
+  border-radius:9px;width:42px;height:42px;cursor:pointer;color:var(--ink-soft);flex:0 0 42px}
+.pclose:hover{border-color:var(--danger-ink);color:var(--danger-ink)}
+.beatin{flex:1;font-size:17px;font-weight:600;padding:11px 12px;border:1.5px solid var(--line-firm);
+  border-radius:9px;color:var(--ink);min-height:46px;font-family:inherit}
+.beatin:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
+.beatin::placeholder{color:#b6c4c1;font-weight:400;font-style:italic}
+.enterhint{font-size:11.5px;color:var(--ink-faint);margin:5px 0 0}
+.enterhint kbd{font-family:var(--mono);font-size:11px;background:#eef3f2;border:1px solid var(--line-firm);
+  border-radius:4px;padding:1px 5px;color:var(--ink-soft)}
+.chiprow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.step{font-size:13px;font-weight:700;border:1.5px solid var(--line);background:#fff;border-radius:9px;
+  padding:7px 10px;cursor:pointer;min-width:50px;min-height:46px;color:var(--ink-soft);line-height:1.18}
+.step:hover{border-color:var(--acc)}
+.step.mid{background:#f6f8f8}
+.step .num{display:block;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+.step .wd{display:block;font-size:10px;font-weight:600;color:var(--ink-faint);max-width:78px}
+.step.set{color:#fff;border-color:transparent}
+.step.set .wd{color:rgba(255,255,255,.86)}
+.pickrow{display:flex;gap:6px;flex-wrap:wrap}
+.pick{width:56px;height:40px;border-radius:7px;overflow:hidden;border:1.5px solid var(--line);cursor:pointer;background:#fff;padding:0}
+.pick:hover{border-color:var(--acc)}
+.pick.on{border-color:var(--acc);border-width:2.5px}
+.pick svg{width:100%;height:100%;display:block}
+.pick.none{display:flex;align-items:center;justify-content:center;color:var(--ink-faint);font-size:16px;border-style:dashed}
+.vchip{font-size:13px;background:#f2f6f5;border:1.5px solid var(--line);border-radius:99px;
+  padding:7px 12px;cursor:pointer;min-height:40px;color:var(--ink-soft)}
+.vchip:hover{border-color:var(--acc)}
+.vchip.on{background:var(--acc-soft);border-color:var(--acc);color:var(--acc-ink);font-weight:700}
+.vchip.flat{cursor:default}
+.noteline{width:100%;font-size:14px;padding:9px 11px;border:1.5px solid var(--line);border-radius:9px;color:var(--ink);font-family:inherit}
+.noteline:focus{outline:none;border-color:var(--acc)}
+.mvrow{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)}
+.mv{font-size:12.5px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 11px;
+  cursor:pointer;color:var(--ink-soft);min-height:40px}
+.mv:hover{border-color:var(--acc);color:var(--acc)}
+.mv.del{color:var(--danger-ink);border-color:var(--danger-soft)}
+.mv.del:hover{border-color:var(--danger-ink);background:var(--danger-soft)}
+
+/* CSS:writing */
+.wctl{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:10px 0 11px;position:sticky;top:0;
+  background:var(--ground);z-index:4;border-bottom:1px solid var(--line)}
+.wbtn{font-size:13.5px;font-weight:700;background:#edf2f1;border:1.5px solid transparent;color:var(--ink-soft);
+  border-radius:9px;padding:9px 13px;cursor:pointer;min-height:42px}
+.wbtn.on{background:var(--ink);color:#fff}
+.wbtn.ghost{background:none;border-color:var(--line-firm);font-weight:600}
+.wbtn.ghost:hover{border-color:var(--acc);color:var(--acc)}
+.swatches{display:flex;gap:5px;margin-left:3px}
+.sw2{width:30px;height:30px;border-radius:99px;border:2.5px solid #fff;box-shadow:0 0 0 1px var(--line-firm);cursor:pointer;padding:0}
+.sw2.on{box-shadow:0 0 0 3px var(--acc)}
+.boxwrap.side{display:grid;grid-template-columns:340px minmax(0,1fr);gap:18px;align-items:start}
+.boxwrap.side .graphref{position:sticky;top:66px}
+.graphref{background:#fff;border:1px solid var(--line-firm);border-radius:11px;padding:11px 13px;margin:12px 0}
+.graphref .legend{margin-top:8px}
+.striplab{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 6px;font-weight:800}
+.stripwrap{padding:11px 0 12px;border-bottom:1px solid var(--line)}
+.brow{display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px;border-top:1px solid var(--line);padding:13px 0}
+.boxwrap.side .brow{grid-template-columns:186px minmax(0,1fr)}
+.mchip{display:flex;gap:8px;align-items:flex-start;margin:0 0 6px}
+.mchip .mt{width:56px;height:40px;border-radius:6px;overflow:hidden;flex:0 0 56px;background:#eff4f3}
+.mchip .mt.ghost{border:1.5px dashed var(--line-firm)}
+.mchip .mt svg{width:100%;height:100%;display:block}
+.mchip .mx{font-size:13px;line-height:1.36;color:var(--ink)}
+.warea{border:1.5px solid var(--line-firm);border-radius:9px;overflow:hidden;background:#fffdf7}
+.warea.sel{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
+svg.wsvg{width:100%;height:auto;display:block;touch-action:none;cursor:crosshair}
+/* The pen has to be beside the box you are writing in. One toolbar at the top of a
+   700px face is a stretch back up the wall for box 4, and on a wall-mounted board
+   that stretch is the whole objection. So every writing row carries its own. */
+.rowtools{display:flex;gap:5px;align-items:center;margin:0 0 6px;flex-wrap:wrap}
+.rt{font-size:12.5px;font-weight:700;background:#fff;border:1.5px solid var(--line-firm);
+  border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--ink-soft);min-height:38px}
+.rt:hover{border-color:var(--acc);color:var(--acc)}
+.rt.on{background:var(--ink);color:#fff;border-color:transparent}
+.rt.del{color:var(--danger-ink);border-color:var(--danger-soft)}
+.rt.del:hover{background:var(--danger-soft);border-color:var(--danger-ink)}
+.rtink{width:26px;height:26px;border-radius:99px;border:2.5px solid #fff;box-shadow:0 0 0 1.5px var(--line-firm);cursor:pointer;padding:0}
+.rtink.on{box-shadow:0 0 0 3px var(--acc)}
+.rtsep{width:1px;height:26px;background:var(--line);margin:0 3px}
+.locknote{font-size:13px;color:var(--st-yours);font-weight:700;padding:11px 3px}
+/* The gap is the teaching point: closing it is what better word choice, sentence
+   shape and pacing are FOR. So every box says its own gap out loud. */
+.gapchip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;
+  background:#f4eefe;color:#5b21b6;border:1.5px solid #d9c8fb;border-radius:99px;padding:4px 11px;margin:5px 0 2px}
+.gapchip.met{background:var(--acc-soft);color:var(--acc-ink);border-color:#9fd8d0}
+.gapchip .d{font-variant-numeric:tabular-nums}
+/* CSS:wordbank — on screen for the class, covered and uncovered a word at a time */
+.wbank{background:#fff;border:1px solid var(--line-firm);border-radius:11px;padding:11px 13px;margin:0 0 13px}
+.wbhead{display:flex;align-items:center;gap:9px;margin:0 0 8px;flex-wrap:wrap}
+.wbtitle{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-faint);font-weight:800}
+.wbwords{display:flex;gap:6px;flex-wrap:wrap}
+.wword{display:inline-flex;align-items:center;gap:6px;font-size:14.5px;font-weight:600;
+  border:1.5px solid var(--line-firm);border-radius:99px;padding:6px 12px 6px 8px;cursor:pointer;background:#fff;color:var(--ink)}
+.wword:hover{border-color:var(--acc)}
+.wword .lad{width:22px;height:22px;flex:0 0 22px}
+.wword .lad svg{width:100%;height:100%;display:block}
+.wword .tag{font-size:9.5px;font-weight:800;letter-spacing:.06em;padding:1px 5px;border-radius:4px}
+.wword.hid{background:var(--ink);border-color:var(--ink);color:transparent}
+.wword.hid .lad,.wword.hid .tag{visibility:hidden}
+.wbnote{font-size:12px;color:var(--ink-faint);margin-top:8px}
+.lvlrow{display:flex;gap:4px;align-items:center}
+.moodgrp{margin:0 0 9px}
+.moodhead{display:flex;align-items:baseline;gap:8px;margin:0 0 5px}
+.moodlab{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;font-weight:800}
+.moodn{font-size:11px;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+.moodgrp.thin .moodn{color:var(--danger-ink);font-weight:800}
+.moodgrp.want .moodhead{padding:3px 9px;border-radius:99px;background:#fff7e6;box-shadow:0 0 0 1.5px #e8c98a}
+.moodempty{font-size:12.5px;color:var(--danger-ink);font-style:italic;font-weight:600}
+.cover{font-size:12px;color:var(--ink-faint);margin-top:9px;line-height:1.5}
+.cover b{color:var(--danger-ink)}
+/* Words offered against the tone are a CHOICE, not a warning. The Road's characters
+   crack jokes; gallows humour and bathos are devices with names. So the heading says
+   "on purpose" and nothing anywhere calls it wrong. */
+.wsec{margin:0 0 8px}
+.wsechead{font-size:10.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;margin:0 0 5px}
+.wsec.match .wsechead{color:var(--acc)}
+.wsec.against .wsechead{color:#7c3aed}
+.wsec.other .wsechead{color:var(--ink-faint)}
+.cpoint{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  background:#ede4fd;color:#5b21b6;padding:1px 6px;border-radius:4px;margin-left:5px}
+.bmeta span.cp{background:#ede4fd;color:#5b21b6}
+.rd{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:4px;margin-left:5px}
+.rd.serves{background:var(--acc-soft);color:var(--acc-ink)}
+.rd.short{background:#fdf0dc;color:#8a4d09}
+.rd.strong{background:#e6f1fb;color:#175a94}
+.rd.counter{background:#ede4fd;color:#5b21b6}
+.rd.level{background:#eceff1;color:#4b5563}
+.gaugekey{font-size:11.5px;color:var(--ink-faint);margin-top:7px;line-height:1.5}
+/* CSS:capture — a child offers a word mid-lesson and it is in the bank, scored,
+   before the moment passes. This is the loop teachers actually love. */
+.capbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:9px 11px;margin:0 0 10px;
+  background:var(--acc-soft);border:1.5px solid #9fd8d0;border-radius:11px}
+.capin{flex:1;min-width:180px;font-size:16px;font-weight:600;padding:10px 12px;border:1.5px solid var(--line-firm);
+  border-radius:9px;color:var(--ink);min-height:44px;font-family:inherit;background:#fff}
+.capin:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px #fff}
+.capin::placeholder{color:#9fb5b1;font-weight:400;font-style:italic}
+.scorepill{display:flex;gap:3px}
+.sp{width:40px;height:44px;border:1.5px solid var(--line-firm);background:#fff;border-radius:9px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0;color:var(--ink-soft)}
+.sp:hover{border-color:var(--acc)}
+.sp.on{border-color:var(--acc);border-width:2.5px;background:var(--acc-soft)}
+.sp .n{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.sp .a{width:16px;height:16px}
+.sp .a svg{width:100%;height:100%;display:block}
+.caplab{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--acc-ink);font-weight:800;width:100%}
+.sp.beyond{border-color:#b45309;color:#8a4d09}
+.sp.beyond.on{background:#fdf0dc;border-color:#b45309}
+.beyondmark{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  background:#fdf0dc;color:#8a4d09;padding:1px 6px;border-radius:4px;margin-left:5px}
+.momentbox{background:#fff;border:1px solid var(--line-firm);border-radius:11px;padding:12px 14px;margin:10px 0}
+.moment{border-left:3px solid #b45309;padding:7px 0 7px 11px;margin:0 0 9px;font-size:13.5px;line-height:1.5}
+.moment b{color:var(--ink)}
+.moment .ctx{display:block;font-size:11.5px;color:var(--ink-faint);margin-top:2px}
+.insert{background:#f7f4ee;border:1px dashed #cbbda2;border-radius:9px;padding:11px 13px;margin-top:9px;
+  font-family:Georgia,serif;font-size:14px;line-height:1.6;color:#3a3228}
+.insertlab{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#8a7a5e;font-weight:800;margin-bottom:5px;font-family:var(--ui)}
+.rhet{color:#a13b4b;text-decoration:line-through;opacity:.75}
+.whorow{display:flex;gap:5px;flex-wrap:wrap;align-items:center;width:100%;margin-top:7px}
+.who{font-size:12.5px;background:#fff;border:1.5px solid var(--line-firm);border-radius:99px;
+  padding:5px 11px;cursor:pointer;color:var(--ink-soft);min-height:36px}
+.who.on{background:var(--ink);color:#fff;border-color:transparent}
+.lchip .kd{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.72}
+
+/* CSS:graph */
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 3px}
+.lchip{font-size:13.5px;font-weight:700;background:#fff;border:1.5px solid var(--line-firm);
+  border-radius:99px;padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;min-height:42px;color:var(--ink-soft)}
+.lchip .sw{width:14px;height:14px;border-radius:99px;border:2.5px solid currentColor;background:none}
+.lchip.on .sw{background:currentColor}
+.lchip.armed{border-width:2.5px;border-color:currentColor;box-shadow:0 0 0 3px rgba(15,118,110,.09)}
+.lchip.off{opacity:.48;text-decoration:line-through}
+.lchip.empty{border-style:dashed;color:#b9c5c1;cursor:default}
+svg.graph{width:100%;height:auto;display:block}
+.armedsay{font-size:12.5px;color:var(--ink-soft);margin:7px 3px 0}
+.armedsay b{color:var(--ink)}
+
+/* CSS:gear */
+.gearbox{margin:10px 0 12px;border:1px solid var(--line-firm);border-radius:12px;padding:14px 15px;background:#fff;max-width:760px}
+.gearbox h4{margin:0 0 7px;font-size:13.5px;letter-spacing:.02em}
+.gearbox .sub{font-size:12.5px;color:var(--ink-faint);margin:0 0 10px;line-height:1.48}
+.planbtn{font-size:13.5px;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:10px;
+  padding:10px 12px;cursor:pointer;color:var(--ink);display:block;width:100%;margin:0 0 7px}
+.planbtn:hover{border-color:var(--acc)}
+.planbtn.cur{border-color:var(--acc);background:var(--acc-soft)}
+.planbtn .pn{font-weight:700}
+.planbtn .pb{font-size:11.5px;color:var(--ink-faint);margin-top:2px;display:block}
+.vocedit{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
+.vocedit .vc{font-size:13px;background:#fff;border:1.5px solid var(--line);border-radius:99px;padding:6px 10px;display:flex;gap:7px;align-items:center;color:var(--ink-soft)}
+.vocedit .vc button{background:none;border:none;color:var(--danger-ink);cursor:pointer;font-size:15px;padding:0 2px}
+.vocadd{font-size:13px;padding:7px 10px;border:1.5px solid var(--line);border-radius:99px;width:140px;font-family:inherit}
+
+/* CSS:sheet */
+.sheetwrap{background:rgba(0,0,0,.44);border-radius:13px;padding:20px;margin-top:16px}
+.sheetwrap h5{margin:0 0 11px;color:#cfe6e2;font-size:12.5px;letter-spacing:.12em;text-transform:uppercase}
+.sheet{background:#fff;color:#111;border-radius:4px;padding:28px 32px;max-width:760px;margin:0 auto;box-shadow:0 8px 26px rgba(0,0,0,.32)}
+.sheet h3{margin:0 0 4px;font-size:23px;font-family:Georgia,serif}
+.sheet .sm{font-size:12px;color:#666;margin:0 0 18px}
+.sheet .srow{border-top:1px solid #ddd;padding:10px 0;display:grid;grid-template-columns:1fr 1.5fr 1.7fr;gap:13px}
+.sheet .sbx{font-weight:700;font-size:13px}
+.sheet .sbx i{display:block;font-weight:400;font-size:11px;color:#777}
+.sheet .schip{display:flex;gap:7px;margin-bottom:6px;font-size:12.5px;align-items:flex-start}
+.sheet .schip .st{width:44px;height:32px;flex:0 0 44px;border-radius:3px;overflow:hidden;background:#eee}
+.sheet .schip .st.g{border:1px dashed #ccc}
+.sheet .rules{border-bottom:1px solid #bbb;height:17px}
+/* Sizes are SHEET BUDGETS, never ISO promises: the label says how many sheets and
+   roughly what it makes, and the readout underneath tells the truth. */
+.budrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px}
+.budbtn{font-size:13px;font-weight:700;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.24);
+  color:#cfe6e2;border-radius:9px;padding:8px 13px;cursor:pointer;min-height:40px}
+.budbtn:hover{background:rgba(255,255,255,.18);color:#fff}
+.budbtn.on{background:#fff;color:#12332f;border-color:#fff}
+.budsay{font-size:12.5px;color:#a9c9c3;margin-left:auto}
+.tiled{position:relative}
+.tiled .cuts{position:absolute;inset:0;pointer-events:none}
+.tiled .cuts i{position:absolute;background:rgba(180,103,26,.5)}
+.tilelab{font-size:11px;color:#666;margin-top:8px;text-align:center;font-style:italic}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:28px;background:#11201e;color:#eaf5f2;
+  padding:13px 22px;border-radius:12px;font-size:14.5px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.45);
+  z-index:99;max-width:min(620px,90vw);opacity:0;pointer-events:none;transition:opacity .18s}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+@media(max-width:860px){.boxwrap.side{grid-template-columns:1fr}.brow{grid-template-columns:1fr}}
+</style>
+
+<div class="hint">
+<p><b>A throwaway mock, not the app.</b> Nothing is wired to Sage Stage and nothing saves.</p>
+<p><b>This pass — the room.</b> A teaching assistant, an SEN group or an EAL group is not standing three metres from a wall: they are at arm’s length with three or four children whose hands <b>should</b> be on it. <b>The room</b> setting in the gear carries the whole distance problem — type, targets, card width, density — and switching to a small group unlocks the board, because there the hands are the point. Earlier: a Year 6 cast — The cap moved off <i>how many lines you can name</i> and onto <b>how many show at once</b>. Three channels, because three separated colours is what a board carries — but name five if the story has five, park two heroes on the orange channel, and put one on air at a time. The one it displaces steps off, and nothing ever changes colour because something else was hidden. Earlier: writing room by age — The boxing-up page now rules itself for the class writing on it: <b>EYFS block letters</b> at 52px with a dashed midline to reach for, <b>KS1 large</b>, then narrower rules and <b>more of them</b> up the school — Years 5–6 gets nine lines to a box, because the story is longer. <b>−/+</b> adds or removes room per box. The printed sheet uses the same pitch, so ruling no longer depends on how tall the Model column happened to be. Earlier: the flag is an event, not a sixth level — The scale still tops out at 5; <b>★ beyond</b> is a separate mark for the word a class gives you once a term. Flagging one records a <b>moment</b> that carries its context — which box, which text, which stage, and who, if you say — because that is what a report can be written from. The gear shows what a moment becomes, next to the stock sentence it replaces. Moments print on the boxing-up sheet for the wall. Earlier: score is diction — A word’s score (1–5) says how rarely a primary writer reaches for it, <b>not</b> how strong the feeling is: <i>wistful</i> is mild and scores 5. Mood is a separate axis, and only mood decides counterpoint. And the moment worth being fastest at now has its own bar: <b>type a word a child just offered, tap a score and a direction, Enter.</b> It is in the bank before the moment passes. Earlier: a finer gauge — A word's reach is its <b>direction and its climb together</b>: <i>sad</i> reaches −1, <i>desolate</i> reaches −3. Measured against the <b>story line</b> (fixed at slot order, not whatever is armed), an attached word reads as <b>serves it</b>, <b>one step short</b>, <b>one step stronger</b>, or <b>counterpoint</b>. "One step short" is the flatness you spotted at the Problem, said out loud. Earlier: set a beat's tone and the words re-order to serve it — <b>for this tone</b> first, then neutral, then <b>against it — on purpose</b>. Nothing is hidden and nothing is called wrong: a happy beat written in <i>gloom</i> is counterpoint, which is what The Road is doing when its characters joke. Attach one and the beat says so, as a craft note. Earlier: a plan carries <b>the mood each part usually runs at</b> — a story mountain is an emotional shape before it is a list of boxes — so the gear can <b>seed the target line from the plan itself</b> and you argue with it from there. The bank checks itself against what <i>this</i> plan asks for rather than a neutral tally. Earlier: the bank groups by <b>which part of the arc a word serves</b> — for the lifts, the level, the falls — because the narrative pack is stocked almost entirely for the fall, and a class cannot write a +2 Opening out of <i>gloom</i> and <i>trembling</i>. Open a beat with a feeling set and the matching group is ringed. The bank says out loud when it is lopsided. Earlier: the graph now carries <b>“we’re here → we want to be there.”</b> A line is either where the writing <b>is</b> or where it should <b>get to</b> — target lines draw dashed with hollow markers, the gap between them is shaded, and <b>every box states its own gap</b> on the text map and on the boxing-up face. Closing that gap is what better word choice and sentence shape are for. Toggle a line between actual and target in the gear (Years 3–4 and up). Earlier: the pen now sits <b>on every writing row</b>, so it is beside the box you are in rather than a stretch back up the wall. <b>Print</b> offers sheet budgets — one A4 each for the children, or <b>8 sheets · about A1 for the wall</b>, with the cut-and-tape lines shown. Face pills wear their own colour whether selected or not. Earlier: the workflow hole is closed — a new beat now opens with its <b>text field focused</b>, so you type what the class just said and press <kbd>Enter</kbd> to go straight into the next one. That is the loop that runs a hundred times a lesson. Pictures are picked from a row rather than cycled. The panel is reordered to what it says → what it looks like → how it feels → the words → a note → housekeeping. Type scale, surfaces and the lock state are tightened for board distance.</p>
+<div class="row">
+  <button id="tType" class="on">Add a beat and type it</button>
+  <button id="tBox">Write in Boxing up</button>
+  <button id="tGap">See the gap</button>
+  <button id="tGraph">Arm a line</button>
+  <button id="tStage">Over-to-you, locked</button>
+  <button id="tWall">Print it for the wall</button>
+  <button id="tPrint">Printed sheet</button>
+  <button id="tReset">Reset</button>
+</div>
+</div>
+
+<div class="board">
+  <div class="boardbar">
+    <div class="deckpill"><span>🌿</span><span>Year 4 · Traditional tales</span><span class="yr">YEAR 4</span></div>
+    <div class="grow"></div>
+    <div style="font-size:12px;opacity:.82">the widget, on a board</div>
+  </div>
+
+  <div class="widget" id="widget">
+    <div class="wtitle">
+      <span>Story map</span>
+      <span class="roomtag" id="roomtag"></span>
+      <span class="lockmark" id="lockmark"></span>
+      <div class="tools">
+        <button class="iconbtn" id="gearBtn">⚙ gear</button>
+        <button class="iconbtn" id="dupBtn">⋮ Duplicate</button>
+      </div>
+    </div>
+    <div class="fhead">
+      <span class="planname" id="planName"></span>
+      <span class="bandchip" id="bandChip"></span>
+    </div>
+    <div class="stband" id="stband"></div>
+    <div class="face" id="face"></div>
+    <div class="bar">
+      <button class="pill" data-face="map">Text map</button>
+      <button class="pill" data-face="box">Boxing up</button>
+      <button class="pill" data-face="graph">Emotion graph</button>
+      <div class="grow"></div>
+      <button class="barbtn ghost" id="lockBtn">Board open</button>
+      <button class="barbtn" id="coverBtn">Cover</button>
+      <button class="barbtn ghost" id="printBtn">Print…</button>
+    </div>
+  </div>
+  <div id="sheetHost"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* JS:art — flat vignettes standing in for the teacher's own photographs */
+const ART={
+ basket:'<svg viewBox="0 0 60 44"><rect width="60" height="44" fill="#e8f1ff"/><path d="M18 22h24l-3 14H21z" fill="#c98a4b"/><path d="M18 22h24" stroke="#8a5a2b" stroke-width="2"/><path d="M23 22c0-6 14-6 14 0" fill="none" stroke="#8a5a2b" stroke-width="2"/><circle cx="27" cy="28" r="3" fill="#d4405a"/><circle cx="34" cy="30" r="3" fill="#d4405a"/></svg>',
+ trees:'<svg viewBox="0 0 60 44"><rect width="60" height="44" fill="#dfeee4"/><path d="M12 34l7-16 7 16z" fill="#2f6b47"/><path d="M28 34l8-20 8 20z" fill="#26583b"/><path d="M44 34l6-13 6 13z" fill="#2f6b47"/><circle cx="21" cy="27" r="1.6" fill="#f5c542"/><circle cx="26" cy="27" r="1.6" fill="#f5c542"/></svg>',
+ wolf:'<svg viewBox="0 0 60 44"><rect width="60" height="44" fill="#e6e9ee"/><path d="M20 30l-3-10 6 3h14l6-3-3 10z" fill="#6b7280"/><path d="M23 23l-2-6 5 3zM37 23l2-6-5 3z" fill="#4b5563"/><circle cx="26" cy="26" r="1.7" fill="#111"/><circle cx="34" cy="26" r="1.7" fill="#111"/><path d="M27 31h6l-3 3z" fill="#374151"/></svg>',
+ flowers:'<svg viewBox="0 0 60 44"><rect width="60" height="44" fill="#eef7e8"/><path d="M0 36h60" stroke="#7aa35c" stroke-width="7"/><g fill="#e05a8a"><circle cx="18" cy="24" r="4"/><circle cx="31" cy="20" r="4"/><circle cx="44" cy="25" r="4"/></g><g stroke="#4f7a3a" stroke-width="2"><path d="M18 28v8M31 24v12M44 29v7"/></g></svg>',
+ path:'<svg viewBox="0 0 60 44"><rect width="60" height="44" fill="#efe9dd"/><path d="M22 44l6-24 4-14h6l-5 15-5 23z" fill="#cbbda2"/><path d="M8 30h12M40 26h12" stroke="#9db07f" stroke-width="4"/></svg>',
+ cottage:'<svg viewBox="0 0 60 44"><rect width="60" height="44" fill="#e9f0f5"/><path d="M14 24l16-11 16 11v14H14z" fill="#e8d9c3"/><path d="M12 25l18-13 18 13" fill="none" stroke="#a4553c" stroke-width="4"/><rect x="26" y="28" width="8" height="10" fill="#7a5230"/><rect x="17" y="27" width="6" height="5" fill="#9fd3e8"/></svg>',
+ bed:'<svg viewBox="0 0 60 44"><rect width="60" height="44" fill="#f3eef7"/><rect x="10" y="24" width="40" height="10" rx="2" fill="#b98a5e"/><rect x="12" y="18" width="16" height="8" rx="3" fill="#fff"/><rect x="28" y="20" width="22" height="6" rx="3" fill="#8fa8d8"/></svg>',
+ axe:'<svg viewBox="0 0 60 44"><rect width="60" height="44" fill="#e8efe6"/><path d="M28 36l4-22" stroke="#8a5a2b" stroke-width="4"/><path d="M30 14c6-3 12 0 12 5s-7 6-12 3z" fill="#9aa5ad"/></svg>',
+ sun:'<svg viewBox="0 0 60 44"><rect width="60" height="44" fill="#fdf3dc"/><circle cx="30" cy="22" r="9" fill="#f5c542"/><g stroke="#f0a92b" stroke-width="2"><path d="M30 6v5M30 33v5M14 22h5M41 22h5M18 10l4 4M42 10l-4 4"/></g></svg>'};
+const ARTKEYS=Object.keys(ART);
+const artOf=k=>ART[k]||'';
+
+/* The climb, banded. Growth is continuous where rungs are discrete, so the
+   sunflower opens rather than steps; the crosshair closes in rather than climbs,
+   which is why it earns the top of the school — by Y6 you are aiming, not reaching. */
+function ladderArt(kind,lvl){
+  const t=Math.max(0,Math.min(LVLMAX,lvl))/LVLMAX;          /* 0 → 1 across five */
+  const g=['#8b9aa2','#6b8a86','#0d6e66','#a06010','#b45309'][lvl]||'#8b9aa2';
+  if(kind==='sunflower'){
+    const h=6+t*12, r=2+t*4.8;
+    return '<svg viewBox="0 0 22 22"><path d="M11 20V'+(20-h).toFixed(1)+'" stroke="#4f7a3a" stroke-width="2"/>'
+      +(lvl>0?'<path d="M11 '+(20-h/2).toFixed(1)+'l'+(2+t*3).toFixed(1)+' -2" stroke="#4f7a3a" stroke-width="1.6"/>':'')
+      +'<circle cx="11" cy="'+(19-h).toFixed(1)+'" r="'+r.toFixed(1)+'" fill="'+(lvl>=3?'#f5c542':'#cbd5c0')+'" stroke="'+g+'" stroke-width="1.4"/>'
+      +(lvl>=3?'<circle cx="11" cy="'+(19-h).toFixed(1)+'" r="'+(1.2+t).toFixed(1)+'" fill="#8a5a2b"/>':'')
+      +(lvl===LVLMAX?'<g stroke="#f0a92b" stroke-width="1.2"><path d="M4 '+(19-h).toFixed(1)+'h2M16 '+(19-h).toFixed(1)+'h2"/></g>':'')+'</svg>';
+  }
+  if(kind==='vine'){
+    const y=17-t*12;
+    return '<svg viewBox="0 0 22 22"><path d="M11 21V2" stroke="#4f7a3a" stroke-width="2"/>'
+      +'<circle cx="11" cy="'+y.toFixed(1)+'" r="'+(2.6+t*1.4).toFixed(1)+'" fill="'+g+'"/>'
+      +'<path d="M11 '+(y+3).toFixed(1)+'q3 3 1 5" stroke="'+g+'" stroke-width="1.4" fill="none"/></svg>';
+  }
+  if(kind==='rocket'){
+    const y=17-t*13;
+    return '<svg viewBox="0 0 22 22"><circle cx="17" cy="4" r="2.6" fill="'+(lvl===LVLMAX?'#f5c542':'#e8e2cf')+'"/>'
+      +'<path d="M11 '+y.toFixed(1)+'l3 5h-6z" fill="'+g+'"/><path d="M11 '+y.toFixed(1)+'l0 -4" stroke="'+g+'" stroke-width="2"/>'
+      +(lvl>0?'<path d="M11 '+(y+6).toFixed(1)+'v'+(lvl*2.2).toFixed(1)+'" stroke="#e0a13a" stroke-width="1.8"/>':'')+'</svg>';
+  }
+  const rr=9.2-t*7;
+  return '<svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="9.2" fill="none" stroke="#cfdad7" stroke-width="1.3"/>'
+    +'<circle cx="11" cy="11" r="'+rr.toFixed(1)+'" fill="none" stroke="'+g+'" stroke-width="1.8"/>'
+    +(lvl>=3?'<circle cx="11" cy="11" r="'+(lvl===LVLMAX?2:1.3)+'" fill="'+g+'"/>':'')
+    +'<path d="M11 1v3M11 18v3M1 11h3M18 11h3" stroke="'+g+'" stroke-width="1.3"/></svg>';
+}
+
+/* JS:plans */
+const PLANS={
+ /* Third field is the mood that part of the arc USUALLY runs at. Not a rule — a
+    story mountain is an emotional shape, which is what makes it a mountain, and
+    Red Riding Hood and Burger Boy both open upbeat and darken. A subverted text
+    overrides it; that override is the interesting lesson, not a failure of the data. */
+ ks1:{id:'beginning-middle-end',name:'Beginning, middle, end',band:'ks1',bandName:'Reception – Year 2',shape:true,steps:5,
+  rows:[['Beginning','Who it is about, and where they are','up'],['Middle','What goes wrong','down'],
+   ['End','How it is sorted out','up']]},
+ lks2:{id:'five-part-story-mountain',name:'Five-part story mountain',band:'lks2',bandName:'Years 3–4',shape:true,steps:7,
+  rows:[['Opening','Who, where, when — and a reason to read on','up'],['Build-up','Something starts to go wrong','mid'],
+   ['Problem','The moment it all goes wrong','down'],['Resolution','How it is put right','up'],
+   ['Ending','How things are now, and what changed','up']]},
+ uks2:{id:'dilemma-arc',name:'Dilemma, conflict, choices, resolution, moral',band:'uks2',bandName:'Years 5–6',shape:true,steps:7,
+  rows:[['Dilemma','The choice the character is left with','down'],['Conflict','What pulls them each way','down'],
+   ['Choices','What they could do, and what it would cost','mid'],['Resolution','What they choose, and what happens','up'],
+   ['Moral','What the reader is left thinking','mid']]},
+ instructions:{id:'pack:instructions',name:'Instructions plan',band:null,bandName:null,shape:false,steps:7,
+  rows:[['Title','What the reader will make'],['What you need','A list, not a sentence'],['Steps','In order, numbered'],
+   ['Tips','What goes wrong, and how to avoid it'],['The result','What it should look like']]}};
+const MOODVAL={up:2,mid:0,down:-3};
+/* A finer gauge without a new field. Mood gives the DIRECTION, the ambition level
+   gives the STRENGTH, and together they imply where on the axis a word actually
+   sits: down+ok = -1, down+amazing = -3, up+amazing = +3, mid = 0. Compared against
+   the STORY line — the reference is fixed at slot order, never at whatever happens
+   to be armed, because counterpoint is against the story's tone. That is what The
+   Road is doing: bleak story, characters joking. */
+const MOODSIGN={up:1,mid:0,down:-1};
+function storyLine(){return P.tracks.filter(t=>t&&t.kind!=='target')[0]||null;}
+/* Two independent readings, never multiplied together. DIRECTION is the word's mood
+   against the beat's tone. SCORE is its diction, which has nothing to do with how
+   strong the feeling is — wistful is a mild word and a high score, because a primary
+   writer almost never reaches for it. */
+function readWord(o,beatVal){
+  if(beatVal==null)return null;
+  const sign=MOODSIGN[o.mood||'mid'];
+  if(sign===0)return {k:'level',say:'level'};
+  if(beatVal!==0&&Math.sign(sign)!==Math.sign(beatVal))return {k:'counter',say:'counterpoint'};
+  return {k:'serves',say:'serves the tone'};
+}
+const AXIS={5:['very happy','happy','all right','sad','very sad'],
+ 7:['as happy as it gets','happy','a bit happy','all right','a bit sad','sad','as sad as it gets']};
+/* A word is not just a string. It came from somewhere — the genre pack, the class's
+   word bank, an EAL need, an SEN support list, high-frequency practice — and it sits
+   at a level of ambition. The source decides its tag; the level decides its climb. */
+/* Board-facing tags are single letters for the two that name a NEED. A word tagged
+   "EAL" or "SEN" on a surface thirty children read is a signpost to which child it is
+   for — the same reason the ambition mark goes on the word and never on the person.
+   "pack", "bank" and "HFW" name a kind of word, not a kind of child, so they read
+   in full. */
+const SRC={genre:['pack','#0d6e66','#d5f0ec'],bank:['bank','#7c3aed','#ede4fd'],
+           eal:['E','#b02a5b','#fbe3ec'],sen:['S','#b45309','#fdf0dc'],hfw:['HFW','#4b5563','#eceff1']};
+/* A teacher types whichever comes to hand; both land on the same key. */
+const SRCALIAS={e:'eal',eal:'eal',s:'sen',sen:'sen',hfw:'hfw',pack:'genre',genre:'genre',bank:'bank'};
+/* A word also serves a PART OF THE ARC. A five-part story lifts, levels and falls,
+   and a bank stocked only for the fall lets a class write the Problem well and the
+   Opening badly. Mood is the teacher's judgement, never the widget's — the packs
+   carry no valence data, so anything inferred would be a machine verdict on word
+   choice. Seeded honestly: the narrative pack really is this lopsided. */
+const MOODS=[['up','for the lifts','#0d6e66'],['mid','for the level','#5b6b7b'],['down','for the falls','#b02a5b']];
+const WORDS0=[
+ {w:'sad',src:'hfw',lvl:0,mood:'down'},{w:'scared',src:'hfw',lvl:0,mood:'down'},{w:'ran',src:'hfw',lvl:0,mood:'mid'},
+ {w:'safe',src:'hfw',lvl:0,mood:'up'},
+ {w:'glanced',src:'genre',lvl:2,mood:'mid'},{w:'hesitated',src:'genre',lvl:2,mood:'down'},
+ {w:'edged',src:'genre',lvl:2,mood:'down'},{w:'whispered',src:'genre',lvl:1,mood:'mid'},
+ {w:'frantic',src:'bank',lvl:3,mood:'down'},{w:'trembling',src:'bank',lvl:3,mood:'down'},
+ {w:'gloom',src:'genre',lvl:3,mood:'down'},{w:'golden',src:'bank',lvl:3,mood:'up'},
+ {w:'desolate',src:'bank',lvl:4,mood:'down'},{w:'wistful',src:'bank',lvl:4,mood:'mid'},
+ {w:'path (n)',src:'eal',lvl:0,mood:'mid'},{w:'basket (n)',src:'eal',lvl:0,mood:'mid'},
+ {w:'first, then, next',src:'sen',lvl:0,mood:'mid'}];
+const LADDERS=['sunflower','vine','rocket','crosshair'];
+const LADDER_BAND={ks1:'sunflower',lks2:'rocket',uks2:'crosshair'};
+/* SCORE IS DICTION, not intensity of feeling. "Wistful" scores high because a primary
+   writer almost never reaches for it — that the feeling is mild is beside the point.
+   Mood and score are independent: mood says which part of the arc a word serves,
+   score says how ambitious the language is. Conflating them was the error. */
+const LVLNAME=['everyday','useful','good','strong','exceptional'];
+const LVLMAX=4;
+/* A flag is not a sixth level. The scale is 1-5 and it has a top; "beyond" is a
+   separate mark for the word a class produces once a term. It is kept separate
+   because it is not a measurement — it is an EVENT, and an event carries context a
+   number cannot: which box, which text, which lesson, and if the teacher chooses,
+   who said it. That context is what turns it into an insertion point for a report
+   written from what happened rather than from stock phrasing. */
+const CLASS=['Amira','Kofi','Zayn','Freya','Marcus','Ilyas','Ayesha','Ben'];
+/* Writing room is not one size. A Reception child forms block letters an inch tall and
+   needs a guide — a baseline to sit on and a dashed midline to reach. Year 6 writes
+   small and at length, so it needs narrow rules and MORE of them. Banded default,
+   teacher override, like everything else here. */
+const RULES={
+  eyfs:{name:'EYFS · block letters',pitch:52,guide:true,lines:3},
+  ks1: {name:'KS1 · large',        pitch:38,guide:true,lines:4},
+  lks2:{name:'Years 3–4',          pitch:26,guide:false,lines:5},
+  uks2:{name:'Years 5–6 · long',   pitch:20,guide:false,lines:9}};
+const RULE_BAND={ks1:'ks1',lks2:'lks2',uks2:'uks2'};
+const HUE=['var(--t1)','var(--t2)','var(--t3)'];
+const RAW=['#1d4ed8','#ea580c','#047857'];
+const SHAPE=['circle','square','triangle'];
+const STAGES=[['model','Model','teacher drives, thinking aloud'],
+              ['together','Together','class contributes, teacher scribes'],
+              ['yours','Over-to-you','their whiteboards now']];
+
+/* JS:state */
+let P, bn=0, focusBeat=null;
+function seed(){
+  const pl=JSON.parse(JSON.stringify(PLANS.lks2));
+  const rows=pl.rows.map((r,i)=>({id:'r'+i,box:r[0],hint:r[1],mood:r[2]||null,edited:false}));
+  const B=(row,t,img,v,voc,note)=>({id:'b'+(++bn),row:row,t:t,img:img,v:v||{},vocab:voc||[],note:note||''});
+  P={plan:Object.assign({},pl,{rows:rows}),
+    beats:[B('r0','Katie sets off with a basket for Grandma','basket',{t1:1,t2:2}),
+      B('r1','The wolf watches from the trees','trees',{t1:0,t2:-1},['glanced']),
+      B('r1','He asks her where she is going','wolf',{t1:0,t2:-1}),
+      B('r1','She steps off the path to pick flowers','flowers',{t1:-1,t2:-2}),
+      B('r2','The path behind her has gone','path',{t1:-1,t2:-3},['frantic','trembling'],'Our draft is flat here — it should be the worst moment'),
+      B('r2','The wolf reaches the cottage first','cottage',{t1:-1,t2:-3}),
+      B('r3','The woodcutter hears her shout','axe',{t1:0,t2:1},['edged']),
+      B('r4','She never leaves the path again','sun',{t1:1,t2:2},['hesitated'])],
+    /* A track is a line, and a line is either where the writing IS or where we
+       want it to GET TO. Same axis, different claim. KS2 and up: at ks1 a target
+       line is noise, so the gear hides the toggle there. */
+    /* Three CHANNELS, because three widely-separated saturated hues is what a badly
+       calibrated board can carry — that constraint is permanent. The number of LINES
+       is not capped: a Year 6 class can name five and put any of them on air. Turning
+       a line on displaces whatever else was on its channel, so the board never shows
+       four. The channel is the colour and the marker shape, so a line's appearance
+       never changes because another line was hidden. */
+    tracks:[{id:'t1',name:'our draft',on:true,kind:'actual',ch:0},
+            {id:'t2',name:'where we want it',on:true,kind:'target',ch:1},
+            {id:'t3',name:'Katie',on:false,kind:'actual',ch:2},
+            {id:'t4',name:'the wolf',on:false,kind:'actual',ch:2},
+            {id:'t5',name:'the woodcutter',on:false,kind:'actual',ch:2}],
+    armed:'t1', face:'map', open:null,
+    cover:{map:false,box:false,graph:false},
+    words:JSON.parse(JSON.stringify(WORDS0)), wordsHidden:false, shown:{},
+    ladder:'rocket', steps:7, axisWords:AXIS[7].slice(),
+    tool:'pen', ink:'#1e2c33', strokes:{}, refMode:'strip',
+    rule:'lks2', lines:5,
+    capW:'', capL:3, capM:'down', capFocus:false, capBeyond:false, capWho:null, moments:[],
+    stage:'model', lock:false, room:'board',
+    gear:false, sheet:false, budget:1, saves:[], saveName:'Year 4R'};
+}
+seed();
+
+const $=s=>document.querySelector(s);
+const face=$('#face');
+let tT=null;
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tT);
+  tT=setTimeout(function(){t.classList.remove('show');},4200);}
+function el(t,c,x){const n=document.createElement(t);if(c)n.className=c;if(x!=null)n.textContent=x;return n;}
+const rowsOf=()=>P.plan.rows;
+const beatsIn=id=>P.beats.filter(b=>b.row===id);
+const trackById=id=>P.tracks.find(t=>t&&t.id===id)||null;
+const visible=()=>P.tracks.filter(t=>t&&t.on);
+const armedTrack=()=>trackById(P.armed)||visible()[0]||null;
+/* the CHANNEL is the identity: colour, marker shape and lane all come from it */
+const slotOf=id=>{const t=trackById(id);return t?t.ch:0;};
+const onChannel=c=>P.tracks.filter(t=>t&&t.ch===c);
+const liveOn=c=>P.tracks.filter(t=>t&&t.ch===c&&t.on)[0]||null;
+/* Putting a line on air takes the channel from whoever had it. Never four at once. */
+function airLine(id){
+  const t=trackById(id);if(!t)return;
+  P.tracks.forEach(function(z){if(z&&z.ch===t.ch&&z.id!==id)z.on=false;});
+  t.on=true;P.armed=id;
+}
+const valOfStep=i=>((P.steps-1)/2)-i;
+const beatById=id=>P.beats.find(b=>b.id===id)||null;
+
+/* Two independent things, answering to different people. The STAGE is the lesson's
+   stance. The LOCK is whether the board takes a hand at all, and it is always the
+   teacher's discretion — never the stage's. */
+const locked=()=>!!P.lock;
+
+/* JS:render */
+function render(){
+  $('#planName').textContent=P.plan.name;
+  const chip=$('#bandChip');
+  if(P.plan.band){chip.textContent=P.plan.bandName;chip.className='bandchip';}
+  else{chip.textContent='No year group set';chip.className='bandchip none';}
+  if(P.face==='graph'&&!P.plan.shape)P.face='map';
+  document.querySelectorAll('.pill').forEach(function(b){
+    b.classList.toggle('on',P.face===b.dataset.face);
+    b.style.display=(b.dataset.face==='graph'&&!P.plan.shape)?'none':'';});
+  $('#coverBtn').classList.toggle('on',P.cover[P.face]);
+  const lb=$('#lockBtn');
+  lb.textContent=P.lock?'🔒 Locked':'Board open';
+  lb.className='barbtn '+(P.lock?'lockon':'ghost');
+  $('#widget').classList.toggle('locked',P.lock);
+  $('#widget').classList.toggle('table',P.room==='table');
+  const rt=$('#roomtag');
+  rt.textContent=P.room==='table'?'small group':'whole class';
+  rt.className='roomtag'+(P.room==='table'?' table':'');
+  $('#lockmark').textContent=P.lock?'· locked':'';
+  stband();
+  face.innerHTML='';
+  if(P.gear)face.appendChild(gearEl());
+  if(P.face==='map')mapFace(); else if(P.face==='box')boxFace(); else graphFace();
+  $('#sheetHost').innerHTML='';
+  if(P.sheet)$('#sheetHost').appendChild(sheetEl());
+  if(focusBeat){const i=document.getElementById('beatin');
+    if(i){i.focus();if(i.value)i.setSelectionRange(i.value.length,i.value.length);}
+    focusBeat=null;}
+  if(P.capFocus){const c=document.getElementById('capin');
+    if(c){c.focus();c.setSelectionRange(c.value.length,c.value.length);}
+    P.capFocus=false;}
+}
+function stband(){
+  const b=$('#stband');
+  b.className='stband s-'+P.stage;
+  b.innerHTML='';
+  STAGES.forEach(function(st){
+    const x=el('button','stbtn b-'+st[0]+(P.stage===st[0]?' on':''),st[1]);
+    x.title=st[2];
+    x.onclick=function(){P.stage=st[0];render();};
+    b.appendChild(x);});
+  const i=STAGES.map(z=>z[0]).indexOf(P.stage);
+  b.appendChild(el('div','stseq','stage '+(i+1)+' of 3'));
+}
+
+/* JS:textmap */
+function mapFace(){
+  face.appendChild(wordBank());
+  const orph=P.beats.filter(b=>!rowsOf().some(r=>r.id===b.row));
+  if(orph.length){const w=el('div','band');
+    const h=el('div','bandhead');h.appendChild(el('div','boxname','Beats with no box'));w.appendChild(h);
+    const bs=el('div','beats');orph.forEach(b=>bs.appendChild(beatEl(b)));w.appendChild(bs);face.appendChild(w);}
+  rowsOf().forEach(function(r){
+    const w=el('div','band');
+    const h=el('div','bandhead');
+    h.appendChild(el('div','boxname',r.box));
+    h.appendChild(el('div','boxhint',r.hint));
+    const gc=gapChip(r.id);
+    if(gc){h.appendChild(el('div','grow'));h.appendChild(gc);}
+    w.appendChild(h);
+    const list=beatsIn(r.id);
+    const bs=el('div','beats');
+    list.forEach(b=>bs.appendChild(beatEl(b)));
+    if(list.length>=6){
+      bs.appendChild(el('div','capnote',r.box+' has '+list.length+' beats — the next one wants a box of its own.'));
+    }else if(!locked()){
+      const a=el('button','addbeat','+');a.title='Add a beat to '+r.box;
+      a.onclick=function(){newBeat(r.id);};
+      bs.appendChild(a);
+    }
+    w.appendChild(bs);
+    if(P.open&&list.some(b=>b.id===P.open))w.appendChild(panelEl(beatById(P.open)));
+    face.appendChild(w);});
+}
+function newBeat(rowId){
+  const list=beatsIn(rowId);
+  if(list.length>=6){toast('That box already holds six beats — the next one wants a box of its own.');return null;}
+  const nb={id:'b'+(++bn),row:rowId,t:'',img:null,v:{},vocab:[],note:''};
+  P.beats.push(nb);P.open=nb.id;focusBeat=nb.id;render();
+  return nb;
+}
+function beatEl(b){
+  const blank=!b.t;
+  const n=el('button','beat'+(P.open===b.id?' sel':'')+(blank?' blank':''));
+  const th=el('div','thumb'+(b.img?'':' ghost'));
+  if(b.img)th.innerHTML=artOf(b.img);
+  n.appendChild(th);
+  const t=el('div','btext'+(P.cover.map?' cov':'')+(blank?' blank':''),blank?'not written yet':b.t);
+  n.appendChild(t);
+  if(b.vocab.length&&!P.cover.map){
+    const sl3=storyLine();
+    const fv3=(sl3&&b.v[sl3.id]!=null)?b.v[sl3.id]:null;
+    const v=el('div','bmeta');
+    const notes=[];
+    b.vocab.forEach(function(w){
+      const o=P.words.filter(z=>z.w===w)[0];
+      const rr=o?readWord(o,fv3):null;
+      v.appendChild(el('span',rr&&rr.k==='counter'?'cp':null,w));
+      if(rr&&rr.k!=='serves'&&rr.k!=='level')notes.push(w+' — '+rr.say);});
+    n.appendChild(v);
+    if(notes.length){const t=el('div','bnote');
+      t.style.color=notes.some(z=>/counterpoint/.test(z))?'#5b21b6':'#8a4d09';
+      t.textContent=notes.join(' · ');n.appendChild(t);}}
+  if(b.note&&!P.cover.map)n.appendChild(el('div','bnote','“'+b.note+'”'));
+  n.onclick=function(){
+    if(locked()){toast('The board is locked. Unlock it to let a hand use it.');return;}
+    if(P.open===b.id){P.open=null;}else{P.open=b.id;focusBeat=b.id;}
+    render();};
+  return n;
+}
+
+/* JS:panel — ordered: what it says, what it looks like, how it feels,
+   the words, a note, then housekeeping. */
+function panelEl(b){
+  const p=el('div','panel');
+  const top=el('div','ptop');
+  const inp=el('input','beatin');
+  inp.id='beatin';
+  inp.value=b.t;
+  inp.maxLength=140;
+  inp.placeholder='Type what they just said…';
+  /* live-patch the card, never re-render: the caret has to survive every keystroke */
+  inp.oninput=function(){
+    b.t=inp.value;
+    const card=[...document.querySelectorAll('.beat.sel .btext')][0];
+    if(card){card.textContent=b.t||'not written yet';card.classList.toggle('blank',!b.t);}
+    const cd=document.querySelector('.beat.sel');
+    if(cd)cd.classList.toggle('blank',!b.t);
+  };
+  inp.onkeydown=function(e){
+    if(e.key==='Enter'){e.preventDefault();
+      const list=beatsIn(b.row);
+      if(list.length>=6){toast(P.plan.rows.filter(r=>r.id===b.row)[0].box+' has six beats — the next one wants a box of its own.');render();return;}
+      newBeat(b.row);
+    }else if(e.key==='Escape'){e.preventDefault();P.open=null;render();}
+  };
+  top.appendChild(inp);
+  const x=el('button','pclose','✕');x.title='Close';
+  x.onclick=function(){P.open=null;render();};
+  top.appendChild(x);
+  p.appendChild(top);
+  const eh=el('div','enterhint');
+  eh.innerHTML='<kbd>Enter</kbd> saves and opens the next beat in '+
+    P.plan.rows.filter(r=>r.id===b.row).map(r=>r.box).join('')+' · <kbd>Esc</kbd> closes';
+  p.appendChild(eh);
+  if(P.cover[P.face])p.appendChild(el('div','boxhint','Cover is on, so this beat stays covered on the board.'));
+
+  p.appendChild(el('div','plab','Picture'));
+  const pr=el('div','pickrow');
+  const none=el('button','pick none'+(b.img?'':' on'),'—');none.title='No picture';
+  none.onclick=function(){b.img=null;render();};pr.appendChild(none);
+  ARTKEYS.forEach(function(k){
+    const pk=el('button','pick'+(b.img===k?' on':''));pk.innerHTML=artOf(k);pk.title=k;
+    pk.onclick=function(){b.img=k;render();};pr.appendChild(pk);});
+  p.appendChild(pr);
+  p.appendChild(el('div','boxhint','In the app these are your own photographs.'));
+
+  if(P.plan.shape){
+    const at=armedTrack();
+    const lab=el('div','plab');
+    lab.innerHTML=at?'Feeling on <b>'+at.name+'</b> — taps write to this line only':'No line armed';
+    p.appendChild(lab);
+    const row=el('div','chiprow');
+    for(let i=0;i<P.steps;i++){
+      const v=valOfStep(i), s=el('button','step'+(v===0?' mid':''));
+      if(at&&b.v[at.id]===v){s.classList.add('set');s.style.background=RAW[slotOf(at.id)];}
+      s.innerHTML='<span class="num">'+(v>0?'+':'')+v+'</span><span class="wd">'+(P.axisWords[i]||'')+'</span>';
+      s.onclick=(function(vv){return function(){if(!at)return;
+        if(b.v[at.id]===vv)delete b.v[at.id];else b.v[at.id]=vv;render();};})(v);
+      row.appendChild(s);}
+    p.appendChild(row);
+  }
+
+  /* The story line is the reference, fixed — not whatever is armed. */
+  const sl=storyLine();
+  const fv=(sl&&b.v[sl.id]!=null)?b.v[sl.id]:null;
+  const bmood=fv==null?null:(fv>0?'up':(fv<0?'down':'mid'));
+  const OPP={up:'down',down:'up',mid:null};
+  p.appendChild(el('div','plab',fv==null?'Words for this beat'
+    :'Words for this beat — '+(sl?sl.name:'the story')+' sits at '+(fv>0?'+':'')+fv));
+  if(!P.words.length)p.appendChild(el('div','boxhint','No words yet — paste a list in the gear.'));
+  function wchip(o){
+    const w=o.w;
+    const c=el('button','vchip'+(b.vocab.indexOf(w)>=0?' on':''));
+    const lad=el('div','lad');lad.style.width='18px';lad.style.height='18px';
+    lad.innerHTML=ladderArt(P.ladder,o.lvl);c.appendChild(lad);
+    c.appendChild(el('span',null,w));
+    const rr=readWord(o,fv);
+    if(rr&&b.vocab.indexOf(w)>=0)c.appendChild(el('span','rd '+rr.k,rr.say));
+    c.style.display='inline-flex';c.style.alignItems='center';c.style.gap='6px';
+    c.onclick=function(){const i=b.vocab.indexOf(w);
+      if(i>=0)b.vocab.splice(i,1);
+      else if(b.vocab.length>=4)toast('Four words is the cap for one beat.');
+      else{b.vocab.push(w);
+        const r2=readWord(o,fv);
+        if(r2&&r2.k==='counter')toast('“'+w+'” cuts against '+(sl?sl.name:'the story')+' at '+(fv>0?'+':'')+fv+' — counterpoint, and a choice.');
+        else if(r2&&r2.k==='short')toast('“'+w+'” is '+r2.say+' of what this beat asks for.');
+        else if(r2&&r2.k==='strong')toast('“'+w+'” is '+r2.say+' than this beat asks for.');}
+      render();};
+    return c;
+  }
+  function wsec(cls,head,words){
+    if(!words.length)return;
+    const sec=el('div','wsec '+cls);
+    sec.appendChild(el('div','wsechead',head));
+    const row=el('div','chiprow');
+    words.forEach(function(o){row.appendChild(wchip(o));});
+    sec.appendChild(row);p.appendChild(sec);
+  }
+  if(!bmood){
+    wsec('other','all of them',P.words);
+  }else if(bmood==='mid'){
+    wsec('match','level with it',P.words.filter(o=>(o.mood||'mid')==='mid'));
+    wsec('other','or tip it either way',P.words.filter(o=>(o.mood||'mid')!=='mid'));
+  }else{
+    wsec('match','for this tone',P.words.filter(o=>(o.mood||'mid')===bmood));
+    wsec('other','neutral',P.words.filter(o=>(o.mood||'mid')==='mid'));
+    wsec('against','against it — on purpose',P.words.filter(o=>(o.mood||'mid')===OPP[bmood]));
+  }
+
+  if(fv!=null){
+    const k=el('div','gaugekey');
+    k.innerHTML='A word’s reach is its direction and its climb together — <i>sad</i> reaches −1, '
+      +'<i>desolate</i> reaches −3. Measured against '+(sl?sl.name:'the story')+', not against the armed line.';
+    p.appendChild(k);}
+  p.appendChild(el('div','plab','A note, if it earns one'));
+  const note=el('input','noteline');note.value=b.note;note.maxLength=140;
+  note.placeholder='Mouth says fine, hands say trembling…';
+  note.oninput=function(e){b.note=e.target.value;};
+  p.appendChild(note);
+
+  const mv=el('div','mvrow');
+  function add(l,fn,cls){const m=el('button','mv'+(cls?' '+cls:''),l);m.onclick=fn;mv.appendChild(m);}
+  const sib=beatsIn(b.row), ix=sib.indexOf(b);
+  add('◀ Left',function(){if(ix>0){const g=P.beats.indexOf(sib[ix-1]),h=P.beats.indexOf(b);
+    const tmp=P.beats[g];P.beats[g]=P.beats[h];P.beats[h]=tmp;render();}});
+  add('Right ▶',function(){if(ix<sib.length-1){const g=P.beats.indexOf(sib[ix+1]),h=P.beats.indexOf(b);
+    const tmp=P.beats[g];P.beats[g]=P.beats[h];P.beats[h]=tmp;render();}});
+  const sel=el('select','mv');sel.appendChild(el('option',null,'Move to box ▾'));
+  rowsOf().forEach(function(r){const o=el('option',null,r.box);o.value=r.id;
+    if(r.id===b.row)o.disabled=true;sel.appendChild(o);});
+  sel.onchange=function(e){if(e.target.value){b.row=e.target.value;render();}};
+  mv.appendChild(sel);
+  add('Delete',function(){P.beats=P.beats.filter(z=>z.id!==b.id);P.open=null;render();},'del');
+  p.appendChild(mv);
+  return p;
+}
+
+/* The one thing that ties the three faces together: a box's target is set on the
+   graph and READ where the writing happens. Without this the graph is a picture
+   beside the work rather than the brief for it. KS2 and up. */
+function gapOf(rowId){
+  const act=P.tracks.filter(t=>t&&t.on&&t.kind!=='target')[0];
+  const tgt=P.tracks.filter(t=>t&&t.on&&t.kind==='target')[0];
+  if(!act||!tgt||!P.plan.shape)return null;
+  const list=beatsIn(rowId);
+  let a=null,g=null,na=0,ng=0;
+  list.forEach(function(b){
+    if(b.v[act.id]!=null){a=(a||0)+b.v[act.id];na++;}
+    if(b.v[tgt.id]!=null){g=(g||0)+b.v[tgt.id];ng++;}});
+  if(!na||!ng)return null;
+  /* Whole numbers only. A box averaging 0, 0 and -1 is "about zero" to a class —
+     "at -0.3" is a spreadsheet talking, and this number gets read aloud. */
+  const am=Math.round(a/na), gm=Math.round(g/ng);
+  return {at:am, want:gm, d:gm-am, met:am===gm};
+}
+function gapChip(rowId){
+  const q=gapOf(rowId);
+  if(!q)return null;
+  const f=v=>(v>0?'+':'')+v;
+  const c=el('div','gapchip'+(q.met?' met':''));
+  if(q.met){c.textContent='at '+f(q.at)+' — where we wanted it';return c;}
+  c.innerHTML='<span class="d">at '+f(q.at)+'</span> → <span class="d">aiming for '+f(q.want)+'</span>';
+  return c;
+}
+
+/* The words are class-facing furniture, not a teacher's list: they sit on the board
+   to be read, covered, and uncovered ONE AT A TIME, so a class earns them rather than
+   being handed them. Same gradual release the rest of the widget runs on. */
+function wordBank(){
+  const w=el('div','wbank');
+  const h=el('div','wbhead');
+  h.appendChild(el('div','wbtitle','Words to reach for'));
+  h.appendChild(el('div','grow'));
+  if(!locked()){
+    const cv=el('button','rt'+(P.wordsHidden?' on':''),P.wordsHidden?'Uncover all':'Cover the words');
+    cv.onclick=function(){P.wordsHidden=!P.wordsHidden;P.shown={};render();};
+    h.appendChild(cv);
+  }
+  w.appendChild(h);
+  if(!locked()){
+    const cap=el('div','capbar');
+    cap.appendChild(el('div','caplab','A word they just offered'));
+    const inp=el('input','capin');
+    inp.id='capin';
+    inp.placeholder='type it before the moment passes…';
+    inp.value=P.capW||'';
+    inp.oninput=function(){P.capW=inp.value;};
+    const commit=function(){
+      const v=(P.capW||'').trim().slice(0,60);
+      if(!v){toast('Type the word first.');return;}
+      if(P.words.some(z=>z.w.toLowerCase()===v.toLowerCase())){
+        toast('“'+v+'” is already in the bank.');P.capW='';render();return;}
+      P.words.push({w:v,src:'bank',lvl:P.capL,mood:P.capM,beyond:!!P.capBeyond});
+      if(P.capBeyond){
+        /* The record, not the flag. A number says how good; this says what happened. */
+        const ob=P.open?beatById(P.open):null;
+        const row=ob?rowsOf().filter(r=>r.id===ob.row)[0]:null;
+        P.moments.push({w:v,score:P.capL+1,who:P.capWho||null,
+          box:row?row.box:null, beat:ob?ob.t:null,
+          plan:P.plan.name, unit:'Traditional tales', stage:P.stage});
+        toast('“'+v+'” recorded as a moment'+(P.capWho?' — '+P.capWho:'')+'. It carries where and when with it.');
+      }else{
+        toast('“'+v+'” added — '+LVLNAME[P.capL]+', '+MOODS.filter(m=>m[0]===P.capM)[0][1].replace('for the ','')+'.');}
+      P.capW='';P.capBeyond=false;P.capWho=null;P.capFocus=true;render();};
+    inp.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();commit();}};
+    cap.appendChild(inp);
+    const sp=el('div','scorepill');
+    for(let i=0;i<=LVLMAX;i++){
+      const b=el('button','sp'+(P.capL===i?' on':''));
+      b.title=LVLNAME[i];
+      const a=el('div','a');a.innerHTML=ladderArt(P.ladder,i);b.appendChild(a);
+      b.appendChild(el('div','n',String(i+1)));
+      b.onclick=(function(v){return function(){P.capL=v;P.capBeyond=false;P.capFocus=true;render();};})(i);
+      sp.appendChild(b);}
+    const bb=el('button','sp beyond'+(P.capBeyond?' on':''));
+    bb.title='Beyond the scale — the word a class gives you once a term';
+    bb.appendChild(el('div','n','★'));
+    bb.onclick=function(){P.capBeyond=!P.capBeyond;if(P.capBeyond)P.capL=LVLMAX;P.capFocus=true;render();};
+    sp.appendChild(bb);
+    cap.appendChild(sp);
+    const mo=el('div','scorepill');
+    MOODS.forEach(function(m){
+      const b=el('button','sp'+(P.capM===m[0]?' on':''));
+      b.style.color=m[2];b.title=m[1];
+      b.appendChild(el('div','n',m[0]==='up'?'↑':(m[0]==='down'?'↓':'–')));
+      b.onclick=(function(k){return function(){P.capM=k;P.capFocus=true;render();};})(m[0]);
+      mo.appendChild(b);});
+    cap.appendChild(mo);
+    const go=el('button','rt','Add');go.onclick=commit;cap.appendChild(go);
+    if(P.capBeyond){
+      const wr=el('div','whorow');
+      wr.appendChild(el('div','caplab','Who offered it? — optional, and it stays on this machine'));
+      const nb=el('button','who'+(P.capWho?'':' on'),'the class');
+      nb.onclick=function(){P.capWho=null;P.capFocus=true;render();};wr.appendChild(nb);
+      CLASS.forEach(function(nm){
+        const b2=el('button','who'+(P.capWho===nm?' on':''),nm);
+        b2.onclick=function(){P.capWho=(P.capWho===nm)?null:nm;P.capFocus=true;render();};
+        wr.appendChild(b2);});
+      cap.appendChild(wr);
+    }
+    w.appendChild(cap);
+  }
+  if(!P.words.length){w.appendChild(el('div','wbnote','No words yet — paste or import a list in the gear.'));return w;}
+  /* Which part of the arc is this face asking for right now? On the map that is the
+     open beat's own feeling; anywhere else it is nothing in particular. */
+  let want=null;
+  const ob=P.open?beatById(P.open):null;
+  const act=P.tracks.filter(t=>t&&t.on&&t.kind!=='target')[0];
+  if(ob&&act&&ob.v[act.id]!=null)want=ob.v[act.id]>0?'up':(ob.v[act.id]<0?'down':'mid');
+  MOODS.forEach(function(m){
+    const mine=P.words.filter(o=>(o.mood||'mid')===m[0]);
+    const grp=el('div','moodgrp'+(mine.length&&mine.length<3?' thin':'')+(want===m[0]?' want':''));
+    const h=el('div','moodhead');
+    const lb=el('div','moodlab',m[1]);lb.style.color=m[2];h.appendChild(lb);
+    h.appendChild(el('div','moodn',mine.length?mine.length+(mine.length===1?' word':' words'):'nothing here'));
+    grp.appendChild(h);
+    if(!mine.length){
+      grp.appendChild(el('div','moodempty','No words for this part of the arc yet — the class cannot write what it cannot reach for.'));
+      w.appendChild(grp);return;}
+    grp.appendChild(wordRow(mine));
+    w.appendChild(grp);});
+  /* Checked against what THIS plan asks for, not against a neutral tally: a plan
+     with three lifts in it and two lift words is short, and the number that matters
+     is the shortfall, not the total. */
+  const cov=el('div','cover');
+  const have={},need={};
+  MOODS.forEach(function(m){
+    have[m[0]]=P.words.filter(o=>(o.mood||'mid')===m[0]).length;
+    need[m[0]]=P.plan.rows.filter(r=>r.mood===m[0]).length;});
+  const short=MOODS.filter(m=>need[m[0]]>0&&have[m[0]]<need[m[0]]+1);
+  if(short.length){
+    cov.innerHTML='<b>Short for this plan.</b> '+short.map(function(m){
+      const bx=P.plan.rows.filter(r=>r.mood===m[0]).map(r=>r.box);
+      const names=bx.length>1?bx.slice(0,-1).join(', ')+' and '+bx[bx.length-1]:bx[0];
+      return names
+        +' run '+m[0]+' and the bank holds '+have[m[0]]+' word'+(have[m[0]]===1?'':'s')+' for that';
+    }).join('; ')+'. A class cannot write what it cannot reach for.';
+  }else{
+    cov.textContent='Across the arc: '+MOODS.map(m=>have[m[0]]+' '+m[0]).join(' · ')
+      +' — enough for every part of this plan.';
+  }
+  w.appendChild(cov);
+  const shown0=P.words.filter(o=>!(P.wordsHidden&&!P.shown[o.w])).length;
+  w.appendChild(el('div','wbnote',P.wordsHidden
+    ? shown0+' of '+P.words.length+' uncovered — tap a covered word to give it to them'
+    : 'Tap a word to climb its score, 1 to 5 · the climb is drawn as a '+P.ladder));
+  return w;
+}
+function wordRow(words){
+  const list=el('div','wbwords');
+  words.forEach(function(o){
+    const hid=P.wordsHidden&&!P.shown[o.w];
+    const c=el('button','wword'+(hid?' hid':''));
+    const lad=el('div','lad');lad.innerHTML=ladderArt(P.ladder,o.lvl);c.appendChild(lad);
+    c.appendChild(el('span',null,o.w));
+    const sc=SRC[o.src]||SRC.genre;
+    const tg=el('span','tag',sc[0]);tg.style.background=sc[2];tg.style.color=sc[1];c.appendChild(tg);
+    if(o.beyond)c.appendChild(el('span','beyondmark','★ beyond'));
+    c.title=hid?'Tap to uncover this word':(o.w+' — scores '+(o.lvl+1)+', '+LVLNAME[o.lvl]+', from '+sc[0]);
+    c.onclick=function(){
+      if(locked()){toast('The board is locked.');return;}
+      if(hid){P.shown[o.w]=true;render();return;}
+      /* tapping an uncovered word climbs it: ok → good → amazing. A claim about the
+         WORD, teacher-driven, never about a child. */
+      o.lvl=(o.lvl+1)%(LVLMAX+1);render();
+      toast('“'+o.w+'” scored '+(o.lvl+1)+' — '+LVLNAME[o.lvl]+'.');};
+    list.appendChild(c);});
+  return list;
+}
+
+/* JS:boxingup — a writing surface, the graph to hand */
+function boxFace(){
+  if(locked())face.appendChild(el('div','locknote','Board locked — the boxes and the shape stay up to copy from.'));
+  /* The top row holds only what a teacher sets ONCE. The pen lives per box. */
+  const ctl=el('div','wctl');
+  function mk(l,on,fn,cls){const b=el('button','wbtn'+(on?' on':'')+(cls?' '+cls:''),l);b.onclick=fn;return b;}
+  const rs0=ruleSet();
+  const rl=el('button','wbtn ghost','Lines: '+rs0.name);
+  rl.title='Line size and guide — banded by year group, yours to change';
+  rl.onclick=function(){
+    const ks=Object.keys(RULES), i=ks.indexOf(P.rule);
+    P.rule=ks[(i+1)%ks.length];P.lines=RULES[P.rule].lines;render();
+    toast(RULES[P.rule].name+' — '+RULES[P.rule].pitch+'px lines'
+      +(RULES[P.rule].guide?', with a dashed midline to reach for':'')+', '+P.lines+' of them.');};
+  ctl.appendChild(rl);
+  const less=el('button','wbtn ghost','−');less.title='Less writing room';
+  less.onclick=function(){if(P.lines>2){P.lines--;render();}else toast('Two lines is the floor.');};
+  const more=el('button','wbtn ghost','+');more.title='More writing room';
+  more.onclick=function(){if(P.lines<14){P.lines++;render();}else toast('Fourteen lines is as tall as a box goes.');};
+  ctl.appendChild(less);ctl.appendChild(el('div',null,String(P.lines)));ctl.appendChild(more);
+  ctl.appendChild(mk(P.refMode==='strip'?'Graph: strip on top':'Graph: beside the boxes',false,
+    function(){P.refMode=P.refMode==='strip'?'side':'strip';render();},'ghost'));
+  ctl.appendChild(el('div','grow'));
+  ctl.appendChild(mk('Print for the wall…',false,function(){P.sheet=true;P.budget=8;render();
+    setTimeout(function(){$('#sheetHost').scrollIntoView({block:'start'});},40);},'ghost'));
+  if(!locked())face.appendChild(ctl);
+
+  const wrap=el('div','boxwrap'+(P.refMode==='side'?' side':''));
+  const ref=el('div','graphref');
+  ref.appendChild(el('div','striplab','The shape you are building towards'));
+  const gs=el('div');gs.innerHTML=graphSVG({compact:true});ref.appendChild(gs);
+  ref.appendChild(legendEl());
+  wrap.appendChild(ref);
+
+  const grid=el('div');
+  grid.appendChild(wordBank());
+
+  rowsOf().forEach(function(r){
+    const row=el('div','brow');
+    const bx=el('div');
+    bx.appendChild(el('div','boxname',r.box));
+    bx.appendChild(el('div','boxhint',r.hint));
+    const gc=gapChip(r.id);
+    if(gc)bx.appendChild(gc);
+    const sp=el('div');sp.style.height='7px';bx.appendChild(sp);
+    beatsIn(r.id).forEach(function(b){
+      const c=el('div','mchip');
+      const th=el('div','mt'+(b.img?'':' ghost'));
+      if(b.img)th.innerHTML=artOf(b.img);
+      c.appendChild(th);c.appendChild(el('div','mx',b.t||'not written yet'));bx.appendChild(c);});
+    row.appendChild(bx);
+    const pen=el('div');
+    if(!locked())pen.appendChild(rowTools(r));
+    pen.appendChild(writeArea(r));
+    row.appendChild(pen);
+    grid.appendChild(row);});
+  wrap.appendChild(grid);
+  face.appendChild(wrap);
+}
+function rowTools(r){
+  const t=el('div','rowtools');
+  const pen=el('button','rt'+(P.tool==='pen'?' on':''),'✎ Pen');
+  pen.onclick=function(){P.tool='pen';render();};t.appendChild(pen);
+  const rub=el('button','rt'+(P.tool==='eraser'?' on':''),'Rub out');
+  rub.onclick=function(){P.tool='eraser';render();};t.appendChild(rub);
+  t.appendChild(el('div','rtsep'));
+  ['#1e2c33','#1d4ed8','#a13b4b'].forEach(function(c){
+    const b=el('button','rtink'+(P.ink===c?' on':''));b.style.background=c;b.title='ink';
+    b.onclick=function(){P.ink=c;P.tool='pen';render();};t.appendChild(b);});
+  t.appendChild(el('div','rtsep'));
+  const cl=el('button','rt del','Clear '+r.box);
+  cl.onclick=function(){
+    if(!P.strokes[r.id]||!P.strokes[r.id].length){toast('Nothing written in '+r.box+' yet.');return;}
+    P.strokes[r.id]=[];render();};
+  t.appendChild(cl);
+  return t;
+}
+function strokePath(st){
+  return '<path d="'+st.d+'" fill="none" stroke="'+st.c+'" stroke-width="'+st.w+
+    '" stroke-linecap="round" stroke-linejoin="round"/>';
+}
+function ruleSet(){return RULES[P.rule]||RULES.lks2;}
+function writeArea(r){
+  const w=el('div','warea'+(P.open===r.id?' sel':''));
+  const rs=ruleSet(), pitch=rs.pitch, W=560;
+  const H=pitch*P.lines+pitch*0.35;      /* room for the last descender */
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.setAttribute('class','wsvg');
+  function paint(){
+    let rules='';
+    for(let i=1;i<=P.lines;i++){
+      const y=i*pitch;
+      rules+='<line x1="10" y1="'+y+'" x2="'+(W-10)+'" y2="'+y+'" stroke="#cfdad7" stroke-width="1.2"/>';
+      if(rs.guide){
+        /* the letter a child aims at: sit on the solid line, reach the dashed one */
+        rules+='<line x1="10" y1="'+(y-pitch*0.45).toFixed(1)+'" x2="'+(W-10)+'" y2="'+(y-pitch*0.45).toFixed(1)
+          +'" stroke="#e3ebe9" stroke-width="1" stroke-dasharray="5 5"/>';
+      }
+    }
+    const st=P.strokes[r.id]||[];
+    svg.innerHTML='<rect width="'+W+'" height="'+H.toFixed(1)+'" fill="'+(P.cover.box?'#1e2c33':'#fffdf7')+'" rx="8"/>'
+      +(P.cover.box?'':rules+st.map(strokePath).join('')
+        +(st.length?'':'<text x="16" y="'+(pitch*0.75).toFixed(1)+'" font-size="'+Math.min(17,pitch*0.42).toFixed(0)
+          +'" font-family="system-ui" font-style="italic" fill="#c2d0cd">write it here</text>'));
+  }
+  paint();
+  w.appendChild(svg);
+  let cur=null;
+  function pt(e){const b=svg.getBoundingClientRect();
+    return [(e.clientX-b.left)/b.width*W,(e.clientY-b.top)/b.height*H];}
+  w.dataset.h=H.toFixed(1);
+  svg.addEventListener('pointerdown',function(e){
+    if(locked()){toast('The board is locked. Unlock it to write, or to hand the pen over.');return;}
+    if(P.cover.box){toast('Cover is on — the writing is hidden.');return;}
+    e.preventDefault();
+    P.open=r.id;
+    try{svg.setPointerCapture(e.pointerId);}catch(_){}
+    const c=pt(e);
+    if(P.tool==='eraser'){erase(r,c[0],c[1]);paint();return;}
+    cur={d:'M'+c[0].toFixed(1)+' '+c[1].toFixed(1),c:P.ink,w:2.8};
+    if(!P.strokes[r.id])P.strokes[r.id]=[];
+    P.strokes[r.id].push(cur);
+    paint();
+    const host=w.parentNode;
+    if(host){host.querySelectorAll('.warea').forEach(n=>n.classList.remove('sel'));w.classList.add('sel');}});
+  svg.addEventListener('pointermove',function(e){
+    if(!cur)return;
+    const c=pt(e);
+    cur.d+=' L'+c[0].toFixed(1)+' '+c[1].toFixed(1);
+    paint();});
+  function stop(){cur=null;}
+  svg.addEventListener('pointerup',stop);
+  svg.addEventListener('pointercancel',stop);
+  svg.addEventListener('pointerleave',stop);
+  return w;
+}
+function erase(r,x,y){
+  const list=P.strokes[r.id]||[];
+  P.strokes[r.id]=list.filter(function(st){
+    const n=st.d.match(/-?\d+(?:\.\d+)?/g)||[];
+    for(let i=0;i+1<n.length;i+=2){
+      const dx=+n[i]-x, dy=+n[i+1]-y;
+      if(dx*dx+dy*dy<28*28)return false;}
+    return true;});
+}
+
+/* JS:graph */
+function legendEl(){
+  const lg=el('div','legend');
+  [0,1,2].forEach(function(ch){
+    const mine=onChannel(ch), live=liveOn(ch);
+    if(!mine.length){
+      const e=el('div','lchip empty');e.appendChild(el('span','sw'));
+      e.appendChild(el('span',null,'free channel'));lg.appendChild(e);return;}
+    const c=el('button','lchip'+(live?' on':' off')+(live&&P.armed===live.id?' armed':''));
+    c.style.color=HUE[ch];
+    c.appendChild(el('span','sw'));
+    c.appendChild(el('span',null,live?live.name:mine[0].name+' (off)'));
+    if(live&&live.kind==='target')c.appendChild(el('span','kd','target'));
+    if(mine.length>1)c.appendChild(el('span','kd','1 of '+mine.length));
+    c.onclick=function(){
+      if(locked()){toast('The board is locked.');return;}
+      if(!live){airLine(mine[0].id);render();return;}
+      if(P.armed!==live.id){P.armed=live.id;render();return;}
+      /* armed already: step to the next line waiting on this channel, or hide it */
+      if(mine.length>1){
+        const i=mine.findIndex(z=>z.id===live.id);
+        const nx=mine[(i+1)%mine.length];
+        airLine(nx.id);
+        toast(nx.name+' is on the '+['blue','orange','green'][ch]+' channel now — '+live.name+' steps off.');
+        render();return;}
+      if(visible().length===1){toast('The last visible line stays — something has to be armed.');return;}
+      live.on=false;const q=visible()[0];P.armed=q?q.id:null;render();};
+    lg.appendChild(c);});
+  return lg;
+}
+function graphFace(){
+  face.appendChild(legendEl());
+  const at=armedTrack();
+  const ah=el('div','armedsay');
+  ah.innerHTML=at?'Armed: <b>'+at.name+'</b> — tap a line to arm it, tap the armed line to hide it.':'Nothing armed.';
+  face.appendChild(ah);
+  const g=el('div');g.innerHTML=graphSVG({});
+  face.appendChild(g);
+  g.querySelectorAll('[data-beat]').forEach(function(n){n.onclick=function(){
+    if(locked()){toast('The board is locked.');return;}
+    const id=n.getAttribute('data-beat');
+    if(P.open===id){P.open=null;}else{P.open=id;focusBeat=id;}
+    render();};});
+  if(P.open){const b=beatById(P.open);if(b)face.appendChild(panelEl(b));}
+}
+function graphSVG(o){
+  const compact=!!o.compact;
+  const W=1000,H=compact?200:440,padL=compact?58:126,padR=28,padT=16,padB=compact?42:98;
+  const rows=rowsOf(),bw=(W-padL-padR)/rows.length;
+  const zero=padT+(H-padT-padB)/2, half=(H-padT-padB)/2;
+  function yOf(v){return zero-(v/((P.steps-1)/2))*half;}
+  const D=compact?12:18, R=compact?5.5:8.5;
+  function bx(ri,bi,n,slot){return padL+ri*bw+(bw/(n+1))*(bi+1)+(slot-1)*D;}
+  const at=armedTrack(), armed=at?at.id:null, aslot=at?slotOf(at.id):0;
+  let s='<svg class="graph" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Emotion graph">';
+  s+='<rect width="'+W+'" height="'+H+'" fill="#fff" rx="9"/>';
+  for(let i=0;i<P.steps;i++){
+    const v=valOfStep(i), y=yOf(v), z=(v===0);
+    s+='<line x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'" stroke="'+(z?'#aebbb7':'#e9eeed')+'" stroke-width="'+(z?2:1)+'"/>';
+    s+='<text x="'+(padL-11)+'" y="'+(y+4)+'" text-anchor="end" font-size="'+(compact?11:13)+'" font-family="system-ui" fill="'+(z?'#5b6b7b':'#7f8f96')+'">'
+      +'<tspan font-weight="800" font-size="'+(compact?12:14)+'">'+(v>0?'+':'')+v+'</tspan>'
+      +(compact?'':'<tspan dx="7">'+(P.axisWords[i]||'')+'</tspan>')+'</text>';
+  }
+  rows.forEach(function(r,ri){
+    if(ri)s+='<line x1="'+(padL+ri*bw)+'" y1="'+padT+'" x2="'+(padL+ri*bw)+'" y2="'+(H-padB)+'" stroke="#e9eeed"/>';
+    if(!P.cover.graph||compact)
+      s+='<text x="'+(padL+ri*bw+bw/2)+'" y="'+(H-padB+(compact?21:28))+'" text-anchor="middle" font-size="'+(compact?11:13.5)
+        +'" font-weight="800" letter-spacing="0.4" font-family="system-ui" fill="#0f766e">'+r.box.toUpperCase()+'</text>';});
+  /* the gap ribbon first, so both lines sit on top of it */
+  const act=P.tracks.filter(t=>t&&t.on&&t.kind!=='target')[0];
+  const tgt=P.tracks.filter(t=>t&&t.on&&t.kind==='target')[0];
+  if(act&&tgt){
+    const a=[],g=[];
+    rows.forEach(function(r,ri){const list=beatsIn(r.id);
+      list.forEach(function(b,bi){
+        const x=bx(ri,bi,list.length,1);   /* centre lane: a region, not a line */
+        if(b.v[act.id]!=null&&b.v[tgt.id]!=null){
+          a.push(x.toFixed(1)+','+yOf(b.v[act.id]).toFixed(1));
+          g.push(x.toFixed(1)+','+yOf(b.v[tgt.id]).toFixed(1));}});});
+    if(a.length>1)s+='<polygon points="'+a.concat(g.reverse()).join(' ')+'" fill="#7c3aed" opacity="'+(compact?0.09:0.11)+'"/>';
+  }
+  visible().forEach(function(t){
+    const slot=t.ch, pts=[];
+    rows.forEach(function(r,ri){const list=beatsIn(r.id);
+      list.forEach(function(b,bi){if(b.v[t.id]!=null)
+        pts.push(bx(ri,bi,list.length,slot).toFixed(1)+','+yOf(b.v[t.id]).toFixed(1));});});
+    const dash=(t.kind==='target')?' stroke-dasharray="'+(compact?'6 4':'9 6')+'"':'';
+    if(pts.length>1)s+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+RAW[slot]
+      +'" stroke-width="'+(compact?2.2:3.4)+'" stroke-linejoin="round" stroke-linecap="round"'+dash+'/>';});
+  rows.forEach(function(r,ri){
+    const list=beatsIn(r.id);
+    list.forEach(function(b,bi){
+      visible().forEach(function(t){
+        const slot=t.ch, x=bx(ri,bi,list.length,slot);
+        if(b.v[t.id]!=null)s+=dot(x,yOf(b.v[t.id]),RAW[slot],slot,t.kind==='target',R,b.id);
+        else if(t.id===armed)s+=dot(x,zero,RAW[slot],slot,true,R,b.id);});
+      if(!P.cover.graph&&!compact)
+        s+='<text x="'+bx(ri,bi,list.length,aslot)+'" y="'+(H-padB+54)+'" text-anchor="middle" font-size="11" font-family="system-ui" fill="#8b9aa2">'
+          +(b.t||'…').slice(0,16)+'</text>';});});
+  return s+'</svg>';
+}
+function dot(x,y,col,slot,ghost,R,id){
+  const f=ghost?'#fff':col, sw=ghost?2.4:1.8, a=' data-beat="'+id+'" style="cursor:pointer"';
+  if(SHAPE[slot]==='square')return '<rect x="'+(x-R)+'" y="'+(y-R)+'" width="'+(2*R)+'" height="'+(2*R)
+    +'" rx="2" fill="'+f+'" stroke="'+col+'" stroke-width="'+sw+'"'+a+'/>';
+  if(SHAPE[slot]==='triangle')return '<polygon points="'+x+','+(y-R-1)+' '+(x+R+1)+','+(y+R)+' '+(x-R-1)+','+(y+R)
+    +'" fill="'+f+'" stroke="'+col+'" stroke-width="'+sw+'"'+a+'/>';
+  return '<circle cx="'+x+'" cy="'+y+'" r="'+R+'" fill="'+f+'" stroke="'+col+'" stroke-width="'+sw+'"'+a+'/>';
+}
+
+/* What belongs to THIS class rather than to the resource. Stated as a count, because
+   a reset that does not say what it is about to take is a reset nobody trusts. */
+function classWork(){
+  const boxes=Object.keys(P.strokes).filter(k=>(P.strokes[k]||[]).length).length;
+  const act=P.tracks.filter(t=>t&&t.kind!=='target');
+  let plotted=0;
+  P.beats.forEach(function(b){act.forEach(function(t){if(b.v[t.id]!=null)plotted++;});});
+  const bits=[];
+  if(boxes)bits.push(boxes+' box'+(boxes===1?'':'es')+' of writing');
+  if(plotted)bits.push(plotted+' plotted feeling'+(plotted===1?'':'s'));
+  return {any:bits.length>0, say:bits.join(' and '), boxes:boxes, plotted:plotted};
+}
+
+/* JS:gear */
+function gearEl(){
+  const g=el('div','gearbox');
+  g.appendChild(el('h4',null,'This plan'));
+  g.appendChild(el('div','sub','Swappable until the map holds a plotted feeling or writing in a box. On a swap every beat keeps its order and lands in the new plan’s first box — none destroyed.'));
+  const plotted=P.beats.some(b=>Object.keys(b.v).length);
+  const written=Object.keys(P.strokes).some(k=>(P.strokes[k]||[]).length);
+  Object.keys(PLANS).forEach(function(k){
+    const pl=PLANS[k];
+    const b=el('button','planbtn'+(pl.id===P.plan.id?' cur':''));
+    b.innerHTML='<span class="pn">'+pl.name+'</span><span class="pb">'
+      +(pl.bandName||'no band — offered at every year group')+' · '+pl.rows.length+' boxes'
+      +(pl.shape?'':' · no emotion graph')+'</span>';
+    b.onclick=function(){
+      if(pl.id===P.plan.id)return;
+      if(plotted||written){
+        const bits=[];if(plotted)bits.push('plotted feelings');if(written)bits.push('writing in a box');
+        toast('This map has '+bits.join(' and ')+' on “'+P.plan.name+'”. Re-word or add boxes instead — swapping a plan whole needs an empty map.');
+        return;}
+      const np=JSON.parse(JSON.stringify(pl));
+      np.rows=np.rows.map(function(r,i){return {id:'r'+i,box:r[0],hint:r[1],mood:r[2]||null,edited:false};});
+      const n=P.beats.length, first=np.rows[0];
+      P.beats.forEach(function(z){z.row=first.id;});
+      P.plan=np;P.steps=np.steps;P.axisWords=AXIS[np.steps].slice();P.strokes={};
+      if(np.band&&RULE_BAND[np.band]){P.rule=RULE_BAND[np.band];P.lines=RULES[P.rule].lines;}
+      if(!np.shape&&P.face==='graph')P.face='map';
+      toast(n+' beat'+(n===1?'':'s')+' moved to '+first.box+' — use Move to box to sort '+(n===1?'it':'them')+'.');
+      render();};
+    g.appendChild(b);});
+  g.appendChild(el('h4',null,'The words'));
+  g.appendChild(el('div','sub','Paste a list, or a CSV of word, source, level. One word per line. '
+    +'Source is pack, bank, HFW, E or S — type EAL or SEN if you prefer, they land in the same place, '
+    +'but the board shows only E and S, so a word never labels the child who needs it. '
+    +'Score is 1 to 5 (or everyday, useful, good, strong, exceptional) and means DICTION — how '
+    +'rarely a primary writer reaches for it, not how strong the feeling is: wistful is a mild word '
+    +'and a 5. It scores the WORD, never the writing: a 5 in the wrong place is worse than a 2 in the '
+    +'right one, and a class chasing high numbers writes purple prose. Mood is up, level or down — which part of the arc the word serves. '
+    +'Pack words arrive already tagged, because a word’s mood is lexical rather than a matter of opinion: '
+    +'gloom is a down word in any text. Override any of them — that is editorial, and yours. '
+    +'so a bank stocked only for the fall shows up as a gap rather than as a surprise mid-lesson. '
+    +'Trailing fields are read in any order. (No Word or PDF here yet — a word list is lines, not a document.)'));
+  const ta=el('textarea','noteline');ta.rows=4;ta.style.fontFamily='var(--mono)';ta.style.fontSize='12.5px';
+  ta.placeholder='beamed, bank, 4, up\nsprinted\nwistful, 5\nfirst, then, next, S, 1, mid';
+  g.appendChild(ta);
+  const irow=el('div','vocedit');
+  const add=el('button','rt','Add these words');
+  add.onclick=function(){
+    const rows=ta.value.split(/\r?\n/).map(z=>z.trim()).filter(Boolean);
+    if(!rows.length){toast('Nothing pasted yet.');return;}
+    let added=0,dup=0;
+    rows.forEach(function(line){
+      /* A comma is only a delimiter if what follows it is actually a source or a
+         level. Otherwise the line is one phrase — "first, then, next" is SEN
+         sequencing language, and splitting it on its commas destroys it. The tools
+         are untidy, not the person. */
+      const cells=line.split(',').map(z=>z.trim());
+      let src='bank', lvl=2, mood='mid', take=cells.length;
+      const isSrc=z=>!!SRCALIAS[(z||'').toLowerCase()];
+      const isLvl=z=>LVLNAME.indexOf((z||'').toLowerCase())>=0
+        ||(/^[1-5]$/.test((z||'').trim()));
+      const isMood=z=>MOODS.some(m=>m[0]===(z||'').toLowerCase());
+      /* Peel recognised trailing fields in any order — a teacher types what comes to
+         hand, and the shape of the line is not their problem. */
+      let peeled=true;
+      while(peeled&&take>1){
+        peeled=false;
+        const last=cells[take-1];
+        if(isMood(last)){mood=last.toLowerCase();take-=1;peeled=true;}
+        else if(isLvl(last)){lvl=/^[1-5]$/.test(last.trim())?(+last.trim()-1)
+          :LVLNAME.indexOf(last.toLowerCase());take-=1;peeled=true;}
+        else if(isSrc(last)){src=SRCALIAS[last.toLowerCase()];take-=1;peeled=true;}
+      }
+      const w=cells.slice(0,take).join(', ').slice(0,60);
+      if(!w)return;
+      if(P.words.some(o=>o.w.toLowerCase()===w.toLowerCase())){dup++;return;}
+      P.words.push({w:w,src:src,lvl:lvl,mood:mood});added++;});
+    ta.value='';
+    /* say what happened in both directions — silence is this rail's failure mode */
+    toast(added+' word'+(added===1?'':'s')+' added'+(dup?' · '+dup+' already there':'')+'.');
+    render();};
+  irow.appendChild(add);
+  const rep2=el('button','rt del','Replace the whole list');
+  rep2.onclick=function(){
+    const rows=ta.value.split(/\r?\n/).map(z=>z.trim()).filter(Boolean);
+    if(!rows.length){toast('Paste a list first.');return;}
+    P.words=[];P.shown={};add.onclick();};
+  irow.appendChild(rep2);
+  g.appendChild(irow);
+  const ve=el('div','vocedit');
+  P.words.forEach(function(o){const c=el('div','vc');
+    const sc=SRC[o.src]||SRC.genre;
+    const lad=el('div','lad');lad.style.width='18px';lad.style.height='18px';
+    lad.innerHTML=ladderArt(P.ladder,o.lvl);c.appendChild(lad);
+    c.appendChild(el('span',null,o.w));
+    const tg=el('span','tag',sc[0]);tg.style.background=sc[2];tg.style.color=sc[1];
+    tg.style.fontSize='9.5px';tg.style.fontWeight='800';tg.style.padding='1px 5px';tg.style.borderRadius='4px';
+    c.appendChild(tg);
+    const md=MOODS.filter(m=>m[0]===(o.mood||'mid'))[0];
+    const mb=el('button',null,md[1].replace('for the ',''));
+    mb.style.cssText='background:none;border:1.5px solid '+md[2]+';color:'+md[2]
+      +';font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;'
+      +'border-radius:99px;padding:2px 7px;cursor:pointer';
+    mb.title='Which part of the arc does this word serve?';
+    mb.onclick=function(){const i=MOODS.findIndex(m=>m[0]===(o.mood||'mid'));
+      o.mood=MOODS[(i+1)%3][0];render();};
+    c.appendChild(mb);
+    const x=el('button',null,'✕');x.onclick=function(){P.words=P.words.filter(z=>z.w!==o.w);render();};
+    c.appendChild(x);ve.appendChild(c);});
+  g.appendChild(ve);
+  g.appendChild(el('h4',null,'The climb'));
+  g.appendChild(el('div','sub','How ambition is drawn on a word. Defaulted by year group, never fixed to it — '
+    +'a Reception class may want the flower where a Year 2 class wants the monkey.'));
+  const lr=el('div','vocedit');
+  LADDERS.forEach(function(k){
+    const b=el('button','rt'+(P.ladder===k?' on':''));
+    b.style.display='inline-flex';b.style.alignItems='center';b.style.gap='7px';
+    const holder=el('div','lvlrow');
+    [0,1,2].forEach(function(l){const d=el('div','lad');d.style.width='20px';d.style.height='20px';
+      d.innerHTML=ladderArt(k,l);holder.appendChild(d);});
+    b.appendChild(holder);b.appendChild(el('span',null,k));
+    b.onclick=function(){P.ladder=k;render();};
+    lr.appendChild(b);});
+  g.appendChild(lr);
+  if(P.plan.shape&&P.plan.rows.some(r=>r.mood)){
+    g.appendChild(el('h4',null,'The shape this plan expects'));
+    g.appendChild(el('div','sub','A story mountain is an emotional shape before it is a list of boxes. '
+      +'These are the moods each part usually runs at — Red Riding Hood and Burger Boy both open upbeat '
+      +'and darken. Seed the target from it and then argue with it: a text that subverts the shape is '
+      +'the more interesting lesson, and overriding a box is how you say so.'));
+    const sr=el('div','vocedit');
+    P.plan.rows.forEach(function(r){
+      const md=MOODS.filter(m=>m[0]===(r.mood||'mid'))[0];
+      const c=el('div','vc');
+      c.appendChild(el('span',null,r.box));
+      const mb=el('button',null,md[1].replace('for the ',''));
+      mb.style.cssText='background:none;border:1.5px solid '+md[2]+';color:'+md[2]
+        +';font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;'
+        +'border-radius:99px;padding:2px 7px;cursor:pointer';
+      mb.onclick=function(){const i=MOODS.findIndex(m=>m[0]===(r.mood||'mid'));
+        r.mood=MOODS[(i+1)%3][0];render();};
+      c.appendChild(mb);sr.appendChild(c);});
+    g.appendChild(sr);
+    const sb=el('button','rt','Seed the target line from this shape');
+    sb.onclick=function(){
+      const tgt=P.tracks.filter(t=>t&&t.kind==='target')[0];
+      if(!tgt){toast('No target line yet — mark a line as target under The lines first.');return;}
+      const cap=(P.steps-1)/2;
+      let set=0;
+      P.plan.rows.forEach(function(r){
+        if(!r.mood)return;
+        const v=Math.max(-cap,Math.min(cap,MOODVAL[r.mood]));
+        beatsIn(r.id).forEach(function(b){b.v[tgt.id]=v;set++;});});
+      toast(set?('Target set on '+set+' beat'+(set===1?'':'s')+' from the plan’s shape. Now argue with it.')
+               :'No beats to set a target on yet.');
+      render();};
+    g.appendChild(sb);
+  }
+  if(P.moments.length){
+    g.appendChild(el('h4',null,'Moments'));
+    g.appendChild(el('div','sub','A flag is not a sixth level — the scale tops out at 5. It is an event, and it '
+      +'carries its context: which box, which text, which stage of the lesson, and who, if you said. '
+      +'That is what a report can be written FROM.'));
+    const mb=el('div','momentbox');
+    P.moments.slice().reverse().forEach(function(m){
+      const d=el('div','moment');
+      d.innerHTML='<b>“'+m.w+'”</b> — scored '+m.score+', beyond the scale'
+        +'<span class="ctx">'+(m.who?m.who+' · ':'the class · ')+(m.box?m.box+' · ':'')
+        +m.unit+' · '+m.plan+' · at '+STAGES.filter(z=>z[0]===m.stage)[0][1]+'</span>';
+      mb.appendChild(d);});
+    const ins=el('div','insert');
+    const m0=P.moments[P.moments.length-1];
+    ins.innerHTML='<div class="insertlab">what a report can say</div>'
+      +'“During our traditional tales unit, '+(m0.who||'the class')+' offered <i>'+m0.w+'</i> '
+      +(m0.box?'at the '+m0.box+' ':'')+'— a word beyond what the year group is expected to reach for.”'
+      +'<div style="margin-top:9px"><span class="rhet">“'+(m0.who||'The class')
+      +' has made good progress in writing this term.”</span></div>';
+    mb.appendChild(ins);
+    g.appendChild(mb);
+  }
+  g.appendChild(el('h4',null,'The room'));
+  g.appendChild(el('div','sub','Not everyone using this is standing at a board. A teaching assistant, '
+    +'an SEN group or an EAL group works with three or four children round a screen at arm’s length — '
+    +'closer, smaller, and with the children’s hands ON it, which is the opposite of the whole-class case. '
+    +'One setting, because a distance is one decision and not eleven.'));
+  const rr2=el('div','vocedit');
+  [['board','Whole class','a wall, three metres, thirty children — big type, big targets, hands off'],
+   ['table','Small group','a screen at arm’s length, three or four children — smaller, denser, hands on']]
+   .forEach(function(r){
+    const b=el('button','rt'+(P.room===r[0]?' on':''));
+    b.style.cssText='text-align:left;display:block;width:100%;margin:0 0 6px;padding:9px 11px';
+    b.innerHTML='<span style="font-weight:800">'+r[1]+'</span><span style="display:block;font-size:11.5px;'
+      +'opacity:.75;margin-top:2px">'+r[2]+'</span>';
+    b.onclick=function(){
+      P.room=r[0];
+      /* a small group is the case where children SHOULD be able to touch it */
+      if(r[0]==='table'&&P.lock){P.lock=false;toast('Small group — board unlocked, because their hands are the point.');}
+      else toast(r[1]+' — sizes and targets follow.');
+      render();};
+    rr2.appendChild(b);});
+  g.appendChild(rr2);
+  g.appendChild(el('h4',null,'This map, and this class'));
+  g.appendChild(el('div','sub','The plan, the beats, their pictures and the words are the RESOURCE — you built '
+    +'it once and it should outlive the class that used it. The handwriting and the plotted draft are '
+    +'THIS class’s work. Reset clears the second and keeps the first.'));
+  const cw=classWork();
+  const rr=el('div','vocedit');
+  const rb=el('button','rt del','Reset for a new class');
+  rb.onclick=function(){
+    if(!cw.any){toast('Nothing to clear — this map is already just the resource.');return;}
+    P.strokes={};P.beats.forEach(function(b){
+      P.tracks.forEach(function(t){if(t&&t.kind!=='target')delete b.v[t.id];});});
+    P.shown={};P.wordsHidden=false;
+    toast('Cleared '+cw.say+'. Kept the plan, '+P.beats.length+' beats, their pictures, the target line and the words.');
+    render();};
+  rr.appendChild(rb);
+  const sv=el('button','rt','Save as…');
+  sv.onclick=function(){
+    const nm=(P.saveName||'')||'Year 4R';
+    P.saves=P.saves||[];
+    P.saves.push({name:nm+' · '+(P.saves.length+1),beats:P.beats.length,
+      wrote:Object.keys(P.strokes).filter(k=>(P.strokes[k]||[]).length).length});
+    toast('Saved “'+P.saves[P.saves.length-1].name+'”. In the app this sits with the deck, per class list.');
+    render();};
+  rr.appendChild(sv);
+  g.appendChild(rr);
+  g.appendChild(el('div','sub',cw.any?('This class has '+cw.say+'.'):'This map holds no class work yet.'));
+  if(P.saves&&P.saves.length){
+    const sl=el('div','vocedit');
+    P.saves.forEach(function(v){const c=el('div','vc');
+      c.appendChild(el('span',null,v.name+' — '+v.wrote+' box'+(v.wrote===1?'':'es')+' written'));
+      sl.appendChild(c);});
+    g.appendChild(sl);}
+  g.appendChild(el('h4',null,'The lines'));
+  g.appendChild(el('div','sub','Name as many as the story has. Three CHANNELS is the limit, because three widely '
+    +'separated colours is what a badly calibrated board carries and a fourth is where it stops being readable. '
+    +'Lines sharing a channel take turns: putting one on air steps the other off, so the board never shows four '
+    +'and no line ever changes colour because another was hidden.'
+    +(P.plan.band==='ks1'?' At Reception–Year 2 a line is just a line: target lines start at Years 3–4.'
+      :' A line marked target draws dashed, and the shaded gap between it and the draft is what the writing has to close.')));
+  const CHN=['blue','orange','green'];
+  [0,1,2].forEach(function(ch){
+    const head=el('div');
+    head.style.cssText='font-weight:800;font-size:11px;letter-spacing:.1em;text-transform:uppercase;'
+      +'color:'+RAW[ch]+';margin:9px 0 3px';
+    head.textContent=CHN[ch]+' channel'+(onChannel(ch).length>1?' · '+onChannel(ch).length+' taking turns':'');
+    g.appendChild(head);
+    const tr=el('div','vocedit');
+    onChannel(ch).forEach(function(t){
+      const c=el('div','vc');c.style.color=HUE[ch];
+      const air=el('button','rt'+(t.on?' on':''),t.on?'on air':'off');
+      air.onclick=function(){
+        if(t.on){if(visible().length===1){toast('The last visible line stays.');return;}
+          t.on=false;if(P.armed===t.id){const q=visible()[0];P.armed=q?q.id:null;}}
+        else{const had=liveOn(ch);airLine(t.id);
+          if(had&&had.id!==t.id)toast(t.name+' is on the '+CHN[ch]+' channel — '+had.name+' steps off.');}
+        render();};
+      c.appendChild(air);
+      const nm=el('input','vocadd');nm.value=t.name;nm.style.width='118px';
+      nm.onchange=function(e){const v=e.target.value.slice(0,24);
+        if(v)t.name=v;
+        else{P.tracks=P.tracks.filter(z=>z.id!==t.id);
+          if(P.armed===t.id){const q=visible()[0];P.armed=q?q.id:null;}}
+        render();};
+      c.appendChild(nm);
+      if(P.plan.band!=='ks1'){
+        const kb=el('button','rt'+(t.kind==='target'?' on':''),t.kind==='target'?'target':'actual');
+        kb.onclick=function(){t.kind=(t.kind==='target')?'actual':'target';render();};
+        c.appendChild(kb);}
+      const mv=el('select','vocadd');mv.style.width='92px';
+      mv.appendChild(el('option',null,'move…'));
+      [0,1,2].forEach(function(c2){if(c2!==ch){const o=el('option',null,'→ '+CHN[c2]);o.value=String(c2);mv.appendChild(o);}});
+      mv.onchange=function(e){if(e.target.value===''){return;}
+        t.ch=+e.target.value;if(t.on)airLine(t.id);render();};
+      c.appendChild(mv);
+      tr.appendChild(c);});
+    const add=el('button','rt','+ a line here');
+    add.onclick=function(){
+      P.tracks.push({id:'t'+(P.tracks.length+1)+'_'+ch,name:'new line',on:false,kind:'actual',ch:ch});
+      render();};
+    tr.appendChild(add);
+    g.appendChild(tr);});
+  return g;
+}
+
+/* JS:sheet */
+const FACE_NAME={map:'Text map',box:'Boxing up',graph:'Emotion graph'};
+const BUDGETS=[[1,'1 sheet','A4, one each for the children'],
+               [4,'4 sheets','about A2'],
+               [8,'8 sheets','about A1, for the wall']];
+function sheetEl(){
+  const w=el('div','sheetwrap');
+  w.appendChild(el('h5',null,'Printed sheet · '+FACE_NAME[P.face]));
+  const br=el('div','budrow');
+  BUDGETS.forEach(function(b){
+    const x=el('button','budbtn'+(P.budget===b[0]?' on':''),b[1]+' · '+b[2]);
+    x.onclick=function(){P.budget=b[0];render();
+      setTimeout(function(){$('#sheetHost').scrollIntoView({block:'start'});},20);};
+    br.appendChild(x);});
+  const cur=BUDGETS.filter(b=>b[0]===P.budget)[0];
+  br.appendChild(el('div','budsay',P.budget===1?'one page, nothing to assemble'
+    :cur[0]+' A4 sheets, trimmed and taped — '+cur[2]));
+  w.appendChild(br);
+  const s=el('div','sheet');
+  s.appendChild(el('h3',null,P.plan.name));
+  s.appendChild(el('div','sm',FACE_NAME[P.face]+' — Year 4 · Traditional tales'));
+  if(P.face==='box'){
+    rowsOf().forEach(function(r){
+      const row=el('div','srow');
+      const bx=el('div','sbx',r.box);bx.appendChild(el('i',null,r.hint));row.appendChild(bx);
+      const md=el('div');
+      beatsIn(r.id).forEach(function(b){const c=el('div','schip');
+        const t=el('div','st'+(b.img?'':' g'));if(b.img)t.innerHTML=artOf(b.img);
+        c.appendChild(t);c.appendChild(el('div',null,b.t||'—'));md.appendChild(c);});
+      row.appendChild(md);
+      const ou=el('div');
+      const st=P.strokes[r.id]||[];
+      if(st.length){const gg=el('div');
+        gg.innerHTML='<svg viewBox="0 0 560 140" style="width:100%;height:auto;display:block">'+st.map(strokePath).join('')+'</svg>';
+        ou.appendChild(gg);}
+      else{
+        /* Ruled from the handwriting pitch, never from however tall the Model column
+           happened to be: a two-chip box and a six-chip box get the same rules. */
+        const rs=ruleSet();
+        for(let i=0;i<P.lines;i++){
+          const ln=el('div','rules');
+          ln.style.height=Math.round(rs.pitch*0.62)+'px';
+          if(rs.guide)ln.style.backgroundImage='linear-gradient(to bottom,transparent 52%,#e6e6e6 52%,#e6e6e6 calc(52% + 1px),transparent calc(52% + 1px))';
+          ou.appendChild(ln);}
+      }
+      row.appendChild(ou);s.appendChild(row);});
+  }else if(P.face==='map'){
+    rowsOf().forEach(function(r){
+      const row=el('div','srow');row.style.gridTemplateColumns='1fr 3.4fr';
+      row.appendChild(el('div','sbx',r.box));
+      const md=el('div');md.style.display='flex';md.style.gap='9px';md.style.flexWrap='wrap';
+      beatsIn(r.id).forEach(function(b){
+        const c=el('div');c.style.width='100px';
+        const t=el('div','st'+(b.img?'':' g'));t.style.width='100px';t.style.height='72px';t.style.flex='none';
+        if(b.img)t.innerHTML=artOf(b.img);
+        c.appendChild(t);
+        const tx=el('div',null,b.t||'—');tx.style.fontSize='11px';tx.style.lineHeight='1.28';tx.style.marginTop='4px';c.appendChild(tx);
+        if(b.vocab.length){const v=el('div',null,b.vocab.join(' · '));v.style.fontSize='10px';v.style.color='#a13b4b';c.appendChild(v);}
+        md.appendChild(c);});
+      row.appendChild(md);s.appendChild(row);});
+    if(P.moments.length){
+      const mh=el('div');mh.style.cssText='margin-top:14px;border-top:1px solid #ddd;padding-top:10px';
+      mh.appendChild(el('div',null,'Words this class reached beyond for')).style.cssText=
+        'font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#777;margin-bottom:6px';
+      P.moments.forEach(function(m){
+        const r=el('div');r.style.cssText='font-size:13px;margin-bottom:3px';
+        r.innerHTML='<b>'+m.w+'</b> — '+(m.who||'the class')+(m.box?', at the '+m.box:'');
+        mh.appendChild(r);});
+      s.appendChild(mh);
+    }
+  }else{
+    const gg=el('div');gg.innerHTML=graphSVG({});s.appendChild(gg);
+    const key=el('div');key.style.fontSize='12px';key.style.marginTop='9px';
+    key.textContent='Key: '+visible().map(t=>SHAPE[slotOf(t.id)]+' = '+t.name).join(' · ');
+    s.appendChild(key);}
+  if(P.budget>1){
+    const cols=P.budget===4?2:(P.budget===8?4:1), rows=P.budget===4?2:2;
+    const t=el('div','tiled');
+    t.appendChild(s);
+    const cuts=el('div','cuts');
+    for(let i=1;i<cols;i++){const v=el('i');v.style.left=(i*100/cols)+'%';v.style.top='0';
+      v.style.width='2px';v.style.height='100%';cuts.appendChild(v);}
+    for(let j=1;j<rows;j++){const h=el('i');h.style.top=(j*100/rows)+'%';h.style.left='0';
+      h.style.height='2px';h.style.width='100%';cuts.appendChild(h);}
+    t.appendChild(cuts);
+    w.appendChild(t);
+    w.appendChild(el('div','tilelab','Amber lines are where you cut and tape — '+cols+' across x '+rows+' down'));
+    return w;
+  }
+  w.appendChild(s);return w;
+}
+
+/* JS:wiring */
+document.querySelectorAll('.pill').forEach(function(b){
+  b.onclick=function(){P.face=b.dataset.face;render();};});
+$('#lockBtn').onclick=function(){P.lock=!P.lock;if(P.lock)P.open=null;render();
+  toast(P.lock?'Board locked — a hand on it changes nothing. Yours to unlock.'
+              :'Board open — a child can come up and use it.');};
+$('#coverBtn').onclick=function(){P.cover[P.face]=!P.cover[P.face];render();};
+$('#printBtn').onclick=function(){P.sheet=!P.sheet;if(P.sheet&&!P.budget)P.budget=1;render();
+  if(P.sheet)setTimeout(function(){$('#sheetHost').scrollIntoView({block:'start'});},40);};
+$('#gearBtn').onclick=function(){
+  if(locked()){toast('The board is locked — settings are closed too.');return;}
+  P.gear=!P.gear;render();};
+$('#dupBtn').onclick=function(){toast('Duplicate makes a second whole map, for comparing two maps. It is not the innovation route — that is Boxing up.');};
+$('#tType').onclick=function(){P.face='map';P.gear=false;P.lock=false;render();
+  const r=rowsOf()[0];newBeat(r.id);
+  toast('Type what the class just said, then press Enter to go straight into the next beat.');};
+$('#tBox').onclick=function(){P.face='box';P.gear=false;render();
+  toast('Write in a box with your mouse or finger. The graph is the shape you are building towards.');};
+$('#tGap').onclick=function(){P.face='graph';P.gear=false;P.open=null;render();
+  toast('Solid line is our draft. Dashed is where we want it. The shaded band is the writing still to do — box by box, on both other faces.');};
+$('#tGraph').onclick=function(){P.face='graph';P.gear=false;render();
+  toast('Katie is armed. Tap “the story” to arm that instead, then tap a beat and a step chip.');};
+$('#tStage').onclick=function(){P.stage='yours';P.lock=true;P.gear=false;P.open=null;render();
+  toast('Stage is Over-to-you and you have locked the board. Nothing moves. Unlock to hand it to a child.');};
+$('#tWall').onclick=function(){P.face='box';P.sheet=true;P.budget=8;P.gear=false;render();
+  setTimeout(function(){$('#sheetHost').scrollIntoView({block:'start'});},40);
+  toast('The class\u2019s modelled write, eight sheets, about A1 \u2014 straight onto the working wall.');};
+$('#tPrint').onclick=function(){P.sheet=true;P.budget=1;render();
+  setTimeout(function(){$('#sheetHost').scrollIntoView({block:'start'});},40);};
+$('#tReset').onclick=function(){seed();render();toast('Back to the start.');};
+render();
+</script>

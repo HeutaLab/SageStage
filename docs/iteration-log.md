@@ -4221,3 +4221,162 @@ perpetual-versus-annual question resolved as a split — teachers buy once and
 own it, departments rent seats because reassignment is the thing they are
 actually buying. Export outlives the licence in both worlds. The decisions
 stay formally open in §11; they just have shapes now.
+
+## 2026-07-30 (story map) — What a mock knew that a spec could not tell him
+
+The story map was specified at length before anything was built —
+[story-map-design.md](story-map-design.md), 1,833 lines after nine agreed
+insertions, every seam cited to a file and a line. Glenn read it and said the
+truest thing anyone said all day: *"I still have no idea what this is going to
+look like. We've spent hours on what seems like nothing."*
+
+He was right, and this project already knew it. The sentence builder reached
+V0.1 by revving a throwaway playable mock nine times against live reactions
+rather than by editing the app. That lesson was in the log and got ignored on
+the way past. So: a throwaway mock, `.sm-mock.html`, and the design moved at
+about ten times the speed for the rest of the day.
+
+Nothing below came out of a review. All of it came out of him using the thing.
+
+### The typed cell was the wrong object
+
+The first mock had boxing-up as two columns of textareas, faithful to the spec.
+He rejected it on sight: *"the typed text in the boxing up tab doesn't feel
+authentic."* The real act is a teacher **scribing by hand** while the class
+ad-libs, which is why modelled writing exists in this app at all — print exists
+so no easel paper gets torn off and walled. Boxing up is now a ruled page with
+a pen, and the handwriting prints as written.
+
+Then the correction that mattered more. Reading *"the area for students to
+extend their learning"*, I built a face children could edit — and he stopped it:
+**children do not touch the board.** The board is for modelling; the practice
+happens on the children's own drywipe boards, replicating what was modelled,
+*when the teacher releases it.* §7.10's refusal of a child-practice face was
+right all along. What was missing was not a child surface but the hand-off.
+
+So gradual release became a first-class state, the same three the sentence
+builder ships: **Model · Together · Over-to-you**, in a band that physically
+recolours the widget.
+
+### The lock is not the stage
+
+The obvious next move was to lock the board at Over-to-you. He stopped that too:
+*"in certain instances, yes they can. And should be allowed to… but at a
+teacher's discretion."* So the **stage** is the lesson's stance and the **lock**
+is whether the board takes a hand at all, and the stage never moves the lock.
+A child can be sent up to plot a dot at Over-to-you; a stray hand can be shut
+out mid-model. Both directions verified.
+
+### A word has three independent properties, and conflating them was the bug
+
+Words started as bare strings from the genre pack. They ended as objects with a
+**source**, a **score** and a **mood**, and the day's sharpest exchanges were
+about keeping those three apart.
+
+- **Source** — pack · bank · HFW · **E** · **S**. Board-facing tags for the two
+  that name a need are single letters on purpose: *a tag that names a need names
+  the child who has it*, on a surface thirty children read. Same mistake as the
+  tick that printed a false claim about children on a wall, in a different
+  costume.
+- **Mood** — which part of the arc a word serves. He caught the need for it by
+  eye: he set a beat to +2 and found the bank held nothing but dread words,
+  because a narrative pack is stocked for the trough of the story mountain. The
+  bank now groups by lifts, level and falls, and **diagnoses its own shortfall
+  against the plan** — *"Opening, Resolution and Ending run up and the bank holds
+  2 words for that."*
+- **Score** — diction, 1–5, and **nothing to do with intensity of feeling.** I
+  had composed mood × score into a signed "reach" and he corrected it:
+  *"wistful would be a good word for scoring at +2 or +3 because of how seldom
+  it's used in primary school writing."* The composition was retired. Score
+  measures rarity; mood measures direction; only mood decides counterpoint.
+
+He also pushed back on my refusing to ship default moods at all — *"Burger Boy
+and Red Riding Hood are both upbeat at the start, only later are they less so"*
+— and he was right. A word's valence is lexical, not a contested judgement, and
+refusing to ship it made every teacher hand-tag fourteen words for nothing. The
+rule I was over-applying protects against verdicts on **the class's writing**,
+not against dictionary facts. Packs now arrive tagged; the override is editorial.
+
+That same observation produced the better feature: because setting and character
+mood generally co-move, **a plan carries the mood each part usually runs at**,
+and the gear can seed the target line from the plan's own shape. A story mountain
+is an emotional shape before it is a list of boxes. Seeded, then argued with.
+
+### Counterpoint, and how to gauge it
+
+Setting the wrong tone deliberately is a device with a name. *"Cormack McCarthy's
+The Road isn't all jolly and the characters in the subway free and easy."* So the
+words re-order to the beat's tone — **for this tone**, neutral, **against it — on
+purpose** — nothing hidden, nothing called wrong, and an attached word that cuts
+against says so as a craft note rather than a warning. The rule immediately
+caught a counterpoint sitting in the seed data nobody had noticed: the Ending at
++1 with *hesitated* on it, which is exactly right for a character who is safe and
+still wary.
+
+Counterpoint is measured against **the story line**, fixed at channel order,
+never against whatever is armed — because in The Road the story is bleak and it
+is the *characters* who joke.
+
+### Three colours, not three lines
+
+Devil's advocate, Year 6: two hero characters plus a protagonist, and the story
+— four lines against a cap of three. The cap was on the wrong noun. Three
+**channels** is the real constraint, because three widely-separated saturated
+hues is what a badly calibrated board carries; the number of **lines** never
+needed a limit. Lines share a channel and take turns, so the board never shows
+four and no line changes colour because another was hidden. His own framing:
+*"the two main characters are the main orange line."*
+
+### The exceptional word is an event, not a sixth level
+
+The scale tops out at 5. **★ beyond** is separate, and flagging one records a
+**moment** carrying its context — which box, which text, which stage, and who,
+if the teacher says. His reason is the one that matters: these are *"insertion
+points in naturally built reports giving authentic data not just rhetorical
+data."* The gear shows what a moment becomes beside the stock sentence it
+replaces. Moments print on the wall sheet.
+
+This is the first time the story map holds anything child-level, and it is
+deliberate, optional, and defaults to "the class". It wants deciding in the spec
+rather than by accident, and the record wants to belong to the assessment
+suite's evidence pipeline rather than to `w.props`.
+
+### And two things about who this is for
+
+Print gained **sheet budgets** — one A4 each for the children, or eight sheets
+at about A1 for the wall — because a whole-class modelled write belongs on the
+working wall, which is the app's existing promise: saved, reprintable
+wall-sized, and A4 for children 1:1.
+
+Writing rules are **banded**: EYFS block letters at 52px with a dashed midline
+to reach for, down to nine narrow lines at Years 5–6, because the story gets
+longer as the letters get smaller. That also retired a review finding — the
+printed ruling was measuring itself off the Model column's height, so a two-chip
+box got two lines and a six-chip box got many.
+
+And the audience is wider than a class teacher at a board. Teaching assistants,
+SEN and EAL specialists work at arm's length with three or four children **whose
+hands should be on it**. One `room` setting carries the whole distance problem —
+type, targets, card width, density — and choosing the small group unlocks the
+board, because there the hands are the point rather than the hazard.
+
+### The warning that belongs in the teacher guide
+
+His, near verbatim, and it should open that document: **this is a teaching tool,
+not a painting-by-numbers story maker.** Stacked carelessly — plan seeds boxes,
+plan seeds target, graph shows a gap, words sorted by tone — the design becomes a
+recipe for thirty identical competent stories with no writer in them. What
+resists it is already here: the model text is empty in every pack, nothing is
+ever marked done, counterpoint is a named choice, and words are re-ordered but
+never filtered. What does not resist it is the diction score, so the gear now
+says out loud that **it scores the word and never the writing — a 5 in the wrong
+place is worse than a 2 in the right one.**
+
+### Where this leaves the spec
+
+Behind. `story-map-design.md` describes typed cells, no stages, no lock, no
+scored words, no channels and no moments. The mock is the design authority for
+behaviour now; the spec's remaining value is its seams — the file:line citations,
+the caps table, the print contract, the hazards. Folding one into the other is
+the next piece of work, and it should keep the spec's constraints and take the
+mock's decisions, not the reverse.
