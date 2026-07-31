@@ -13162,6 +13162,7 @@
     TOOLS.push(widgetTool('sentencebuilder', 'Sentence builder', 'english'));
     TOOLS.push(widgetTool('modelwrite', 'Modelled writing', 'english'));
     if (window.SageEnglishText) TOOLS.push(widgetTool('genretoolkit', 'Genre toolkit', 'english'));
+    if (window.SageEnglishText) TOOLS.push(widgetTool('storymap', 'Story map', 'english'));
   }
   // Boot is the honest moment for the daily copy: it records every unit as the
   // teacher left it yesterday, BEFORE today's lesson can touch it. It has to

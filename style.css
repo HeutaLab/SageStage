@@ -5566,6 +5566,28 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
    the widget's own width (container query, with a plain fallback first) because
    the same list has to read from the back of the room at board size and stay
    legible in a corner at 300px. */
+/* ---- story map ---- */
+.smwidget {
+  /* The board's measured widely-separated set, re-declared because --wb-t1/2/3 are
+     scoped to .wbwidget. Widget-internal literals: never var(--ink), which applyTheme
+     re-declares per widget, and a var() inside a printed SVG string means nothing. */
+  --sm-t1: #1d4ed8;  /* channel 0 · circle */
+  --sm-t2: #ea580c;  /* channel 1 · square */
+  --sm-t3: #047857;  /* channel 2 · triangle */
+  position: relative;
+}
+.sm-face {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow: auto;
+}
+/* .tclock-quick is wrap + centre, and a shrink-wrapped row cannot pin anything to an
+   edge — .gt-quick's override, verbatim, for the same reason. */
+.sm-quick { display: flex; flex-direction: column; align-items: stretch; gap: 5px; }
+
 .gtwidget { position: relative; }
 .gt-face {
   container-type: inline-size;

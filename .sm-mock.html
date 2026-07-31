@@ -274,8 +274,6 @@ svg.wsvg{width:100%;height:auto;display:block;touch-action:none;cursor:crosshair
 .bmeta span.cp{background:#ede4fd;color:#5b21b6}
 .rd{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:4px;margin-left:5px}
 .rd.serves{background:var(--acc-soft);color:var(--acc-ink)}
-.rd.short{background:#fdf0dc;color:#8a4d09}
-.rd.strong{background:#e6f1fb;color:#175a94}
 .rd.counter{background:#ede4fd;color:#5b21b6}
 .rd.level{background:#eceff1;color:#4b5563}
 .gaugekey{font-size:11.5px;color:var(--ink-faint);margin-top:7px;line-height:1.5}
@@ -554,6 +552,10 @@ const LADDER_BAND={ks1:'sunflower',lks2:'rocket',uks2:'crosshair'};
    score says how ambitious the language is. Conflating them was the error. */
 const LVLNAME=['everyday','useful','good','strong','exceptional'];
 const LVLMAX=4;
+/* One number, named once. Three copies of a literal 6 is how a cap and the sentence
+   that speaks it drift apart — and the graph's slot pitch has to agree with it, or a
+   band re-spaces itself the moment a beat is added. */
+const BEATCAP=6;
 /* A flag is not a sixth level. The scale is 1-5 and it has a top; "beyond" is a
    separate mark for the word a class produces once a term. It is kept separate
    because it is not a measurement — it is an EVENT, and an event carries context a
@@ -579,20 +581,31 @@ const STAGES=[['model','Model','teacher drives, thinking aloud'],
               ['yours','Over-to-you','their whiteboards now']];
 
 /* JS:state */
-let P, bn=0, focusBeat=null;
+let P, bn=0, focusBeat=null, penRow=null;
+/* One id space, minted never counted — a length-derived id collides after a delete and
+   two lines sharing an id merge every plotted value on every beat. */
+const uid=()=>Math.random().toString(36).slice(2,10);
 function seed(){
   const pl=JSON.parse(JSON.stringify(PLANS.lks2));
-  const rows=pl.rows.map((r,i)=>({id:'r'+i,box:r[0],hint:r[1],mood:r[2]||null,edited:false}));
+  /* §6 refuses matching rows, beats, cells or values by array position. A positional
+     id IS that match, deferred: swap the plan and 'r2' binds the Problem's handwriting
+     to the new plan's third box. Minted, never counted. */
+  const rows=pl.rows.map(r=>({id:uid(),box:r[0],hint:r[1],mood:r[2]||null,edited:false}));
+  /* Seed data has to reference the ids that were actually minted. Hardcoding 'r0' here
+     while rows mint uid()s made every beat an orphan — which the tray survived silently,
+     exactly as designed, and which is precisely why the tray must never be the only thing
+     that notices. */
+  const R=i=>rows[i].id;
   const B=(row,t,img,v,voc,note)=>({id:'b'+(++bn),row:row,t:t,img:img,v:v||{},vocab:voc||[],note:note||''});
   P={plan:Object.assign({},pl,{rows:rows}),
-    beats:[B('r0','Katie sets off with a basket for Grandma','basket',{t1:1,t2:2}),
-      B('r1','The wolf watches from the trees','trees',{t1:0,t2:-1},['glanced']),
-      B('r1','He asks her where she is going','wolf',{t1:0,t2:-1}),
-      B('r1','She steps off the path to pick flowers','flowers',{t1:-1,t2:-2}),
-      B('r2','The path behind her has gone','path',{t1:-1,t2:-3},['frantic','trembling'],'Our draft is flat here — it should be the worst moment'),
-      B('r2','The wolf reaches the cottage first','cottage',{t1:-1,t2:-3}),
-      B('r3','The woodcutter hears her shout','axe',{t1:0,t2:1},['edged']),
-      B('r4','She never leaves the path again','sun',{t1:1,t2:2},['hesitated'])],
+    beats:[B(R(0),'Katie sets off with a basket for Grandma','basket',{t1:1,t2:2}),
+      B(R(1),'The wolf watches from the trees','trees',{t1:0,t2:-1},['glanced']),
+      B(R(1),'He asks her where she is going','wolf',{t1:0,t2:-1}),
+      B(R(1),'She steps off the path to pick flowers','flowers',{t1:-1,t2:-2}),
+      B(R(2),'The path behind her has gone','path',{t1:-1,t2:-3},['frantic','trembling'],'Our draft is flat here — it should be the worst moment'),
+      B(R(2),'The wolf reaches the cottage first','cottage',{t1:-1,t2:-3}),
+      B(R(3),'The woodcutter hears her shout','axe',{t1:0,t2:1},['edged']),
+      B(R(4),'She never leaves the path again','sun',{t1:1,t2:2},['hesitated'])],
     /* A track is a line, and a line is either where the writing IS or where we
        want it to GET TO. Same axis, different claim. KS2 and up: at ks1 a target
        line is noise, so the gear hides the toggle there. */
@@ -712,7 +725,7 @@ function mapFace(){
     const list=beatsIn(r.id);
     const bs=el('div','beats');
     list.forEach(b=>bs.appendChild(beatEl(b)));
-    if(list.length>=6){
+    if(list.length>=BEATCAP){
       bs.appendChild(el('div','capnote',r.box+' has '+list.length+' beats — the next one wants a box of its own.'));
     }else if(!locked()){
       const a=el('button','addbeat','+');a.title='Add a beat to '+r.box;
@@ -725,7 +738,7 @@ function mapFace(){
 }
 function newBeat(rowId){
   const list=beatsIn(rowId);
-  if(list.length>=6){toast('That box already holds six beats — the next one wants a box of its own.');return null;}
+  if(list.length>=BEATCAP){toast('That box already holds '+BEATCAP+' beats — the next one wants a box of its own.');return null;}
   const nb={id:'b'+(++bn),row:rowId,t:'',img:null,v:{},vocab:[],note:''};
   P.beats.push(nb);P.open=nb.id;focusBeat=nb.id;render();
   return nb;
@@ -781,7 +794,7 @@ function panelEl(b){
   inp.onkeydown=function(e){
     if(e.key==='Enter'){e.preventDefault();
       const list=beatsIn(b.row);
-      if(list.length>=6){toast(P.plan.rows.filter(r=>r.id===b.row)[0].box+' has six beats — the next one wants a box of its own.');render();return;}
+      if(list.length>=BEATCAP){toast(P.plan.rows.filter(r=>r.id===b.row)[0].box+' has '+BEATCAP+' beats — the next one wants a box of its own.');render();return;}
       newBeat(b.row);
     }else if(e.key==='Escape'){e.preventDefault();P.open=null;render();}
   };
@@ -845,8 +858,7 @@ function panelEl(b){
       else{b.vocab.push(w);
         const r2=readWord(o,fv);
         if(r2&&r2.k==='counter')toast('“'+w+'” cuts against '+(sl?sl.name:'the story')+' at '+(fv>0?'+':'')+fv+' — counterpoint, and a choice.');
-        else if(r2&&r2.k==='short')toast('“'+w+'” is '+r2.say+' of what this beat asks for.');
-        else if(r2&&r2.k==='strong')toast('“'+w+'” is '+r2.say+' than this beat asks for.');}
+}
       render();};
     return c;
   }
@@ -871,8 +883,9 @@ function panelEl(b){
 
   if(fv!=null){
     const k=el('div','gaugekey');
-    k.innerHTML='A word’s reach is its direction and its climb together — <i>sad</i> reaches −1, '
-      +'<i>desolate</i> reaches −3. Measured against '+(sl?sl.name:'the story')+', not against the armed line.';
+    k.innerHTML='Direction only: a word either serves this beat’s tone, sits level, or cuts '
+      +'against it. Measured against <b>'+xmlEsc(sl?sl.name:'the story')+'</b>, never against the armed line. '
+      +'Its score is a separate axis and says nothing about fit.';
     p.appendChild(k);}
   p.appendChild(el('div','plab','A note, if it earns one'));
   const note=el('input','noteline');note.value=b.note;note.maxLength=140;
@@ -1064,7 +1077,10 @@ function wordRow(words){
       if(hid){P.shown[o.w]=true;render();return;}
       /* tapping an uncovered word climbs it: ok → good → amazing. A claim about the
          WORD, teacher-driven, never about a child. */
-      o.lvl=(o.lvl+1)%(LVLMAX+1);render();
+      /* Clamps at the top rather than wrapping: a child standing at the board turning a
+         5 back into a 1 is destruction with no undo and a cheerful toast. */
+      if(o.lvl>=LVLMAX){toast('“'+o.w+'” is already '+LVLNAME[LVLMAX]+'. Lower it in the gear.');return;}
+      o.lvl++;render();
       toast('“'+o.w+'” scored '+(o.lvl+1)+' — '+LVLNAME[o.lvl]+'.');};
     list.appendChild(c);});
   return list;
@@ -1153,7 +1169,7 @@ function strokePath(st){
 }
 function ruleSet(){return RULES[P.rule]||RULES.lks2;}
 function writeArea(r){
-  const w=el('div','warea'+(P.open===r.id?' sel':''));
+  const w=el('div','warea'+(penRow===r.id?' sel':''));
   const rs=ruleSet(), pitch=rs.pitch, W=560;
   const H=pitch*P.lines+pitch*0.35;      /* room for the last descender */
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -1186,7 +1202,10 @@ function writeArea(r){
     if(locked()){toast('The board is locked. Unlock it to write, or to hand the pen over.');return;}
     if(P.cover.box){toast('Cover is on — the writing is hidden.');return;}
     e.preventDefault();
-    P.open=r.id;
+    /* §5.2: `open` holds at most one BEAT id. In the app both ids are D.uid(), so a row
+       id parked here is indistinguishable from a beat id and a moment silently records
+       box:null. The pen's current row is module-local, never props. */
+    penRow=r.id;
     try{svg.setPointerCapture(e.pointerId);}catch(_){}
     const c=pt(e);
     if(P.tool==='eraser'){erase(r,c[0],c[1]);paint();return;}
@@ -1262,6 +1281,14 @@ function graphFace(){
     render();};});
   if(P.open){const b=beatById(P.open);if(b)face.appendChild(panelEl(b));}
 }
+/* Box names arrive from imported pack files and beat text is typed at the board, and
+   both are concatenated into an SVG string that is then assigned with innerHTML. Inside
+   foreign content a <foreignObject> hands the parser back to HTML, so this is the same
+   injection class the template rail was fixed for this morning. Escape at the door. */
+function xmlEsc(v){return String(v==null?'':v)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;')
+  .replace(/[\u0000-\u001f]/g,'');}
 function graphSVG(o){
   const compact=!!o.compact;
   const W=1000,H=compact?200:440,padL=compact?58:126,padR=28,padT=16,padB=compact?42:98;
@@ -1269,7 +1296,10 @@ function graphSVG(o){
   const zero=padT+(H-padT-padB)/2, half=(H-padT-padB)/2;
   function yOf(v){return zero-(v/((P.steps-1)/2))*half;}
   const D=compact?12:18, R=compact?5.5:8.5;
-  function bx(ri,bi,n,slot){return padL+ri*bw+(bw/(n+1))*(bi+1)+(slot-1)*D;}
+  /* §5.1 "no band ever re-spaces itself" and §7.7 "a dot's position is a pure function
+     of (beat, value, slot)". Dividing by the live count broke both: a fifth beat moved the
+     four the class was already reading. Pitch from the CAP, so a band's slots are fixed. */
+  function bx(ri,bi,n,slot){return padL+ri*bw+(bw/(BEATCAP+1))*(bi+1)+(slot-1)*D;}
   const at=armedTrack(), armed=at?at.id:null, aslot=at?slotOf(at.id):0;
   let s='<svg class="graph" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Emotion graph">';
   s+='<rect width="'+W+'" height="'+H+'" fill="#fff" rx="9"/>';
@@ -1284,7 +1314,7 @@ function graphSVG(o){
     if(ri)s+='<line x1="'+(padL+ri*bw)+'" y1="'+padT+'" x2="'+(padL+ri*bw)+'" y2="'+(H-padB)+'" stroke="#e9eeed"/>';
     if(!P.cover.graph||compact)
       s+='<text x="'+(padL+ri*bw+bw/2)+'" y="'+(H-padB+(compact?21:28))+'" text-anchor="middle" font-size="'+(compact?11:13.5)
-        +'" font-weight="800" letter-spacing="0.4" font-family="system-ui" fill="#0f766e">'+r.box.toUpperCase()+'</text>';});
+        +'" font-weight="800" letter-spacing="0.4" font-family="system-ui" fill="#0f766e">'+xmlEsc(r.box.toUpperCase())+'</text>';});
   /* the gap ribbon first, so both lines sit on top of it */
   const act=P.tracks.filter(t=>t&&t.on&&t.kind!=='target')[0];
   const tgt=P.tracks.filter(t=>t&&t.on&&t.kind==='target')[0];
@@ -1313,9 +1343,11 @@ function graphSVG(o){
         const slot=t.ch, x=bx(ri,bi,list.length,slot);
         if(b.v[t.id]!=null)s+=dot(x,yOf(b.v[t.id]),RAW[slot],slot,t.kind==='target',R,b.id);
         else if(t.id===armed)s+=dot(x,zero,RAW[slot],slot,true,R,b.id);});
+      /* the label belongs to the BEAT, not to whichever line happens to be armed —
+         arming slid the class's own reading of the plot sideways */
       if(!P.cover.graph&&!compact)
-        s+='<text x="'+bx(ri,bi,list.length,aslot)+'" y="'+(H-padB+54)+'" text-anchor="middle" font-size="11" font-family="system-ui" fill="#8b9aa2">'
-          +(b.t||'…').slice(0,16)+'</text>';});});
+        s+='<text x="'+bx(ri,bi,list.length,1)+'" y="'+(H-padB+54)+'" text-anchor="middle" font-size="11" font-family="system-ui" fill="#8b9aa2">'
+          +xmlEsc((b.t||'…').slice(0,16))+'</text>';});});
   return s+'</svg>';
 }
 function dot(x,y,col,slot,ghost,R,id){
@@ -1345,7 +1377,11 @@ function gearEl(){
   const g=el('div','gearbox');
   g.appendChild(el('h4',null,'This plan'));
   g.appendChild(el('div','sub','Swappable until the map holds a plotted feeling or writing in a box. On a swap every beat keeps its order and lands in the new plan’s first box — none destroyed.'));
-  const plotted=P.beats.some(b=>Object.keys(b.v).length);
+  /* Only ACTUAL values are this class's work. classWork() already excludes targets and
+     the reset toast already promises to keep the target line — counting it here made one
+     tap of 'seed the target from this shape', a resource act, shut the swap window for
+     good on a map holding no class work at all. */
+  const plotted=P.beats.some(b=>P.tracks.some(t=>t&&t.kind!=='target'&&b.v[t.id]!=null));
   const written=Object.keys(P.strokes).some(k=>(P.strokes[k]||[]).length);
   Object.keys(PLANS).forEach(function(k){
     const pl=PLANS[k];
@@ -1360,10 +1396,16 @@ function gearEl(){
         toast('This map has '+bits.join(' and ')+' on “'+P.plan.name+'”. Re-word or add boxes instead — swapping a plan whole needs an empty map.');
         return;}
       const np=JSON.parse(JSON.stringify(pl));
-      np.rows=np.rows.map(function(r,i){return {id:'r'+i,box:r[0],hint:r[1],mood:r[2]||null,edited:false};});
+      np.rows=np.rows.map(function(r){return {id:uid(),box:r[0],hint:r[1],mood:r[2]||null,edited:false};});
       const n=P.beats.length, first=np.rows[0];
       P.beats.forEach(function(z){z.row=first.id;});
-      P.plan=np;P.steps=np.steps;P.axisWords=AXIS[np.steps].slice();P.strokes={};
+      /* §6's guarantee is that a swap destroys nothing, and §5.7 argues seven agreed axis
+         words are authored work like twelve box names. Keep them when the step count is
+         unchanged; only a change of scale may touch them. */
+      const sameScale=(np.steps===P.steps);
+      P.plan=np;P.steps=np.steps;
+      if(!sameScale)P.axisWords=AXIS[np.steps].slice();
+      P.strokes={};
       if(np.band&&RULE_BAND[np.band]){P.rule=RULE_BAND[np.band];P.lines=RULES[P.rule].lines;}
       if(!np.shape&&P.face==='graph')P.face='map';
       toast(n+' beat'+(n===1?'':'s')+' moved to '+first.box+' — use Move to box to sort '+(n===1?'it':'them')+'.');
@@ -1617,7 +1659,7 @@ function gearEl(){
       tr.appendChild(c);});
     const add=el('button','rt','+ a line here');
     add.onclick=function(){
-      P.tracks.push({id:'t'+(P.tracks.length+1)+'_'+ch,name:'new line',on:false,kind:'actual',ch:ch});
+      P.tracks.push({id:uid(),name:'new line',on:false,kind:'actual',ch:ch});
       render();};
     tr.appendChild(add);
     g.appendChild(tr);});
@@ -1657,7 +1699,12 @@ function sheetEl(){
       const ou=el('div');
       const st=P.strokes[r.id]||[];
       if(st.length){const gg=el('div');
-        gg.innerHTML='<svg viewBox="0 0 560 140" style="width:100%;height:auto;display:block">'+st.map(strokePath).join('')+'</svg>';
+        /* The surface is 560 x (pitch*lines + pitch*0.35) — 139 at the lks2 default, which
+           is why a hardcoded 140 looked right, and 174 at EYFS, 187 at Y5-6. Take the same
+           pass the face used or the class's writing prints at the wrong aspect. */
+        const rs2=ruleSet(), hh=(rs2.pitch*P.lines+rs2.pitch*0.35).toFixed(1);
+        gg.innerHTML='<svg viewBox="0 0 560 '+hh+'" style="width:100%;height:auto;display:block">'
+          +st.map(strokePath).join('')+'</svg>';
         ou.appendChild(gg);}
       else{
         /* Ruled from the handwriting pitch, never from however tall the Model column

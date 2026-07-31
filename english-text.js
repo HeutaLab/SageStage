@@ -835,6 +835,35 @@
     const settingRowOr = (label, control) => (D.settingRow ? D.settingRow(label, control)
       : el('div', { class: 'row' }, el('span', {}, label), control));
 
+    /* ---------------------------------------------------------------- story map
+       The shell. Registered first and deliberately empty, so the widget can be seen
+       to arrive in the real app — in the menu, on a screen, through a save and a
+       reload — before any of the interesting code exists to hide a wiring fault.
+       Behaviour lands per docs/story-map-design.md; the mock at .sm-mock.html is the
+       authority on what it should do. */
+    WIDGETS.storymap = {
+      title: 'Story map', icon: 'storymap', accent: '#c7d2fe', w: 1180, h: 660,
+      defaults: () => ({ face: 'map', stage: 'model', lock: false, room: 'board' }),
+      mount(body, w, api) {
+        body.classList.add('mntray', 'smwidget');
+        const p = w.props;
+        const face = el('div', { class: 'sm-face' });
+        face.append(el('div', { class: 'ct-hint' },
+          'Story map — the shell is wired. Faces land next.'));
+        const bar = el('div', { class: 'sm-quick' });
+        const row = el('div', { class: 'row' });
+        [['map', 'Text map'], ['box', 'Boxing up'], ['graph', 'Emotion graph']].forEach(([id, label]) => {
+          const b = el('button', {
+            class: 'tq-btn' + (p.face === id ? ' active' : ''),
+            onclick: () => { p.face = id; save(); api.refresh(); },
+          }, label);
+          row.append(b);
+        });
+        bar.append(row);
+        body.append(face, bar);
+      },
+    };
+
     WIDGETS.genretoolkit = {
       title: 'Genre toolkit', icon: 'genretoolkit', accent: '#c7d2fe', w: 780, h: 560,
       defaults: () => ({

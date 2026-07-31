@@ -141,6 +141,12 @@
       <path d="M12.8 13.2h4.6"/>
       <path d="M6.8 17.6l1.4 1.4 2.4-2.8"/>
       <path d="M12.8 17.8h4.6"/>`,
+    storymap: `<rect x="3" y="4" width="18" height="16" rx="1.8"/>
+      <path d="M9 4v16M15 4v16" opacity=".45"/>
+      <path d="M5.6 14.6l3.4-4 3 3.4 3-5.2 3 2.6"/>
+      <circle cx="5.6" cy="14.6" r="1.5" ${A}/>
+      <circle cx="12" cy="14" r="1.5" ${A}/>
+      <circle cx="18" cy="11.4" r="1.5" ${A}/>`,
     games: `<path d="M8 7h8a5 5 0 0 1 4.9 6l-.7 3.2a2.7 2.7 0 0 1-4.8 1L14.2 15H9.8l-1.2 2.2a2.7 2.7 0 0 1-4.8-1L3.1 13A5 5 0 0 1 8 7z" ${A}/>
       <path d="M8.4 9.6v3M6.9 11.1h3"/>
       <circle cx="15.2" cy="10" r="1" fill="currentColor" stroke="none"/>
