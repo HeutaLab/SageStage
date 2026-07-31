@@ -1,6 +1,9 @@
 /* Sage Stage — a fully local classroom screen.
-   All data lives in your browser's localStorage. Nothing leaves this device. */
-(function () {
+   Nothing leaves this device. WHERE it is kept is storage.js's business: the
+   browser build keeps it in localStorage, and the desktop build will keep it in a
+   real file under Documents (docs/storage-abstraction-plan.md). This file asks
+   SageStorage and never touches the store itself. */
+(async function () {
   'use strict';
 
   const LS_KEY = 'sage-stage-v1';
@@ -247,11 +250,15 @@
     return data;
   }
 
+  // THE ONE await in this file. Everything below — every listener, every
+  // render — registers after it, and the localStorage backend resolves in
+  // microtasks, so nothing can observe the gap.
+  const persisted = await SageStorage.init();
+
   function load() {
     try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return null;
-      return normalize(JSON.parse(raw));
+      if (!persisted.raw) return null;
+      return normalize(JSON.parse(persisted.raw));
     } catch (e) {
       return null;
     }
@@ -328,39 +335,52 @@
     return { level: probe(HEAD_FLOOR) ? 'nearly full' : 'full', atLeast: 0 };
   }
 
-  let saveTimer = null;
+  // The debounce and the write itself moved into storage.js so the desktop build
+  // can put the same bytes in a file instead. What stayed here is everything that
+  // is about STATE rather than about storage: rolling the snapshot trail, probing
+  // headroom, and deciding what may be surrendered when there is no room left.
   function save() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      // first save of a new calendar day rolls the snapshot trail forward
-      try { dailySnapshots(); } catch (_) { /* armour must never break the save */ }
-      try {
-        const json = JSON.stringify(state);
-        checkHeadroom(json.length);
-        localStorage.setItem(LS_KEY, json);
-        return;
-      } catch (e) { /* fall through and shed ballast */ }
-      // The bin (closed widgets kept so a mis-click is recoverable) can hold a
-      // whole writing unit's pictures. If keeping it would stop the LIVE state
-      // saving, the bin loses — work on the screen always beats work in the
-      // bin. Shed oldest first, then drop it entirely, and only then admit
-      // defeat.
-      while (Array.isArray(state.bin) && state.bin.length) {
-        state.bin.pop();
-        try {
-          localStorage.setItem(LS_KEY, JSON.stringify(state));
-          return;
-        } catch (e2) { /* keep shedding */ }
-      }
-      delete state.bin;
-      try {
-        localStorage.setItem(LS_KEY, JSON.stringify(state));
-        toast('Storage was full — the list of recently closed widgets was cleared to make room.');
-        return;
-      } catch (e3) { /* genuinely out of room */ }
-      toast('⚠️ Could not save — storage is full. Try removing large images or clearing old writing pages.');
-    }, 250);
+    SageStorage.write(serializeState, { shed: shedBallast });
   }
+
+  // Runs at flush time, not at call time, so a hundred mutations in one gesture
+  // cost one stringify of the final state.
+  function serializeState() {
+    // first save of a new calendar day rolls the snapshot trail forward
+    try { dailySnapshots(); } catch (_) { /* armour must never break the save */ }
+    const json = JSON.stringify(state);
+    checkHeadroom(json.length);
+    return json;
+  }
+
+  // The bin (closed widgets kept so a mis-click is recoverable) can hold a whole
+  // writing unit's pictures. If keeping it would stop the LIVE state saving, the
+  // bin loses — work on the screen always beats work in the bin. Shed oldest
+  // first, then drop it entirely, and only then admit defeat.
+  //
+  // It lives here rather than in the backend because it is a judgement about what
+  // the teacher can afford to lose, and the backend has no business holding an
+  // opinion about that. The backend retries after each concession and gives up
+  // when this returns null.
+  function shedBallast() {
+    if (Array.isArray(state.bin) && state.bin.length) {
+      state.bin.pop();
+      return { json: JSON.stringify(state), notice: null };
+    }
+    if (state.bin !== undefined) {
+      delete state.bin;
+      return {
+        json: JSON.stringify(state),
+        notice: 'Storage was full — the list of recently closed widgets was cleared to make room.',
+      };
+    }
+    return null;
+  }
+
+  // The backend reports failure in words the teacher can act on; only this file
+  // knows how to put words on the screen. Both the quota refusal and the
+  // bin-was-cleared notice arrive through here.
+  SageStorage.onWriteError((msg) => toast(msg));
 
   // Erasing is the one change a tab cannot make on its own. Every other tab is
   // still holding the old state in memory — the forgotten #s= projector window
@@ -370,8 +390,7 @@
   // that erases and every tab that hears about it both come through here.
   function dropLocalState() {
     // a save queued before the erase would land after it and undo it
-    clearTimeout(saveTimer);
-    saveTimer = null;
+    SageStorage.cancel();
     state = normalize(defaultState());
     rewardsDayTick();
     applyReadingFont(); renderStarPill();
@@ -11794,7 +11813,9 @@
   // ---------------------------------------------------------------- data (export / import)
   $('#dataBtn').addEventListener('click', () => {
     openModal('Your data', (body, finish) => {
-      const usage = Math.round((localStorage.getItem(LS_KEY) || '').length / 1024);
+      // still computed synchronously, so the modal renders in one pass with no
+      // async fill-in — the local backend's usageChars() is a plain read
+      const usage = Math.round(SageStorage.usageChars() / 1024);
       // The second way back, for the teacher who did not catch the toast —
       // "I closed something on Tuesday" has to have an answer on Thursday.
       const bin = (state.bin || []).filter((b) => b && b.w);
@@ -11894,7 +11915,7 @@
           class: 'btn danger small', style: 'align-self:start;',
           onclick: () => {
             confirmDialog('Erase ALL screens, widgets and class lists on this device?', () => {
-              localStorage.removeItem(LS_KEY);
+              SageStorage.erase();
               dropLocalState();
               finish();
               toast('Everything cleared');
@@ -13097,19 +13118,18 @@
   });
 
   // keep tabs in sync: adopt changes written by another tab instead of clobbering them
-  window.addEventListener('storage', (e) => {
-    if (e.key !== LS_KEY) return;
-    // A null newValue is the erase in another window, not a write to skip past.
+  SageStorage.onExternalChange((raw) => {
+    // A null payload is the erase in another window, not a write to skip past.
     // Ignoring it left this tab holding the only surviving copy — and then
     // writing it back. It says so out loud, because a display tab that empties
     // itself mid-lesson without explanation reads as the app losing the work.
-    if (!e.newValue) {
+    if (!raw) {
       dropLocalState();
       toast('Everything on this device was erased in another window.', { ms: 9000 });
       return;
     }
     try {
-      const incoming = normalize(JSON.parse(e.newValue));
+      const incoming = normalize(JSON.parse(raw));
       if (!incoming) return;
       state = incoming;
       // no rewardsDayTick here — the writing tab already ticked this state,
@@ -13193,7 +13213,7 @@
   $('#delScreen').replaceChildren(iconEl('trash'));
   $('#deckBtn').prepend(iconEl('screens'));
   renderScreen();
-  if (!localStorage.getItem(LS_KEY)) {
+  if (!persisted.existed) {
     // friendly first-run starter widgets
     addWidget('clock');
     const c = screen().widgets[screen().widgets.length - 1];
@@ -13203,5 +13223,12 @@
   }
   // land on the dashboard so the teacher picks their class deck; a tab pinned
   // to one screen (#s=) is a display tab and goes straight there instead
+  if (persisted.notice) toast(persisted.notice);
   if (!viewId) openDashboard();
-})();
+})().catch((e) => {
+  // Boot is async now, so a throw here is a promise rejection rather than a
+  // console error with a half-drawn page behind it. A teacher at a board needs
+  // to be told the app did not start, not left looking at an empty screen.
+  console.error(e);
+  document.body.textContent = 'Sage Stage failed to start — see the browser console.';
+});

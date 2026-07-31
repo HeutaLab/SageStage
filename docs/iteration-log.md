@@ -4519,3 +4519,47 @@ Changing it edits a shipped widget's printed page tag, which wants a ruling rath
 than a guess. And ⋮ Duplicate deep-copies props, so a duplicated map carries last
 term's moments; it is written down here rather than fixed, because the fix is a
 hook the app does not have.
+
+## 2026-07-31 · Phase 1 of the storage seam
+
+Going to Tauri to answer the storage question properly, and phase 1 of
+`docs/storage-abstraction-plan.md` is the half that needs no toolchain: extract the seam,
+prove parity in the browser, and only then put a desktop shell round it.
+
+`storage.js` now owns persistence and `app.js` asks it. Boot has exactly one `await`
+— `SageStorage.init()` — and the outer IIFE gained a `.catch`, because an async boot
+turns a startup throw into a silent rejection behind a half-drawn page. Every other
+touch was mechanical: `load()` reads a preloaded string, `save()` hands over a
+serializer thunk, the cross-tab `storage` listener became `onExternalChange`, the
+first-run probe became `persisted.existed`, erase and the usage meter went through
+the interface.
+
+**Where the plan was out of date, the principle won.** Its §3 sketch of the local
+backend was written on 2026-07-18 against a `save()` that has grown since — copying it
+literally would have quietly dropped the headroom probe and the whole bin-shedding
+ladder. So what moved was today's code, not the sketch: the backend owns the debounce,
+the `setItem` and the retry loop, and `app.js` keeps the judgement about what a teacher
+can afford to lose. The backend asks for a smaller payload; `app.js` decides that the
+bin goes before the lesson does.
+
+**One regression, found by testing rather than reading, and it was the bad kind.**
+`dropLocalState()` cleared `saveTimer` so that a save queued just before an erase could
+not land after it and undo it. Moving the timer into the backend left that as a dangling
+reference in strict mode — which broke **both** erase paths, the button and the
+cross-window one, silently. The interface gained `cancel()`: throw away a pending write
+rather than perform it. The plan does not have it; §2 should, and the note is in the
+code where the next reader will find it.
+
+Verified in the browser rather than by reading, against the plan's own phase-1 list:
+existing data restores with no duplicate starter widget; a mutation is absent from the
+store at 120ms and present by 420ms, so the 250ms debounce is unchanged; the shedding
+ladder retries through successive concessions, fires its notice exactly once, and lands
+on the smaller payload; with nothing left to give up it says the same sentence it always
+said; a serializer that throws does not wedge the queue; cross-tab writes still arrive
+and still re-render; both erase paths clear the store and stay clear through the debounce
+window; and an empty store still produces the starter clock and the dashboard.
+
+**Not done, and it needs a person rather than a commit:** Rust is not installed on this
+machine, so phase 2 cannot be run — `tauri init`, `tauri dev` and `tauri build` all need
+`cargo`. Xcode's command line tools are present, so that half is ready. Until then the
+seam runs on localStorage exactly as before, which is what phase 2 asks for anyway.
