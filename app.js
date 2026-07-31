@@ -434,6 +434,17 @@
     return state.lists[cl] ? cl : Object.keys(state.lists)[0] || null;
   };
 
+  // The English widgets get names through THIS and never through `state`. The
+  // story map's who-row needs the children's names to record who offered a word,
+  // and a narrow accessor is auditable where handing over `state` is not: one
+  // line says exactly what an English widget can see. Returns a copy, so a widget
+  // holding the result cannot edit a class list by accident, and [] when no list
+  // exists — which is the common case, since a deck ships with none.
+  const classNames = () => {
+    const cl = deckDefaultList();
+    return cl && Array.isArray(state.lists[cl]) ? state.lists[cl].filter(Boolean).slice() : [];
+  };
+
   function openDeck(id) {
     if (viewId) { viewId = null; location.hash = ''; } // this tab adopts the deck
     state.activeDeck = id;
@@ -13148,7 +13159,7 @@
   if (window.SagePrint) SagePrint.init({ el, iconEl, openModal, toast });
   if (window.SageSnapshots) SageSnapshots.init({ toast });
   if (window.SageEnglishWord) {
-    const engDeps = { WIDGETS, el, iconEl, save, toast, uid, clamp, settingRow, checkRow, selectInput, pickImage, confirmDialog, openModal, deck: viewDeck, snapshotBefore, getPref, setPref };
+    const engDeps = { WIDGETS, el, iconEl, save, toast, uid, clamp, settingRow, checkRow, selectInput, pickImage, confirmDialog, openModal, deck: viewDeck, snapshotBefore, getPref, setPref, classNames };
     SageEnglishWord.init(engDeps);
     // modelled writing lives in its own file from v2 — same deps, same pattern
     if (window.SageModelWrite) SageModelWrite.init(engDeps);

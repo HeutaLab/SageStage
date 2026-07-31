@@ -5566,7 +5566,12 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
    the widget's own width (container query, with a plain fallback first) because
    the same list has to read from the back of the room at board size and stay
    legible in a corner at 300px. */
-/* ---- story map ---- */
+/* ---- story map (english-text.js, docs/story-map-design.md) ----
+   Board-scale target sizes are written HERE and never inherited: .mntray
+   contributes only gap:7px plus its named selectors, so anything this widget does
+   not state for itself arrives at whatever the app's default happens to be.
+   Everything sizes off @container on .sm-face, never a viewport query — a 900px
+   widget on a 1920px stage must not keep a two-column layout it cannot fit. */
 .smwidget {
   /* The board's measured widely-separated set, re-declared because --wb-t1/2/3 are
      scoped to .wbwidget. Widget-internal literals: never var(--ink), which applyTheme
@@ -5574,19 +5579,420 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
   --sm-t1: #1d4ed8;  /* channel 0 · circle */
   --sm-t2: #ea580c;  /* channel 1 · square */
   --sm-t3: #047857;  /* channel 2 · triangle */
+  --sm-ink: #1e2c33; --sm-soft: #5b6b7b; --sm-faint: #8b9aa2;
+  --sm-line: #e4eae8; --sm-firm: #cfdad7; --sm-ground: #f7faf9;
+  --sm-acc: #0f766e; --sm-acc-soft: #d8f3ef; --sm-acc-ink: #0a544e;
+  --sm-danger: #a13b4b; --sm-danger-soft: #fbe9ec;
+  --sm-fs-beat: 15px; --sm-fs-box: 15.5px; --sm-fs-hint: 12.5px;
+  --sm-tap: 44px; --sm-beatw: 158px;
   position: relative;
+  display: flex; flex-direction: column; min-height: 0;
+  color: var(--sm-ink);
+  border-top: 4px solid transparent;
 }
+/* the lock reads from the back of the room without anyone reading the bar */
+.smwidget.sm-locked { border-top-color: #1d7a4c; }
+
+/* THE ROOM. Everything above is sized for a wall three metres away and thirty
+   children. A teaching assistant with four children round a laptop is a different
+   room: closer, smaller, and the children SHOULD be touching it. Custom properties
+   inherit, so one class on the body does the whole thing — a TA changes a DISTANCE
+   rather than eleven separate sizes. On the BODY, because mounts only ever touch
+   the body and .widget.locked is already the app's own position-lock class. */
+.smwidget.sm-table {
+  --sm-fs-beat: 13px; --sm-fs-box: 13px; --sm-fs-hint: 11.5px;
+  --sm-tap: 36px; --sm-beatw: 124px;
+}
+
+.sm-title {
+  display: flex; align-items: center; gap: 9px; padding: 2px 2px 6px;
+  font-size: 11.5px; letter-spacing: .15em; text-transform: uppercase;
+  color: var(--sm-faint); font-weight: 700;
+}
+.sm-roomtag {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .09em;
+  padding: 3px 9px; border-radius: 99px; background: #ede4fd; color: #5b21b6;
+}
+.sm-lockmark { color: #1d7a4c; letter-spacing: 0; text-transform: none; font-size: 12.5px; }
+.sm-head { display: flex; align-items: baseline; gap: 11px; flex-wrap: wrap; padding: 0 2px 6px; }
+/* the plan's name is CONTENT, not a control: it wraps and is never truncated */
+.sm-plan { font-size: 20px; font-weight: 700; letter-spacing: -.012em; }
+.sm-bandchip {
+  font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  background: var(--sm-acc-soft); color: var(--sm-acc-ink); padding: 4px 10px; border-radius: 99px;
+}
+.sm-bandchip.none { background: #fdeee3; color: #94491a; }
+
+/* the stage band: declarative, and it gates nothing */
+.sm-stage {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 10px; margin: 0 0 6px; border-radius: 9px;
+  border-left: 5px solid transparent; background: #eef3f4;
+}
+.sm-stage.s-model { background: #eef3f4; border-left-color: #3f5a63; }
+.sm-stage.s-together { background: #fdf1e0; border-left-color: #b4671a; }
+.sm-stage.s-yours { background: #e6f5ec; border-left-color: #1d7a4c; }
+.sm-stbtn {
+  font-size: 13.5px; font-weight: 700; background: rgba(255,255,255,.72);
+  border: 1.5px solid transparent; color: var(--sm-soft); border-radius: 99px;
+  padding: 8px 17px; cursor: pointer; min-height: var(--sm-tap);
+}
+.sm-stbtn:hover { background: #fff; }
+.sm-stbtn.on { color: #fff; }
+.sm-stbtn.on.b-model { background: #3f5a63; }
+.sm-stbtn.on.b-together { background: #b4671a; }
+.sm-stbtn.on.b-yours { background: #1d7a4c; }
+.sm-stseq {
+  margin-left: auto; font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--sm-faint); font-weight: 700;
+}
+
+/* .sm-face is the ONE scroller. touch-action:none goes on the writing SVG and
+   nowhere else, or a finger cannot scroll the face at all. */
 .sm-face {
   container-type: inline-size;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 0;
-  overflow: auto;
+  display: flex; flex-direction: column; gap: 6px;
+  flex: 1; min-height: 0; overflow: auto;
+  padding: 2px 2px 10px; background: var(--sm-ground); border-radius: 9px;
 }
-/* .tclock-quick is wrap + centre, and a shrink-wrapped row cannot pin anything to an
-   edge — .gt-quick's override, verbatim, for the same reason. */
-.sm-quick { display: flex; flex-direction: column; align-items: stretch; gap: 5px; }
+.sm-grow { flex: 1; }
+.sm-empty { padding: 22px 6px; color: var(--sm-faint); font-size: 15px; font-style: italic; }
+
+.sm-bar {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 9px 2px 2px; border-top: 1px solid var(--sm-line); margin-top: 6px;
+}
+/* Each face owns a hue and wears it selected or not, so a child reads the face by
+   colour from the back of the room. Selected = saturated fill, unselected = the
+   same hue as a tint, never grey. The three are chosen deliberately AWAY from the
+   graph's blue/orange/green so a pill can never be mistaken for a line. */
+.sm-pill {
+  font-size: 15px; font-weight: 800; border: 2.5px solid; border-radius: 11px;
+  padding: 10px 18px; cursor: pointer; min-height: calc(var(--sm-tap) + 2px);
+}
+.sm-pill.f-map { color: #0d6e66; border-color: #0d6e66; background: #d5f0ec; }
+.sm-pill.f-box { color: #7c3aed; border-color: #7c3aed; background: #ede4fd; }
+.sm-pill.f-graph { color: #b02a5b; border-color: #b02a5b; background: #fbe3ec; }
+.sm-pill.on { color: #fff; }
+.sm-pill.f-map.on { background: #0d6e66; }
+.sm-pill.f-box.on { background: #7c3aed; }
+.sm-pill.f-graph.on { background: #b02a5b; }
+.sm-barbtn {
+  font-size: 14.5px; font-weight: 700; background: #edf2f1; border: 1.5px solid transparent;
+  color: var(--sm-soft); border-radius: 10px; padding: 10px 16px; cursor: pointer;
+  min-height: var(--sm-tap);
+}
+.sm-barbtn.on { background: var(--sm-ink); color: #fff; }
+.sm-barbtn.ghost { background: none; border-color: var(--sm-firm); }
+.sm-barbtn.lockon { background: #1d7a4c; color: #fff; border-color: transparent; }
+
+/* ---- text map ---- */
+.sm-band { padding: 11px 0 13px; border-top: 1px solid var(--sm-line); }
+.sm-band:first-of-type { border-top: none; }
+.sm-bandhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0 0 9px; }
+.sm-boxname {
+  font-size: var(--sm-fs-box); font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--sm-acc);
+}
+/* the hint is permanent band-head furniture and measures identically whether the
+   box holds four beats or none — a fixed size on a fixed base, because an em-sized
+   fallback once made the EMPTY state shout */
+.sm-boxhint { font-size: var(--sm-fs-hint); color: var(--sm-faint); font-style: italic; }
+.sm-beats { display: flex; gap: 11px; align-items: flex-start; flex-wrap: wrap; }
+.sm-beat {
+  width: var(--sm-beatw); border: 1px solid var(--sm-firm); border-radius: 11px;
+  padding: 8px; cursor: pointer; background: #fff; text-align: left;
+  display: flex; flex-direction: column; font: inherit; color: inherit;
+}
+.sm-beat:hover { border-color: var(--sm-acc); }
+.sm-beat.sel { border-color: var(--sm-acc); border-width: 2px; padding: 7px; box-shadow: 0 0 0 3px var(--sm-acc-soft); }
+.sm-beat.blank { border-style: dashed; background: #fdfefe; }
+/* a picture and a ghost frame occupy the SAME footprint, so a picture arriving can
+   never change the card's size */
+.sm-thumb { width: 100%; height: 78px; border-radius: 8px; background: #eff4f3; overflow: hidden; }
+.sm-thumb.ghost { border: 1.5px dashed var(--sm-firm); background: #f8fbfa; }
+.sm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sm-btext {
+  font-size: var(--sm-fs-beat); line-height: 1.34; margin: 7px 2px 1px; font-weight: 500;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden; min-height: 2.7em;
+}
+.sm-btext.blank { color: var(--sm-faint); font-weight: 400; font-style: italic; }
+.sm-btext.cov { background: var(--sm-ink); color: transparent; border-radius: 5px; }
+.sm-bmeta { display: flex; gap: 4px; flex-wrap: wrap; margin: 5px 2px 0; }
+.sm-bmeta span {
+  font-size: 11px; background: var(--sm-acc-soft); color: var(--sm-acc-ink);
+  padding: 2px 7px; border-radius: 99px; font-weight: 700;
+}
+.sm-bmeta span.cp { background: #ede4fd; color: #5b21b6; }
+.sm-bnote { font-size: 11.5px; color: var(--sm-danger); margin: 4px 2px 0; line-height: 1.32; }
+.sm-addbeat {
+  width: 72px; min-height: 118px; border: 1.5px dashed var(--sm-firm); border-radius: 11px;
+  background: none; color: var(--sm-faint); font-size: 24px; cursor: pointer;
+}
+.sm-addbeat:hover { border-color: var(--sm-acc); color: var(--sm-acc); background: var(--sm-acc-soft); }
+/* A dead control teaches nothing and a class reads it as the map being full, so at
+   the cap the + is REPLACED by the teaching point rather than dimmed — and the
+   sentence stands on the board instead of in a toast nobody re-reads. */
+.sm-capnote {
+  font-size: 12.5px; color: var(--sm-danger); font-weight: 700;
+  padding: 10px 4px; max-width: 210px; line-height: 1.38;
+}
+.sm-tray { padding: 8px 0 10px; border-bottom: 1px solid var(--sm-line); }
+.sm-traylab {
+  font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--sm-danger); font-weight: 800; margin: 0 0 6px;
+}
+/* The gap is the teaching point: closing it is what better word choice, sentence
+   shape and pacing are FOR. So every box says its own gap out loud. */
+.sm-gap {
+  display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700;
+  background: #f4eefe; color: #5b21b6; border: 1.5px solid #d9c8fb;
+  border-radius: 99px; padding: 4px 11px; margin: 4px 0 2px;
+}
+.sm-gap.met { background: var(--sm-acc-soft); color: var(--sm-acc-ink); border-color: #9fd8d0; }
+
+/* ---- the beat panel ---- */
+.sm-panel {
+  margin: 11px 0 3px; border: 2px solid var(--sm-acc); border-radius: 12px;
+  background: #fff; padding: 14px 15px; max-width: 690px;
+}
+.sm-ptop { display: flex; align-items: flex-start; gap: 10px; }
+.sm-beatin, .sm-noteline {
+  flex: 1; font-size: 17px; font-weight: 600; padding: 11px 12px;
+  border: 1.5px solid var(--sm-firm); border-radius: 9px; color: var(--sm-ink);
+  min-height: var(--sm-tap); font-family: inherit; width: 100%;
+}
+.sm-noteline { font-size: 14px; font-weight: 400; }
+.sm-beatin:focus, .sm-noteline:focus { outline: none; border-color: var(--sm-acc); box-shadow: 0 0 0 3px var(--sm-acc-soft); }
+.sm-pclose {
+  font-size: 19px; line-height: 1; background: none; border: 1px solid var(--sm-firm);
+  border-radius: 9px; cursor: pointer; color: var(--sm-soft);
+}
+.sm-pclose:hover { border-color: var(--sm-danger); color: var(--sm-danger); }
+/* The 72px floor stands for the two controls a lesson presses dozens of times.
+   --sm-tap is 44 at board and 36 at table for everything else, which the room
+   setting makes defensible; these two are pressed under time pressure with a
+   class watching, and they keep the floor at every band. */
+.sm-big { min-width: 72px; min-height: 72px; }
+.sm-plab {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--sm-faint); margin: 13px 0 6px;
+}
+.sm-enterhint { font-size: 11.5px; color: var(--sm-faint); margin: 5px 0 0; }
+.sm-pickrow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+/* stretch, so seven chips are one height: the axis words are the class's own and
+   run to different lengths, and a ragged row of steps reads as a broken control */
+.sm-chiprow { display: flex; gap: 6px; flex-wrap: wrap; align-items: stretch; }
+.sm-step {
+  font-size: 13px; font-weight: 700; border: 1.5px solid var(--sm-line); background: #fff;
+  border-radius: 9px; padding: 7px 10px; cursor: pointer;
+  min-width: 50px; min-height: var(--sm-tap); color: var(--sm-soft); line-height: 1.18;
+}
+.sm-step.mid { background: #f6f8f8; }
+.sm-step .sm-num { display: block; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sm-step .sm-wd {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 10px; font-weight: 600; color: var(--sm-faint); max-width: 78px; line-height: 1.2;
+}
+.sm-step.set { color: #fff; border-color: transparent; }
+.sm-step.set .sm-wd { color: rgba(255,255,255,.86); }
+.sm-pick {
+  min-width: 56px; min-height: var(--sm-tap); border-radius: 7px; border: 1.5px solid var(--sm-line);
+  cursor: pointer; background: #fff; color: var(--sm-soft); font-size: 16px;
+}
+.sm-pick.on, .sm-pick:hover { border-color: var(--sm-acc); }
+.sm-pick.none { border-style: dashed; }
+.sm-pickimg { width: 78px; height: 46px; object-fit: cover; border-radius: 7px; border: 1px solid var(--sm-line); }
+.sm-mvrow { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--sm-line); }
+.sm-mv {
+  font-size: 12.5px; background: #fff; border: 1px solid var(--sm-line); border-radius: 8px;
+  padding: 8px 11px; cursor: pointer; color: var(--sm-soft); min-height: 40px;
+}
+.sm-mv.del { color: var(--sm-danger); border-color: var(--sm-danger-soft); }
+
+/* ---- the word bank: class-facing furniture ---- */
+.sm-bank { background: #fff; border: 1px solid var(--sm-firm); border-radius: 11px; padding: 11px 13px; margin: 0 0 10px; }
+.sm-bankhead { display: flex; align-items: center; gap: 9px; margin: 0 0 8px; flex-wrap: wrap; }
+.sm-banktitle { font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--sm-faint); font-weight: 800; }
+.sm-words { display: flex; gap: 6px; flex-wrap: wrap; }
+.sm-word {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 14.5px; font-weight: 600;
+  border: 1.5px solid var(--sm-firm); border-radius: 99px; padding: 6px 12px 6px 8px;
+  cursor: pointer; background: #fff; color: var(--sm-ink); min-height: 38px;
+}
+.sm-word:hover { border-color: var(--sm-acc); }
+.sm-word.picked { background: var(--sm-acc-soft); border-color: var(--sm-acc); }
+/* covered by PAINTING the chip — proven by measured rendering, never by textContent */
+.sm-word.hid { background: var(--sm-ink); border-color: var(--sm-ink); color: transparent; }
+.sm-word.hid .sm-lad, .sm-word.hid .sm-tag, .sm-word.hid .sm-beyond { visibility: hidden; }
+.sm-lad { width: 22px; height: 22px; flex: 0 0 22px; }
+.sm-lad svg { width: 100%; height: 100%; display: block; }
+.sm-tag { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; padding: 1px 5px; border-radius: 4px; }
+.sm-beyond { font-size: 11px; color: #b45309; }
+.sm-moodgrp { margin: 0 0 9px; }
+.sm-moodhead { display: flex; align-items: baseline; gap: 8px; margin: 0 0 5px; }
+.sm-moodlab { font-size: 10.5px; letter-spacing: .11em; text-transform: uppercase; font-weight: 800; }
+.sm-moodn { font-size: 11px; color: var(--sm-faint); font-variant-numeric: tabular-nums; }
+.sm-moodgrp.thin .sm-moodn { color: var(--sm-danger); font-weight: 800; }
+/* the want ring: the mood the open beat is asking for */
+.sm-moodgrp.want .sm-moodhead { padding: 3px 9px; border-radius: 99px; background: #fff7e6; box-shadow: 0 0 0 1.5px #e8c98a; }
+.sm-moodempty { font-size: 12.5px; color: var(--sm-danger); font-style: italic; font-weight: 600; }
+.sm-banknote { font-size: 12px; color: var(--sm-faint); margin-top: 8px; line-height: 1.5; }
+/* Words offered against the tone are a CHOICE, not a warning: The Road's characters
+   crack jokes, and gallows humour and bathos are devices with names. Nothing here
+   calls one wrong. */
+.sm-rd { font-size: 9.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; margin-left: 5px; }
+.sm-rd.serves { background: var(--sm-acc-soft); color: var(--sm-acc-ink); }
+.sm-rd.counter { background: #ede4fd; color: #5b21b6; }
+.sm-rd.level { background: #eceff1; color: #4b5563; }
+
+/* ---- the capture bar ---- */
+.sm-cap {
+  display: flex; gap: 7px; align-items: center; flex-wrap: wrap; padding: 9px 11px; margin: 0 0 10px;
+  background: var(--sm-acc-soft); border: 1.5px solid #9fd8d0; border-radius: 11px;
+}
+.sm-caplab { font-size: 10.5px; letter-spacing: .11em; text-transform: uppercase; color: var(--sm-acc-ink); font-weight: 800; width: 100%; }
+.sm-capin {
+  flex: 1; min-width: 180px; font-size: 16px; font-weight: 600; padding: 10px 12px;
+  border: 1.5px solid var(--sm-firm); border-radius: 9px; color: var(--sm-ink);
+  min-height: var(--sm-tap); font-family: inherit; background: #fff;
+}
+.sm-capin:focus { outline: none; border-color: var(--sm-acc); box-shadow: 0 0 0 3px #fff; }
+.sm-scores, .sm-capmoods { display: flex; gap: 3px; }
+.sm-sp {
+  width: 42px; min-height: var(--sm-tap); border: 1.5px solid var(--sm-firm); background: #fff;
+  border-radius: 9px; cursor: pointer; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; color: var(--sm-soft); font-size: 13px;
+}
+.sm-sp.on { border-color: var(--sm-acc); border-width: 2.5px; background: var(--sm-acc-soft); }
+.sm-sp .sm-spa { width: 16px; height: 16px; }
+.sm-sp .sm-spa svg { width: 100%; height: 100%; display: block; }
+.sm-spn { font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sm-sp.beyond { border-color: #b45309; color: #8a4d09; }
+.sm-sp.beyond.on { background: #fdf0dc; border-color: #b45309; }
+.sm-capmood {
+  width: 40px; min-height: var(--sm-tap); border: 1.5px solid var(--sm-firm);
+  background: #fff; border-radius: 9px; cursor: pointer; font-size: 17px; font-weight: 800;
+}
+.sm-capmood.on { color: #fff; }
+.sm-whorow { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; width: 100%; margin-top: 7px; }
+.sm-who {
+  font-size: 12.5px; background: #fff; border: 1.5px solid var(--sm-firm); border-radius: 99px;
+  padding: 5px 11px; cursor: pointer; color: var(--sm-soft); min-height: 36px;
+}
+.sm-who.on { background: var(--sm-ink); color: #fff; border-color: transparent; }
+
+/* ---- boxing up: a handwritten ruled page ---- */
+.sm-wctl {
+  display: flex; gap: 7px; align-items: center; flex-wrap: wrap;
+  padding: 8px 0 10px; border-bottom: 1px solid var(--sm-line);
+}
+.sm-wbtn {
+  font-size: 13.5px; font-weight: 700; background: #edf2f1; border: 1.5px solid transparent;
+  color: var(--sm-soft); border-radius: 9px; padding: 9px 13px; cursor: pointer; min-height: 42px;
+}
+.sm-wbtn.on { background: var(--sm-ink); color: #fff; }
+.sm-wbtn.ghost { background: none; border-color: var(--sm-firm); font-weight: 600; }
+.sm-wbtn.ghost:hover { border-color: var(--sm-acc); color: var(--sm-acc); }
+.sm-wbtn.del { color: var(--sm-danger); border-color: var(--sm-danger-soft); }
+.sm-wcount { font-size: 12.5px; color: var(--sm-soft); font-variant-numeric: tabular-nums; min-width: 60px; text-align: center; }
+.sm-locknote { font-size: 13px; color: #1d7a4c; font-weight: 700; padding: 11px 3px; }
+.sm-boxwrap { display: block; }
+.sm-graphref { background: #fff; border: 1px solid var(--sm-firm); border-radius: 11px; padding: 10px 12px; margin: 10px 0; }
+.sm-graphsvg { width: 100%; height: auto; display: block; }
+.sm-brow {
+  display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px;
+  border-top: 1px solid var(--sm-line); padding: 12px 0;
+}
+.sm-mchip { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 6px; }
+.sm-mchip .sm-mt { width: 56px; height: 40px; border-radius: 6px; overflow: hidden; flex: 0 0 56px; background: #eff4f3; }
+.sm-mchip .sm-mt.ghost { border: 1.5px dashed var(--sm-firm); }
+.sm-mchip .sm-mt img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sm-mchip .sm-mx { font-size: 13px; line-height: 1.36; }
+.sm-warea { display: block; }
+.sm-wsvgwrap { border: 1.5px solid var(--sm-firm); border-radius: 9px; overflow: hidden; background: #fffdf7; }
+/* touch-action:none belongs HERE and nowhere else — a finger inside a writing area
+   draws, and anywhere else on the face it scrolls */
+.sm-wsvg { width: 100%; height: auto; display: block; touch-action: none; cursor: crosshair; }
+/* The pen has to be beside the box you are writing in: one toolbar at the top of a
+   700px face is a stretch back up the wall for box 4, and on a wall-mounted board
+   that stretch is the whole objection. */
+.sm-rowtools { display: flex; gap: 5px; align-items: center; margin: 0 0 6px; flex-wrap: wrap; }
+.sm-rt {
+  font-size: 12.5px; font-weight: 700; background: #fff; border: 1.5px solid var(--sm-firm);
+  border-radius: 8px; padding: 6px 10px; cursor: pointer; color: var(--sm-soft); min-height: 38px;
+}
+.sm-rt.on { background: var(--sm-ink); color: #fff; border-color: transparent; }
+.sm-rt.del { color: var(--sm-danger); border-color: var(--sm-danger-soft); }
+.sm-rtink { width: 28px; height: 28px; border-radius: 99px; border: 2.5px solid #fff; box-shadow: 0 0 0 1.5px var(--sm-firm); cursor: pointer; padding: 0; }
+.sm-rtink.on { box-shadow: 0 0 0 3px var(--sm-acc); }
+.sm-rtsep { width: 1px; height: 26px; background: var(--sm-line); margin: 0 3px; }
+
+/* ---- the graph ---- */
+.sm-legend { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 3px; }
+.sm-lchip {
+  font-size: 13.5px; font-weight: 700; background: #fff; border: 1.5px solid var(--sm-firm);
+  border-radius: 99px; padding: 8px 14px; cursor: pointer; display: flex; align-items: center;
+  gap: 8px; min-height: 42px; color: var(--sm-soft);
+}
+/* ON (swatch filled) and ARMED (thicker border plus a halo) are two INDEPENDENT
+   states — a chip can be on and not armed, and that is the common case. */
+.sm-lchip .sm-sw { width: 14px; height: 14px; border-radius: 99px; border: 2.5px solid currentColor; background: none; }
+.sm-lchip .sm-sw.on { background: currentColor; }
+.sm-lchip.armed { border-width: 2.5px; border-color: currentColor; box-shadow: 0 0 0 3px rgba(15,118,110,.09); }
+.sm-lchip.off { opacity: .48; text-decoration: line-through; }
+/* an empty channel holds its position, so the legend's three places never move */
+.sm-lchip.empty { border-style: dashed; color: #b9c5c1; cursor: default; }
+.sm-lchip .sm-kd { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; opacity: .72; }
+/* MEASURED, 2026-07-31, at the shipped 1180x660 def on a 1500px stage: the app's
+   own title bar leaves 620px of body, the plan header (33) + stage band (60) +
+   bar (58) take 151 of it, and the face gets 420 with the legend taking 42 of
+   that. A 1000x440 plot at 1139px of width wants 499px and would scroll — and a
+   class reads the shape whole or not at all.
+
+   So the plot takes the room that is left rather than a number: the holder
+   flexes, the SVG fills it, and preserveAspectRatio's own meet scaling does the
+   rest. No measurement in JS, and it stays right when a teacher resizes. */
+.sm-graphhold {
+  background: #fff; border-radius: 9px;
+  flex: 1 1 auto; min-height: 190px; display: flex;
+}
+.sm-graphhold .sm-graphsvg { height: 100%; max-height: 100%; }
+
+/* ---- the settings panel ---- */
+.sm-planbtn {
+  font-size: 13.5px; text-align: left; background: #fff; border: 1.5px solid var(--sm-line);
+  border-radius: 10px; padding: 10px 12px; cursor: pointer; display: block; width: 100%; margin: 0 0 7px;
+}
+.sm-planbtn.cur { border-color: var(--sm-acc); background: var(--sm-acc-soft); }
+.sm-planbtn .pn { font-weight: 700; display: block; }
+.sm-planbtn .pb { font-size: 11.5px; color: var(--sm-faint); margin-top: 2px; display: block; }
+.sm-lrow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 0 0 6px; }
+.sm-lrow input[type="text"] { flex: 1; min-width: 110px; font: inherit; padding: 7px 9px; border: 1.5px solid var(--sm-line); border-radius: 8px; }
+.sm-paste { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; padding: 8px; border: 1.5px solid var(--sm-line); border-radius: 8px; }
+.sm-wordname { flex: 1; min-width: 90px; font-size: 13.5px; font-weight: 600; }
+.sm-lvlname { font-size: 12px; color: var(--sm-faint); min-width: 92px; }
+.sm-ladpick { display: inline-flex; gap: 2px; padding: 5px 7px; border: 1.5px solid var(--sm-line); border-radius: 9px; background: #fff; cursor: pointer; }
+.sm-ladpick.on { border-color: var(--sm-acc); background: var(--sm-acc-soft); }
+.sm-moment { border-left: 3px solid #b45309; padding: 7px 0 7px 11px; margin: 0 0 9px; font-size: 13.5px; line-height: 1.5; }
+.sm-moment .sm-ctx { display: block; font-size: 11.5px; color: var(--sm-faint); margin: 2px 0 4px; }
+/* the case for moments, rendered: what a report can say, against the stock
+   sentence it replaces */
+.sm-insert { background: #f7f4ee; border: 1px dashed #cbbda2; border-radius: 9px; padding: 11px 13px; margin-top: 9px; font-family: Georgia, serif; font-size: 14px; line-height: 1.6; color: #3a3228; }
+.sm-insertlab { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #8a7a5e; font-weight: 800; margin-bottom: 5px; font-family: inherit; }
+.sm-rhet { color: var(--sm-danger); text-decoration: line-through; opacity: .75; margin-top: 8px; }
+
+/* A CONTAINER query, never a viewport one: a 900px widget on a 1920px stage must
+   not keep a two-column layout it cannot fit. */
+@container (min-width: 900px) {
+  .sm-boxwrap.side { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px; align-items: start; }
+  .sm-boxwrap.side .sm-graphref { position: sticky; top: 4px; }
+  .sm-boxwrap.side .sm-brow { grid-template-columns: 186px minmax(0, 1fr); }
+}
+@container (max-width: 620px) {
+  .sm-brow { grid-template-columns: 1fr; }
+}
 
 .gtwidget { position: relative; }
 .gt-face {

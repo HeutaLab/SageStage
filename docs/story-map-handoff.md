@@ -1,11 +1,45 @@
 # Story map — handoff
 _Written 2026-07-31 at the end of a long session, so nothing lives only in a chat._
-**State:** the shell is built and in the app (commit `198ea53`). `docs/story-map-design.md` is the
+
+> ## BUILD STATUS — updated 2026-07-31, later the same day
+>
+> **The widget is built and running.** All three faces, the pen, the word bank, the capture
+> bar, moments, the stage band, the lock, the room, channels, target lines, the gap, the
+> settings panel and all three printed sheets are in `english-text.js`. The three blocking
+> decisions below were taken **as recommended**, and the reasoning for each is now a comment
+> at the place it binds:
+>
+> 1. **Names: screen only.** A moment's `who` shows in the settings panel and reaches no sheet.
+> 2. **Moments live in `w.props`,** cleared by reset — per BUILD-GAP BLOCKER 6's later and
+>    better-reasoned ruling, not the front-matter option that deferred them out of v1.
+> 3. **The pen was promoted:** `modelwrite.js` now exports `window.SagePen`, and modelwrite's
+>    own `mount()` does not go through it, so nothing already written can shift.
+>
+> Also landed: `engDeps.classNames()`, the one-line `print.js` budget preset, eight `kind:'arc'`
+> plans, and `mood`/`shape`/tagged vocabulary across all five sites in one commit.
+>
+> **Deviations from what is written below, each with its reason in the code:**
+> - The per-beat text label under the graph axis is **cut**. At the fixed beat pitch — about
+>   20 units at six boxes — no wording fits, and every beat in a box drew on top of its
+>   neighbour. The dot opens the panel instead.
+> - `language.vocabulary` still normalises to **plain strings**, so the genre toolkit is
+>   byte-for-byte unaffected; the tags ride alongside in `genre.vocab`. One authored list, two
+>   views.
+> - A plan taken from the arc library seeds its bank from the **narrative** pack when it has a
+>   shape, rather than opening on an empty bank.
+> - The 72px floor stands for `+ beat` and the panel close; `--sm-tap` is 44 at board and 36 at
+>   table elsewhere.
+>
+> **Still open:** the spec fold itself (§1 below); modelwrite's four-stage `MW_STAGES` against
+> the story map's three; and ⋮ Duplicate carrying moments, which needs an app hook that does not
+> exist. Everything else in this document is now a record of why the code is the shape it is.
+
+**State (as written):** the shell is built and in the app (commit `198ea53`). `docs/story-map-design.md` is the
 spec and is OUT OF DATE. `.sm-mock.html` is a playable mock and is the AUTHORITY ON BEHAVIOUR.
 The next task is folding one into the other: **keep the spec's seams and hazards, take the
 mock's decisions.** Do not build faces from the spec as it stands.
 
-## Three decisions that block the fold
+## Three decisions that block the fold — ALL TAKEN, see the build status above
 Each changes what the spec says, so none of them can be defaulted.
 
 1. **Do child names reach a printed sheet?** The mock prints moments — "wistfully — Amira, at the
@@ -522,22 +556,25 @@ Three entries move or narrow and each needs its OWN sentence, because a blanket 
 _docs/story-map-design.md:1592-1604; .sm-mock.html:1272, 524-528, 646-649_
 
 ## Next actions, in order
+_Struck items landed 2026-07-31; see the build status at the top._
 
-1. Get the three decisions above.
+1. ~~Get the three decisions above.~~ **Done** — all three taken as recommended.
 2. Fold the spec: keep every KEEP verbatim, rewrite the rest from the mock. Correct the drifted
    citations first — `printCurrent` is at `english-text.js:887-895` not `:863-866`; the derived-state
    prune at `:913-919` not `:884-892`; the per-face Cover comment at `:925-931`; the word-bank face
    hiding at `:933-935`; the staleness toast at `:1690`. All app.js and print.js citations verified
    exact.
-3. Measure the target floor at reading size — §9 mandates 72px, the mock runs 44px, and §12.5's
-   refusal of dot drag is argued from the 72–96px number. If 44px stands, that refusal needs a new
-   argument.
-4. `mood`, `shape` and `steps` on pack structure rows need the same five-site treatment `arcs` needed
-   (english-packs.js, gtNormalize, gtCopy, gtBlank, gtPackOf) — in one commit, or they vanish on the
-   first round trip.
-5. Build the faces against the folded spec. The three printed sheets are real work, not a port:
-   `print.js` lint requires a root `<svg>` with a viewBox and refuses `<foreignObject>`, so they must
-   be SVG string emitters using gtSvg / gtHead / gtWrap / xmlEsc, all already private in the file the
-   widget lives in.
-6. Write the teacher guide. Its opening paragraph is Glenn's, near verbatim: **this is a teaching
+3. ~~Measure the target floor at reading size.~~ **Done, and it is a split:** 72px stands for
+   `+ beat` and the panel close — the two controls a lesson presses dozens of times under time
+   pressure — and `--sm-tap` is 44 at board, 36 at table, everywhere else. §12.5's refusal of dot
+   drag keeps its arithmetic, because dot targets were not lowered.
+4. ~~`mood`, `shape` and the tagged vocabulary need the same five-site treatment.~~ **Done, in one
+   commit**, plus eight `kind:'arc'` plans and all 120 pack words scored and moody.
+5. ~~Build the faces.~~ **Done**, including the three sheets as SVG string emitters through
+   gtSvg / gtHead / gtWrap / xmlEsc. Verified against print.js's lint end to end: all three build,
+   the wall entry opens at 8 sheets and the bar's at 1, and the class's handwriting prints as
+   written.
+6. **Fold the spec** — now the top of the list, because the code is ahead of the document again and
+   that is the state the iteration log exists to stop.
+7. Write the teacher guide. Its opening paragraph is Glenn's, near verbatim: **this is a teaching
    tool, not a painting-by-numbers story maker.**

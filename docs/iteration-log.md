@@ -4380,3 +4380,102 @@ behaviour now; the spec's remaining value is its seams — the file:line citatio
 the caps table, the print contract, the hazards. Folding one into the other is
 the next piece of work, and it should keep the spec's constraints and take the
 mock's decisions, not the reverse.
+
+## 2026-07-31 · The story map, built
+
+The handoff from the reconciliation pass listed three decisions that blocked the
+build. All three were taken as recommended, and the build ran from there.
+
+**Names do not print.** A moment carries a child's name, and the map sheet is the
+one that goes home in a book bag. Screen only, in v1: the settings panel shows a
+moment with its `who`, and no sheet carries one. §14 rule 5's "no child names" is
+about pack text and does not govern this, so the code says so where the sheets
+are built.
+
+**Moments live in `w.props`.** Every store the app has ages out at 60 days, which
+defeats the whole point of evidence for a report written a term later — but the
+question is moot for v1, because a moment is not meant to outlive the class that
+produced it. They ride with the map, they snapshot, and reset clears them. The
+durable store is the assessment suite's job.
+
+**The pen was promoted, not re-implemented.** `modelwrite.js` now exports
+`window.SagePen` — the stroke maths plus an `attach(svg, opts)` factory — and the
+story map's per-row pens go through it. The alternative was ~400 lines of second
+pen, and `mwErasePart`'s own header records two rubbers that looked right and were
+not. Modelwrite's `mount()` does not go through the new surface, so nothing
+already written can shift. The split is of the SHARED LAYER, which is the rule the
+spec sets for exactly this case.
+
+### What that made possible
+
+The three faces are in. The text map runs the capture loop — `+ beat` opens a beat
+with its field focused, Enter commits and starts the next in the same box — and
+typing live-patches the card rather than re-rendering it, because the caret has to
+survive every keystroke. The emotion graph draws three channels with unlimited
+named lines, ghost dots on the armed line only, target lines dashed with hollow
+markers, and the gap ribbon between them. Boxing up is a handwritten ruled page:
+no typed cells anywhere, a pen strip on every row because a toolbar at the top of a
+700px face is a stretch back up the wall for box 4.
+
+Two blockers from the pass were fixed rather than carried. The write surfaces are
+built once and re-parented across a render, so a tap on a capture-bar score chip no
+longer tears down five SVGs and orphans a stroke in flight — verified: the node
+identity survives, and so does the ink. And the printed sheet takes its viewBox
+from the same `ruleSet()/lines` pass the face used, so handwriting prints as
+written at every band rather than only at the one that was eyeballed.
+
+### The measurement, and what it cost
+
+The board floor was settled by measuring rather than arguing. 72px stands for the
+two controls a lesson presses dozens of times — `+ beat` and the panel's close —
+and `--sm-tap` is 44 at board and 36 at table everywhere else, where the room
+setting makes it defensible.
+
+Measured at the shipped 1180×660: the app's title bar leaves 620px of body, and the
+plan header, stage band and bar take 151 of it. A 1000×440 plot wants 499px in a
+420px face. A class reads the shape whole or not at all, so the plot now takes the
+room that is left — the holder flexes and preserveAspectRatio does the scaling,
+with no measurement in JS.
+
+The per-beat text label under the axis was **cut**. Beats sit at a fixed pitch of
+`bw/(cap+1)` so a new beat cannot move the ones the class is already reading; at
+six boxes that pitch is about 20 units and at three boxes about 40. No wording fits
+either, and the mock's 16-character label drew every beat in a box on top of its
+neighbour. The dot carries `data-beat` and opens the panel instead; the box name is
+the label that has room.
+
+### Two seams widened
+
+`engDeps` gained one accessor, `classNames()` — the resolved class list's names, or
+`[]`. A narrow accessor is auditable where handing a widget `state` is not, and the
+who-row's promise that a name "stays on this machine" had to be true from the first
+commit. And `print.js` gained one line so a caller can open the dialog at the budget
+its own entry point means: "Print…" on the bar opens at one sheet, "Print for the
+wall…" at eight, and the choice is remembered nowhere.
+
+### The data, in one commit
+
+`mood`, `shape` and a tagged vocabulary landed across all five sites at once —
+`english-packs.js`, `gtNormalize`, `gtCopy`, `gtBlank`, `gtPackOf` — because a mood
+added to the data alone works until the first time a pack round-trips through a
+file, and then it is silently gone. Eight arcs joined as a new `kind: 'arc'` pack,
+and all 120 pack vocabulary words carry a diction score and a mood.
+
+`language.vocabulary` still normalises to plain strings, so the genre toolkit's bank
+face, its poster and its settings are untouched; the tags ride alongside in `vocab`.
+One authored list, two views, and no second list to drift. Verified: the toolkit
+still lists twelve genres at 26 words each.
+
+### What is not done
+
+The spec fold itself. `story-map-design.md` still describes typed cells and no
+stages, and the handoff's section-by-section plan is the instruction for rewriting
+it. The code is ahead of the document again, which is the state this log exists to
+stop — so it is the next thing, not a later thing.
+
+Also outstanding: modelwrite still ships `MW_STAGES` at four stages with different
+words, so two English widgets side by side show two gradual-release schemes.
+Changing it edits a shipped widget's printed page tag, which wants a ruling rather
+than a guess. And ⋮ Duplicate deep-copies props, so a duplicated map carries last
+term's moments; it is written down here rather than fixed, because the fix is a
+hook the app does not have.

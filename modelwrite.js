@@ -2750,6 +2750,210 @@
     };
   }
 
+  /* ------------------------------------------------------- the pen, lent out
+     The story map writes by hand too: a ruled box beside each part of the plan,
+     modelled on the board while thirty children copy it onto their own boards.
+     It needs THIS pen rather than another one, and the reason is mwErasePart —
+     whose header records two rubbers that looked right and were not, one of
+     which latched and threw away the rest of a stroke. A second implementation
+     re-earns those bugs and hands a teacher two rubbers that behave differently.
+
+     So the SHARED LAYER is promoted and no widget is split, which is the rule
+     docs/story-map-design.md §13 sets for exactly this case. Everything below is
+     a read of what is already in this file: modelwrite's own mount does not go
+     through it and is untouched, so nothing already written can shift.
+
+     A stroke is { c, w, pts:[x,y,…], pw:[…] } in both widgets, so the maths
+     needs no translation at the seam. The stroke's own coordinate space is the
+     host's viewBox — never pixels — which is what makes a resize unable to move
+     a child's ink. */
+  const SP_THIN = 16;                 // 4 units squared: a point must earn its place
+
+  const spHasW = (s) => !!(s && s.pw && s.pts && s.pw.length === s.pts.length >> 1);
+  // Variable-width strokes are drawn as their own filled outline; a stroke with
+  // no per-point width takes the constant-width centreline, byte for byte as the
+  // page does, so the two widgets cannot render the same stroke differently.
+  const spPathOf = (s) => (spHasW(s) ? mwOutline(s.pts, s.pw) : mwStrokePath(s.pts));
+
+  // The meet-transform, computed by hand. Scaling the client offset by the
+  // bounding rect alone is only correct while the element box matches the
+  // viewBox aspect; the moment a surface sits in a grid cell with a constrained
+  // height, preserveAspectRatio letterboxes it and the ink lands away from the
+  // pen tip. This was a review finding on mount()'s toUnits and it is the same
+  // finding here — the shortcut is the obvious thing to write.
+  function spUnits(svg, e, vw, vh) {
+    const r = svg.getBoundingClientRect();
+    const scale = Math.min(r.width / vw, r.height / vh) || 1;
+    const padX = (r.width - vw * scale) / 2;
+    const padY = (r.height - vh * scale) / 2;
+    const x = Math.round((e.clientX - r.left - padX) / scale);
+    const y = Math.round((e.clientY - r.top - padY) / scale);
+    return [Math.max(0, Math.min(vw, x)), Math.max(0, Math.min(vh, y))];
+  }
+
+  // Strokes as an SVG string, for a printed sheet. The same path maths the
+  // screen uses, so handwriting prints as written rather than as a redraw.
+  function spMarkup(strokes) {
+    let out = '';
+    for (const s of strokes || []) {
+      if (!s || !s.pts || s.pts.length < 2) continue;
+      const c = /^#[0-9a-fA-F]{3,8}$/.test(String(s.c)) ? s.c : '#1e2c33';
+      out += spHasW(s)
+        ? '<path d="' + spPathOf(s) + '" fill="' + c + '" stroke="none"/>'
+        : '<path d="' + spPathOf(s) + '" fill="none" stroke="' + c + '" stroke-width="'
+          + (+s.w > 0 ? +s.w : 6) + '" stroke-linecap="round" stroke-linejoin="round"/>';
+    }
+    return out;
+  }
+
+  /* attach(svg, o) — the interaction layer, as a factory.
+
+     The host owns the strokes and the repaint; this owns the pointer stream and
+     nothing else. o carries:
+       view()      → [w, h] in viewBox units
+       strokes()   → the live array for THIS surface
+       add(s)      → push a committed stroke
+       replace(a)  → swap the array wholesale (the rubber's only write)
+       layer()     → the element the live path is appended to  (optional)
+       tool/ink/width/eraseR/cap                              (optional readers)
+       locked()    → falsy, or the refusal to speak            (optional)
+       onRefuse(msg) / onChange('draw'|'erase')                (optional)
+
+     Returns { destroy }. */
+  function spAttach(svg, o) {
+    const NS = 'http://www.w3.org/2000/svg';
+    let drawing = null, liveEl = null;
+    const read = (k, dflt) => (typeof o[k] === 'function' ? o[k]() : dflt);
+
+    const rubAt = (x, y) => {
+      const r = read('eraseR', 14);
+      const arr = o.strokes() || [];
+      const out = [];
+      let hit = false;
+      for (const s of arr) {
+        const parts = mwErasePart(s, x, y, r);
+        // null means untouched, and it is not the same as []: an unhit stroke is
+        // handed back the object it already was, never a rebuilt copy of it.
+        if (parts === null) { out.push(s); continue; }
+        hit = true;
+        for (const q of parts) out.push(q);
+      }
+      if (!hit) return false;
+      o.replace(out);
+      return true;
+    };
+
+    const down = (e) => {
+      // One pointer owns a stroke. A second finger on an interactive whiteboard
+      // is the commonest input there is, and without this the two interleave
+      // into a single zig-zag that erases as one object.
+      if (drawing) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      const refusal = read('locked', '');
+      if (refusal) { if (o.onRefuse) o.onRefuse(refusal); return; }
+      const v = o.view();
+      const [x, y] = spUnits(svg, e, v[0] || 1, v[1] || 1);
+      const erasing = read('tool', 'pen') === 'rub';
+      if (!erasing) {
+        const cap = read('cap', 0);
+        if (cap && (o.strokes() || []).length >= cap) {
+          if (o.onRefuse) o.onRefuse(read('capMsg', 'That box is full — start the next box.'));
+          return;
+        }
+      }
+      e.preventDefault();
+      // Belt and braces, never the mechanism: every move re-checks the pointer
+      // id, so a board that declines capture still draws one clean stroke.
+      try { svg.setPointerCapture(e.pointerId); } catch (err) { /* as above */ }
+      if (erasing) {
+        drawing = { ptr: e.pointerId, erase: true, took: false };
+        if (rubAt(x, y)) drawing.took = true;
+        return;
+      }
+      const w = read('width', 6);
+      drawing = {
+        ptr: e.pointerId, pts: [x, y], pw: [Math.round(w)], w,
+        c: read('ink', '#1e2c33'), vw: 0, lt: e.timeStamp || performance.now(),
+        pen: e.pointerType === 'pen',
+      };
+      liveEl = document.createElementNS(NS, 'path');
+      liveEl.setAttribute('fill', drawing.c);
+      liveEl.setAttribute('stroke', 'none');
+      liveEl.setAttribute('d', mwOutline(drawing.pts, drawing.pw));
+      (read('layer', null) || svg).append(liveEl);
+    };
+
+    const move = (e) => {
+      if (!drawing || e.pointerId !== drawing.ptr) return;
+      const v = o.view();
+      const [x, y] = spUnits(svg, e, v[0] || 1, v[1] || 1);
+      if (drawing.erase) { if (rubAt(x, y)) drawing.took = true; return; }
+      const n = drawing.pts.length;
+      const dx = x - drawing.pts[n - 2], dy = y - drawing.pts[n - 1];
+      if (dx * dx + dy * dy < SP_THIN) return;
+      drawing.pts.push(x, y);
+      const now = e.timeStamp || performance.now();
+      const dt = Math.max(1, now - drawing.lt);
+      const target = mwNib(drawing.w, e.pressure, Math.sqrt(dx * dx + dy * dy) / dt, drawing.pen);
+      drawing.vw = drawing.vw ? drawing.vw * 0.62 + target * 0.38 : target;
+      drawing.pw.push(Math.round(drawing.vw));
+      drawing.lt = now;
+      // one live path, set once per point — never a rebuild of the surface
+      if (liveEl) liveEl.setAttribute('d', mwOutline(drawing.pts, drawing.pw));
+    };
+
+    // Nulled before any branch work, so a throw downstream cannot leave the
+    // surface locked against the next stroke.
+    const finish = (e) => {
+      const d = drawing;
+      if (!d || (e && e.pointerId !== d.ptr)) return;
+      drawing = null;
+      const live = liveEl;
+      liveEl = null;
+      if (e) { try { svg.releasePointerCapture(e.pointerId); } catch (err) { /* fine */ } }
+      if (d.erase) {
+        if (d.took && o.onChange) o.onChange('erase');
+        return;
+      }
+      if (d.pts.length >= 2) {
+        o.add({ c: d.c, w: d.w, pts: d.pts, pw: d.pw });
+        // the host repaints here, so the live path is removed AFTER its
+        // committed twin is on the surface and nothing flickers
+        if (o.onChange) o.onChange('draw');
+      }
+      if (live && live.parentNode) live.remove();
+    };
+
+    svg.style.touchAction = 'none';
+    svg.addEventListener('pointerdown', down);
+    svg.addEventListener('pointermove', move);
+    svg.addEventListener('pointerup', finish);
+    svg.addEventListener('pointercancel', finish);
+    return {
+      destroy() {
+        svg.removeEventListener('pointerdown', down);
+        svg.removeEventListener('pointermove', move);
+        svg.removeEventListener('pointerup', finish);
+        svg.removeEventListener('pointercancel', finish);
+        drawing = null;
+        liveEl = null;
+      },
+    };
+  }
+
+  window.SagePen = {
+    VERSION: 1,
+    strokePath: mwStrokePath,
+    outline: mwOutline,
+    nib: mwNib,
+    erasePart: mwErasePart,
+    pathOf: spPathOf,
+    hasWidths: spHasW,
+    markup: spMarkup,
+    units: spUnits,
+    attach: spAttach,
+  };
+
   window.SageModelWrite = {
     init(deps) {
       D = deps;

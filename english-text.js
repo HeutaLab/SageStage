@@ -109,6 +109,12 @@
   const gtSlug = (s) => gtStr(s, GT_CAP.id).toLowerCase().replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '').slice(0, GT_CAP.id) || 'genre';
 
+  // Which part of an arc a thing serves: a plan's box usually runs up, level or
+  // down, and so does a word. Three values and null, whitelisted at every door —
+  // an unrecognised mood is absence, never a fourth kind.
+  const GT_MOODS = ['up', 'mid', 'down'];
+  const gtMood = (v) => (GT_MOODS.includes(v) ? v : null);
+
   // Model text keeps its line breaks — paragraphing is part of what a class reads
   // off a WAGOLL — so it gets its own cleaner rather than gtStr's whitespace
   // collapse. Over the cap it stops at the last sentence end rather than
@@ -165,20 +171,44 @@
       if (structure.length >= GT_CAP.struct) { clamped.push('structure rows past ' + GT_CAP.struct); break; }
       const box = gtStr(row && row.box, GT_CAP.box);
       if (!box) continue;
-      structure.push({ box, hint: gtStr(row && row.hint, GT_CAP.hint) });
+      structure.push({ box, hint: gtStr(row && row.hint, GT_CAP.hint), mood: gtMood(row && row.mood) });
     }
+    // shape says whether this text form is a story in TIME at all — whether the
+    // emotion graph applies to it. It lives on the plan and is never derived from
+    // the genre id: a water-cycle explanation and a diary are both "text" and
+    // only one of them has a shape. Absent means true, so nothing already
+    // authored loses its graph.
+    const shape = raw.shape !== false;
 
     // `language: "nonsense"` and `language: []` both land here as three empty
     // lists rather than a throw — which also hides the word bank face (§8.5)
     const lang = raw.language && typeof raw.language === 'object' && !Array.isArray(raw.language)
       ? raw.language : {};
     const language = {};
+    const vocab = [];
     for (const [key, label] of GT_LANG) {
       const out = [];
       for (const wd of Array.isArray(lang[key]) ? lang[key] : []) {
         if (out.length >= GT_CAP.lang) { clamped.push(label.toLowerCase() + ' past ' + GT_CAP.lang); break; }
-        const s = gtStr(wd, GT_CAP.word);
-        if (s) out.push(s);
+        const obj = wd && typeof wd === 'object' && !Array.isArray(wd) ? wd : null;
+        const s = gtStr(obj ? obj.w : wd, GT_CAP.word);
+        if (!s) continue;
+        out.push(s);
+        // VOCABULARY alone may arrive tagged, and the tags ride ALONGSIDE rather
+        // than inside: language.vocabulary stays a list of plain strings, so the
+        // toolkit's own bank face, its poster and its settings are byte-for-byte
+        // unaffected, while the story map's word bank reads `vocab` in the same
+        // order. One authored list, two views — there is no second list to drift.
+        //
+        // The tags are AUTHORED, never inferred. A derived valence stays refused:
+        // nothing here looks at the string and decides what it means.
+        if (key !== 'vocabulary') continue;
+        const raw2 = obj && obj.lvl != null ? +obj.lvl : 2;
+        vocab.push({
+          w: s,
+          lvl: Number.isFinite(raw2) ? Math.max(0, Math.min(4, Math.round(raw2))) : 2,
+          mood: gtMood(obj && obj.mood) || 'mid',
+        });
       }
       language[key] = out;
     }
@@ -186,7 +216,7 @@
     const model = gtCleanText(raw.model);
     if (model.clipped) clamped.push('model text shortened');
     const id = gtStr(raw.id, GT_CAP.id).toLowerCase().replace(/[^a-z0-9-]/g, '') || gtSlug(name);
-    return { genre: { id, name, items, structure, language, model: model.text }, clamped };
+    return { genre: { id, name, items, structure, shape, language, vocab, model: model.text }, clamped };
   }
 
   let gtDefaultCache = null;
@@ -201,17 +231,25 @@
     // reveal in one look like a reveal in the other after a reload
     return gtDefaultCache.map(gtCopy);
   }
+  // Every one of these rebuilds the shape FIELD BY FIELD, which is what makes an
+  // unknown key impossible to smuggle through — and also what means a new key
+  // must land in all five places (here, gtNormalize, gtBlank, gtPackOf and
+  // english-packs.js) in ONE commit. mood, shape and vocab landed together for
+  // exactly that reason: a mood added to the data alone works until the first
+  // time a pack round-trips through a file, and then it is silently gone.
   const gtCopy = (g) => ({
     id: g.id,
     name: g.name,
     items: g.items.map((it) => ({ id: D.uid(), t: it.t, band: it.band })),
-    structure: g.structure.map((r) => ({ box: r.box, hint: r.hint })),
+    structure: g.structure.map((r) => ({ box: r.box, hint: r.hint, mood: r.mood || null })),
+    shape: g.shape !== false,
     language: GT_LANG.reduce((o, [k]) => { o[k] = (g.language[k] || []).slice(); return o; }, {}),
+    vocab: (g.vocab || []).map((v) => ({ w: v.w, lvl: v.lvl, mood: v.mood })),
     model: g.model,
   });
   const gtBlank = () => ({
-    id: 'genre', name: 'Genre', items: [], structure: [],
-    language: GT_LANG.reduce((o, [k]) => { o[k] = []; return o; }, {}), model: '',
+    id: 'genre', name: 'Genre', items: [], structure: [], shape: true,
+    language: GT_LANG.reduce((o, [k]) => { o[k] = []; return o; }, {}), vocab: [], model: '',
   });
   const gtHasBank = (g) => !!g && GT_LANG.some(([k]) => (g.language[k] || []).length);
   // Always mutate the existing genre object rather than swapping in a new one, so
@@ -223,11 +261,22 @@
     else p.genre = next;
     return p.genre;
   }
+  // Vocabulary leaves TAGGED, so a pack that goes out to a file and comes back
+  // keeps the moods and scores that were authored into it. gtNormalize reads
+  // both shapes, so a pack of bare strings written before this still loads and
+  // one written after it still loads anywhere.
+  const gtVocabOut = (g) => ((g.vocab && g.vocab.length)
+    ? g.vocab.map((v) => ({ w: v.w, lvl: v.lvl, mood: v.mood }))
+    : (g.language.vocabulary || []).slice());
   const gtPackOf = (g) => ({
     format: 'sage-pack@1', kind: 'genre', id: g.id, name: g.name,
     items: g.items.map((it) => ({ t: it.t, band: it.band })),
-    structure: g.structure.map((r) => ({ box: r.box, hint: r.hint })),
-    language: GT_LANG.reduce((o, [k]) => { o[k] = (g.language[k] || []).slice(); return o; }, {}),
+    structure: g.structure.map((r) => ({ box: r.box, hint: r.hint, mood: r.mood || null })),
+    shape: g.shape !== false,
+    language: GT_LANG.reduce((o, [k]) => {
+      o[k] = k === 'vocabulary' ? gtVocabOut(g) : (g.language[k] || []).slice();
+      return o;
+    }, {}),
     model: g.model || '',
   });
 
@@ -829,38 +878,2395 @@
     fileIn.click();
   }
 
+  /* ================================================================ story map
+     Design: docs/story-map-design.md, folded against .sm-mock.html — the mock is
+     the authority on BEHAVIOUR, the spec on the seams and the hazards.
+
+     THE GOVERNING DISCOVERY, and everything else follows from it: THE CHILDREN
+     DO NOT TOUCH THE BOARD. The board is for MODELLING; the practice happens on
+     thirty drywipe boards in front of it. So gradual release is a first-class
+     state, the board lock is a first-class control, the boxing-up face is a
+     HANDWRITTEN page the teacher writes on while the class copies from it, and
+     the word bank is class-facing furniture to be covered and uncovered rather
+     than a teacher's list.
+
+     The second governing sentence, which is why this exists beyond the lesson: a
+     moment recorded at the board is evidence for a report written a term later.
+
+     Three lessons, three bits of paper, and all three are describing the same
+     five or six boxes — which is why it is one widget with three faces and not
+     three widgets. */
+
+  // Caps live in ONE table, because a cap that lives somewhere else is a cap
+  // nobody audits. `word` and `words` are REUSED from GT_CAP rather than
+  // restated, for the same reason. Channels are 3 and that is a SHAPE, not a
+  // cap, so 3 is deliberately not in here.
+  const SM_CAP = {
+    spine: 16, beats: 6, mapBeats: 96, beat: 140, note: 140,
+    lines: 12, moments: 60, axisWord: 24, track: 24, vocabPerBeat: 4,
+    writeMin: 2, writeMax: 14,
+    strokesPerBox: 300, strokesPerMap: 1200, pointsPerStroke: 3000,
+    pic: 64000, picW: 340,
+  };
+
+  // Three channels: the colour, the marker shape and the lane are one thing and
+  // there are three of them, permanently, because three widely-separated
+  // saturated hues is what a badly calibrated interactive whiteboard can
+  // actually carry. Widget-internal literals and never var(--…): applyTheme
+  // re-declares --ink per widget, and a var() inside a printed SVG string means
+  // nothing at all. These are the same three re-declared under .smwidget.
+  const SM_CH = [
+    { col: '#1d4ed8', shape: 'circle', name: 'blue' },
+    { col: '#ea580c', shape: 'square', name: 'orange' },
+    { col: '#047857', shape: 'triangle', name: 'green' },
+  ];
+
+  const SM_STAGES = [
+    ['model', 'Model', 'teacher drives, thinking aloud'],
+    ['together', 'Together', 'class contributes, teacher scribes'],
+    ['yours', 'Over-to-you', 'their whiteboards now'],
+  ];
+  const SM_STAGE_IDS = SM_STAGES.map((s) => s[0]);
+  const SM_STAGE_NAME = (id) => (SM_STAGES.find((s) => s[0] === id) || SM_STAGES[0])[1];
+
+  // Which part of the arc a word serves, as a sign. Read against the STORY line
+  // and nothing else — see smStoryLine.
+  const SM_MOODSIGN = { up: 1, mid: 0, down: -1 };
+  // Seeding a target from a plan's shape. Clamped to the axis at ±((steps−1)/2),
+  // so at five steps a "down" box gets −2 rather than −3.
+  const SM_MOODVAL = { up: 2, mid: 0, down: -3 };
+  const SM_MOOD_META = [
+    ['up', 'for the lifts', '#0d6e66'],
+    ['mid', 'for the level', '#5b6b7b'],
+    ['down', 'for the falls', '#b02a5b'],
+  ];
+
+  // One string per step, top first. The axis words are the class's to change —
+  // a class that has agreed "raging" for the bottom of the scale should see
+  // "raging" on the board.
+  const SM_AXIS_WORDS = {
+    5: ['very happy', 'happy', 'all right', 'sad', 'very sad'],
+    7: ['as happy as it gets', 'happy', 'a bit happy', 'all right',
+      'a bit sad', 'sad', 'as sad as it gets'],
+  };
+  const smValOfStep = (i, steps) => ((steps - 1) / 2) - i;
+  // ONE glyph for a signed numeral, everywhere. The numeral is the cue that
+  // survives a reader who has neither the default wording nor the class's
+  // replacement, so it cannot be a hyphen-minus on the axis and a U+2212 on the
+  // sheet. Every signed number in this widget comes through here.
+  const smSigned = (v) => (v > 0 ? '+' + v : v < 0 ? '−' + Math.abs(v) : '0');
+
+  /* Writing room is not one size. A Reception child forms block letters an inch
+     tall and needs a guide — a baseline to sit on and a dashed midline to reach
+     for. Year 6 writes small and at length, so it needs narrow rules and MORE of
+     them. Banded default, teacher override, like everything else here.
+
+     The pitches are viewBox UNITS in a fixed 560-unit space, so on screen a band
+     is a RELATIVE size and nothing here claims otherwise — the honest millimetre
+     claim belongs to the printed sheet, where the paper is a known size. Naming
+     these in px on the board would be a claim the widget cannot keep. */
+  const SM_RULES = {
+    eyfs: { name: 'EYFS · block letters', pitch: 52, guide: true, lines: 3 },
+    ks1: { name: 'KS1 · large', pitch: 38, guide: true, lines: 4 },
+    lks2: { name: 'Years 3–4', pitch: 26, guide: false, lines: 5 },
+    uks2: { name: 'Years 5–6 · long', pitch: 20, guide: false, lines: 9 },
+  };
+  const SM_RULE_IDS = Object.keys(SM_RULES);
+  const SM_WRITE_W = 560;
+
+  /* A SECOND band vocabulary, and it is not gtBandFor's. Writing rules have FOUR
+     bands where plans have three, because gtBandFor folds Reception into ks1 —
+     and Reception is precisely the band that needs the 52-unit guide. Derived
+     from the RAW year group, which is why it is its own function sitting beside
+     gtBandFor rather than a call to it. Do not unify the two. */
+  const SM_RULE_YEAR = { R: 'eyfs', 1: 'ks1', 2: 'ks1', 3: 'lks2', 4: 'lks2', 5: 'uks2', 6: 'uks2' };
+  const smRuleBandFor = (yg) => SM_RULE_YEAR[String(yg == null ? '' : yg)] || 'lks2';
+
+  /* SCORE IS DICTION, not intensity of feeling. "Wistful" scores high because a
+     primary writer almost never reaches for it — that the feeling is mild is
+     beside the point. Mood and score are INDEPENDENT: mood says which part of
+     the arc a word serves, score says how ambitious the language is. Conflating
+     them was the error, and only mood ever feeds counterpoint.
+
+     It scores the WORD, never the writing: a 5 in the wrong place is worse than
+     a 2 in the right one, and a class chasing high numbers writes purple prose. */
+  const SM_LVLNAME = ['plain', 'useful', 'good', 'strong', 'exceptional'];
+  const SM_LVLMAX = 4;
+  const SM_LADDERS = ['sunflower', 'vine', 'rocket', 'crosshair'];
+  const SM_LADDER_BAND = { ks1: 'sunflower', lks2: 'rocket', uks2: 'crosshair' };
+
+  /* Board-facing tags are SINGLE LETTERS for the two that name a NEED. A word
+     tagged "EAL" or "SEN" on a surface thirty children read is a signpost to
+     which child it is for — the same reason the ambition mark goes on the word
+     and never on the person. "pack", "bank" and "HFW" name a kind of WORD, not a
+     kind of child, so they read in full.
+
+     That is the test, and the next tag has to pass it: a tag naming a kind of
+     word reads in full; a tag naming a need is one letter. */
+  const SM_SRC = {
+    genre: ['pack', '#0d6e66', '#d5f0ec'],
+    bank: ['bank', '#7c3aed', '#ede4fd'],
+    eal: ['E', '#b02a5b', '#fbe3ec'],
+    sen: ['S', '#b45309', '#fdf0dc'],
+    hfw: ['HFW', '#4b5563', '#eceff1'],
+  };
+  // A teacher types whichever comes to hand; both land on the same key. The
+  // settings panel may say EAL and SEN in its own prose — that surface is the
+  // teacher's — but the board shows only the letters.
+  const SM_SRCALIAS = {
+    e: 'eal', eal: 'eal', s: 'sen', sen: 'sen', hfw: 'hfw',
+    pack: 'genre', genre: 'genre', bank: 'bank',
+  };
+
+  /* The climb, banded. Growth is continuous where rungs are discrete, so the
+     sunflower opens rather than steps; the crosshair closes in rather than
+     climbs, which is why it earns the top of the school — by Year 6 you are
+     aiming, not reaching. A Reception class may want the flower where a Year 2
+     class wants the rocket, so the band only picks the default. */
+  function smLadderArt(kind, lvl) {
+    const l = Math.max(0, Math.min(SM_LVLMAX, lvl | 0));
+    const t = l / SM_LVLMAX;
+    const g = ['#8b9aa2', '#6b8a86', '#0d6e66', '#a06010', '#b45309'][l] || '#8b9aa2';
+    if (kind === 'sunflower') {
+      const h = 6 + t * 12, r = 2 + t * 4.8, cy = (19 - h).toFixed(1);
+      return '<svg viewBox="0 0 22 22"><path d="M11 20V' + (20 - h).toFixed(1) + '" stroke="#4f7a3a" stroke-width="2"/>'
+        + (l > 0 ? '<path d="M11 ' + (20 - h / 2).toFixed(1) + 'l' + (2 + t * 3).toFixed(1) + ' -2" stroke="#4f7a3a" stroke-width="1.6"/>' : '')
+        + '<circle cx="11" cy="' + cy + '" r="' + r.toFixed(1) + '" fill="' + (l >= 3 ? '#f5c542' : '#cbd5c0') + '" stroke="' + g + '" stroke-width="1.4"/>'
+        + (l >= 3 ? '<circle cx="11" cy="' + cy + '" r="' + (1.2 + t).toFixed(1) + '" fill="#8a5a2b"/>' : '')
+        + (l === SM_LVLMAX ? '<g stroke="#f0a92b" stroke-width="1.2"><path d="M4 ' + cy + 'h2M16 ' + cy + 'h2"/></g>' : '')
+        + '</svg>';
+    }
+    if (kind === 'vine') {
+      const y = 17 - t * 12;
+      return '<svg viewBox="0 0 22 22"><path d="M11 21V2" stroke="#4f7a3a" stroke-width="2"/>'
+        + '<circle cx="11" cy="' + y.toFixed(1) + '" r="' + (2.6 + t * 1.4).toFixed(1) + '" fill="' + g + '"/>'
+        + '<path d="M11 ' + (y + 3).toFixed(1) + 'q3 3 1 5" stroke="' + g + '" stroke-width="1.4" fill="none"/></svg>';
+    }
+    if (kind === 'rocket') {
+      const y = 17 - t * 13;
+      return '<svg viewBox="0 0 22 22"><circle cx="17" cy="4" r="2.6" fill="' + (l === SM_LVLMAX ? '#f5c542' : '#e8e2cf') + '"/>'
+        + '<path d="M11 ' + y.toFixed(1) + 'l3 5h-6z" fill="' + g + '"/><path d="M11 ' + y.toFixed(1) + 'l0 -4" stroke="' + g + '" stroke-width="2"/>'
+        + (l > 0 ? '<path d="M11 ' + (y + 6).toFixed(1) + 'v' + (l * 2.2).toFixed(1) + '" stroke="#e0a13a" stroke-width="1.8"/>' : '')
+        + '</svg>';
+    }
+    const rr = 9.2 - t * 7;
+    return '<svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="9.2" fill="none" stroke="#cfdad7" stroke-width="1.3"/>'
+      + '<circle cx="11" cy="11" r="' + rr.toFixed(1) + '" fill="none" stroke="' + g + '" stroke-width="1.8"/>'
+      + (l >= 3 ? '<circle cx="11" cy="11" r="' + (l === SM_LVLMAX ? 2 : 1.3) + '" fill="' + g + '"/>' : '')
+      + '<path d="M11 1v3M11 18v3M1 11h3M18 11h3" stroke="' + g + '" stroke-width="1.3"/></svg>';
+  }
+
+  // ------------------------------------------------------------- the plans
+  /* Three homes, one normalised shape: a plan comes from the bundled arc library,
+     from the genre pack the toolkit already ships, or from the teacher's own
+     rows. Whichever it came from, it is the same five parts by the time anything
+     reads it, and arc.src lives INSIDE the arc rather than beside it — a sibling
+     field is two writes and two chances to disagree about which plan the rows
+     came from.
+
+     Genres are a sort key for the picker and never a filter. An affinity that
+     reads as a gate is the kind of key a later reader fixes into a restriction. */
+  function smNormArc(raw, keepIds) {
+    if (!raw || typeof raw !== 'object') return null;
+    const name = gtStr(raw.name, GT_CAP.name);
+    if (!name) return null;
+    const rows = [];
+    const seen = new Set();
+    for (const r of Array.isArray(raw.rows) ? raw.rows : (Array.isArray(raw.structure) ? raw.structure : [])) {
+      if (rows.length >= GT_CAP.struct) break;
+      const box = gtStr(r && r.box, GT_CAP.box);
+      if (!box) continue;
+      // Row ids are D.uid() and NEVER 'r'+i. Strokes, gap lookups and every
+      // beat's row are keyed by row id, so a positional id binds the old third
+      // box's handwriting to the new plan's third box — the Problem's writing
+      // appearing under "Choices". §6 already refuses matching anything by
+      // position; this is that ban, on the id itself.
+      let id = keepIds && r && typeof r.id === 'string' && r.id && r.id.length <= 40 ? r.id : D.uid();
+      if (seen.has(id)) id = D.uid();
+      seen.add(id);
+      rows.push({
+        id,
+        // key is minted from the wording AS AUTHORED, in this pass, because
+        // identity cannot be back-filled. Nothing reads it yet; the swap's
+        // matcher is deferred and will.
+        key: gtStr(r && r.key, GT_CAP.box) || gtSlug(box),
+        box,
+        hint: gtStr(r && r.hint, GT_CAP.hint),
+        mood: gtMood(r && r.mood),
+        edited: !!(r && r.edited),
+      });
+    }
+    if (!rows.length) return null;
+    const shape = raw.shape !== false;
+    return {
+      src: gtStr(raw.src || raw.id, GT_CAP.id) || null,
+      name,
+      band: GT_BAND_IDS.includes(raw.band) ? raw.band : null,
+      shape,
+      steps: raw.steps === 5 || raw.steps === 7 ? raw.steps : null,
+      // A mood with no graph to seed is dead data that reads as authored.
+      rows: rows.map((r) => (shape ? r : Object.assign(r, { mood: null }))),
+    };
+  }
+
+  // Mirrors gtDefaults exactly, including the fresh-ids-on-every-read rule: two
+  // story maps on one plan are two independent lesson artefacts, and sharing row
+  // ids between them would bind one map's handwriting to the other's boxes.
+  let smArcCache = null;
+  function smArcLib() {
+    if (!smArcCache) {
+      const packs = Array.isArray(window.SAGE_ENGLISH_PACKS) ? window.SAGE_ENGLISH_PACKS : [];
+      const out = [];
+      for (const b of packs) {
+        if (!b) continue;
+        if (b.kind === 'arc') {
+          for (const a of Array.isArray(b.arcs) ? b.arcs : []) {
+            const n = smNormArc(a, false);
+            if (n) out.push(n);
+          }
+        } else if (b.kind === 'genre' && Array.isArray(b.structure) && b.structure.length) {
+          // the genre pack's own structure IS a plan — the toolkit and the story
+          // map are describing the same boxes and there is no second list
+          const n = smNormArc({
+            id: b.id, name: b.name, band: null, shape: b.shape, rows: b.structure,
+          }, false);
+          if (n) out.push(n);
+        }
+      }
+      smArcCache = out;
+    }
+    return smArcCache.map((a) => smNormArc(a, false));
+  }
+
+  // ------------------------------------------------------------- coercion
+  /* Field by field, so an unknown key is dropped BY CONSTRUCTION rather than by a
+     list of keys to delete — never a spread of the parsed value. This is the one
+     door between a saved blob and everything downstream, and the discipline is
+     what stops a hostile or a stale props object reaching a face. */
+  const smWhite = (v, list, dflt) => (list.includes(v) ? v : dflt);
+  const smInt = (v, lo, hi, dflt) => {
+    const n = Math.round(+v);
+    return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : dflt;
+  };
+
+  // ONE word normaliser, used by the pack seed, the capture bar, the paste rail
+  // and the coercion alike — a second one is how a src alias works in one place
+  // and not another.
+  function smWord(raw) {
+    const o = raw && typeof raw === 'object' ? raw : { w: raw };
+    const w = gtStr(o.w, GT_CAP.word);
+    if (!w) return null;
+    const key = String(o.src == null ? '' : o.src).toLowerCase();
+    return {
+      w,
+      src: SM_SRCALIAS[key] || 'bank',
+      lvl: smInt(o.lvl, 0, SM_LVLMAX, 2),
+      mood: gtMood(o.mood) || 'mid',
+      beyond: !!o.beyond,
+    };
+  }
+
+  function smNorm(p) {
+    const arc = smNormArc(p.arc, true);
+    p.arc = arc;
+    p.allBands = !!p.allBands;
+    p.shape = arc ? arc.shape : true;
+
+    const rowIds = new Set(arc ? arc.rows.map((r) => r.id) : []);
+
+    // TRACKS. Identity is the explicit `ch` field, never the array position —
+    // the sentence builder's recorded regression is why. There, mount's
+    // filter(Boolean) collapsed a positional pair, so filling "The broken one"
+    // first PROMOTED the broken sentence into the "Done right" slot on the next
+    // remount: the error presented as the model. Array position may never BE
+    // identity. With ch on the entry the array can be any length, compaction is
+    // harmless, and "no line ever changes colour because another was hidden" is
+    // true by construction rather than by a ban on splice.
+    const tracks = [];
+    const tSeen = new Set();
+    for (const t of Array.isArray(p.tracks) ? p.tracks : []) {
+      if (tracks.length >= SM_CAP.lines) break;
+      const name = gtStr(t && t.name, SM_CAP.track);
+      if (!name) continue;
+      let id = t && typeof t.id === 'string' && t.id && t.id.length <= 40 ? t.id : D.uid();
+      if (tSeen.has(id)) id = D.uid();
+      tSeen.add(id);
+      tracks.push({
+        id, name,
+        on: !!(t && t.on),
+        kind: smWhite(t && t.kind, ['actual', 'target'], 'actual'),
+        ch: smInt(t && t.ch, 0, 2, 0),
+      });
+    }
+    // at most one line on air per channel — the board never shows four
+    for (let ch = 0; ch < 3; ch++) {
+      let live = false;
+      for (const t of tracks) {
+        if (t.ch !== ch || !t.on) continue;
+        if (live) t.on = false; else live = true;
+      }
+    }
+    p.tracks = tracks;
+    const visible = tracks.filter((t) => t.on);
+    // armed is ONE id outside the entries, because `on` is three independent
+    // truths and armed is one — and one truth stored in three places is a state
+    // that can say two lines are armed at once. Resolved by walking CHANNELS,
+    // never array order.
+    p.armed = visible.some((t) => t.id === p.armed) ? p.armed
+      : (smByChannel(visible)[0] || { id: null }).id;
+    const tIds = new Set(tracks.map((t) => t.id));
+
+    // BEATS. row is a box id and never an index, and MOUNT NEVER FILTERS THIS
+    // ARRAY BY ROW ID: nothing but a hand ever deletes a beat. A one-line sweep
+    // against live row ids is the erase-resurrect class of bug, and orphans go
+    // in a tray instead — see the tray at the head of the map face.
+    const beats = [];
+    for (const b of Array.isArray(p.beats) ? p.beats : []) {
+      if (beats.length >= SM_CAP.mapBeats) break;
+      if (!b || typeof b !== 'object') continue;
+      const v = {};
+      const src = b.v && typeof b.v === 'object' ? b.v : {};
+      // keyed by TRACK id, not by (emo, track): the latter makes a beat belong
+      // to exactly one line, which makes "the same beat on two lines" —
+      // the whole point of the graph — unrepresentable
+      for (const k of Object.keys(src)) {
+        if (!tIds.has(k)) continue;
+        const n = Math.round(+src[k]);
+        if (Number.isFinite(n)) v[k] = Math.max(-3, Math.min(3, n));
+      }
+      const vocab = [];
+      for (const wd of Array.isArray(b.vocab) ? b.vocab : []) {
+        const s = gtStr(wd, GT_CAP.word);
+        // attached words are NOT pruned against the bank: a word the class chose
+        // and attached is typed work, not derived state — deliberately the
+        // opposite of what this file does to reveals, ticks and marks
+        if (s && vocab.length < SM_CAP.vocabPerBeat && !vocab.includes(s)) vocab.push(s);
+      }
+      const img = typeof b.img === 'string' && b.img.slice(0, 5) === 'data:'
+        && b.img.length <= SM_CAP.pic ? b.img : null;
+      beats.push({
+        id: typeof b.id === 'string' && b.id && b.id.length <= 40 ? b.id : D.uid(),
+        row: gtStr(b.row, 40),
+        // a fractional sort key within a box, so no INDEX is ever a reference and
+        // a delete cannot shift what a later beat means
+        ord: Number.isFinite(+b.ord) ? +b.ord : beats.length + 1,
+        t: gtStr(b.t, SM_CAP.beat),
+        note: gtStr(b.note, SM_CAP.note),
+        img, vocab, v,
+      });
+    }
+    p.beats = beats;
+
+    // WORDS. Deduped case-insensitively through the one normaliser.
+    const words = [];
+    const wSeen = new Set();
+    for (const raw of Array.isArray(p.words) ? p.words : []) {
+      if (words.length >= GT_CAP.lang) break;
+      const o = smWord(raw);
+      if (!o || wSeen.has(o.w.toLowerCase())) continue;
+      wSeen.add(o.w.toLowerCase());
+      words.push(o);
+    }
+    p.words = words;
+    p.wordsHidden = !!p.wordsHidden;
+    // `shown` IS derived state — it is a per-word reveal against a live list —
+    // so pruning it is right, and it is the exact opposite of b.vocab above
+    const shown = {};
+    const forms = new Set(words.map((o) => o.w));
+    for (const k of Object.keys(p.shown && typeof p.shown === 'object' ? p.shown : {})) {
+      if (forms.has(k)) shown[k] = true;
+    }
+    p.shown = shown;
+    p.ladder = smWhite(p.ladder, SM_LADDERS, 'rocket');
+
+    // MOMENTS. Snapshots, never references: renaming the plan later does not
+    // change a recorded moment, because a moment is what happened.
+    const moments = [];
+    for (const m of Array.isArray(p.moments) ? p.moments : []) {
+      if (moments.length >= SM_CAP.moments) break;
+      const w = gtStr(m && m.w, GT_CAP.word);
+      if (!w) continue;
+      moments.push({
+        w,
+        score: smInt(m && m.score, 1, 5, 5),
+        who: gtStr(m && m.who, 40) || null,
+        box: gtStr(m && m.box, GT_CAP.box) || null,
+        beat: gtStr(m && m.beat, SM_CAP.beat) || null,
+        plan: gtStr(m && m.plan, GT_CAP.name) || null,
+        unit: gtStr(m && m.unit, GT_CAP.name) || null,
+        stage: smWhite(m && m.stage, SM_STAGE_IDS, 'model'),
+        at: Number.isFinite(+(m && m.at)) ? +m.at : 0,
+      });
+    }
+    p.moments = moments;
+
+    // STROKES. Keyed by row id, exactly as p.beats[].row is — so the warning
+    // that lives on the beats belongs here too, in the same breath: a sweep of
+    // p.strokes against live row ids silently erases a class's modelled write.
+    // Orphaned strokes are not RENDERED (there is no face to render them on) but
+    // they are not deleted, and a box restored by name gets its writing back.
+    const strokes = {};
+    const raw = p.strokes && typeof p.strokes === 'object' ? p.strokes : {};
+    let total = 0;
+    for (const k of Object.keys(raw)) {
+      const list = [];
+      for (const s of Array.isArray(raw[k]) ? raw[k] : []) {
+        if (list.length >= SM_CAP.strokesPerBox || total >= SM_CAP.strokesPerMap) break;
+        if (!s || !Array.isArray(s.pts) || s.pts.length < 2) continue;
+        let pts = s.pts.slice(0, SM_CAP.pointsPerStroke * 2)
+          .map((n) => Math.round(+n) || 0);
+        if (pts.length & 1) pts = pts.slice(0, -1);
+        if (pts.length < 2) continue;
+        const st = { c: /^#[0-9a-f]{3,8}$/i.test(String(s.c)) ? s.c : '#1e2c33', w: smInt(s.w, 1, 40, 6), pts };
+        if (Array.isArray(s.pw) && s.pw.length === pts.length >> 1) {
+          st.pw = s.pw.map((n) => smInt(n, 1, 60, st.w));
+        }
+        list.push(st);
+        total++;
+      }
+      if (list.length) strokes[gtStr(k, 40)] = list;
+    }
+    p.strokes = strokes;
+
+    p.rule = smWhite(p.rule, SM_RULE_IDS, 'lks2');
+    p.lines = smInt(p.lines, SM_CAP.writeMin, SM_CAP.writeMax, SM_RULES[p.rule].lines);
+    p.stage = smWhite(p.stage, SM_STAGE_IDS, 'model');
+    p.lock = !!p.lock;
+    p.room = smWhite(p.room, ['board', 'table'], 'board');
+    p.face = smWhite(p.face, ['map', 'box', 'graph'], 'map');
+    // shape:false suppresses the graph face entirely, the way the word bank face
+    // is suppressed for a pack with no bank — the flag lives on the arc and is
+    // never derived from the genre id, because a water-cycle explanation and a
+    // diary are both "text" and only one of them is a story in time
+    if (!p.shape && p.face === 'graph') p.face = 'map';
+    p.refMode = smWhite(p.refMode, ['strip', 'side'], 'strip');
+    p.coverMap = !!p.coverMap;
+    p.coverBox = !!p.coverBox;
+    p.coverGraph = !!p.coverGraph;
+    p.steps = p.steps === 5 ? 5 : 7;
+    const axis = [];
+    for (let i = 0; i < p.steps; i++) {
+      axis.push(gtStr((Array.isArray(p.axisWords) ? p.axisWords : [])[i], SM_CAP.axisWord)
+        || SM_AXIS_WORDS[p.steps][i]);
+    }
+    p.axisWords = axis;
+    // open stays pruned EMPTY, not filtered: a map opens showing the map, and a
+    // panel is something a hand asks for
+    p.open = null;
+    p.capL = smInt(p.capL, 0, SM_LVLMAX, 2);
+    p.capM = gtMood(p.capM) || 'mid';
+    // rowIds is computed but deliberately unused against beats and strokes — see
+    // the two comments above. Kept named so the next reader sees the omission is
+    // a decision rather than an oversight.
+    void rowIds;
+    return p;
+  }
+
+  // ------------------------------------------------------------- derived reads
+  // Channel order, never array order. The counterpoint reference and the gap
+  // reference both resolve through here, so neither can silently re-point at a
+  // different line because an entry moved or a line was deleted.
+  const smByChannel = (list) => [0, 1, 2]
+    .map((ch) => list.find((t) => t.ch === ch)).filter(Boolean);
+  const smRows = (p) => (p.arc ? p.arc.rows : []);
+  const smBeats = (p, rowId) => p.beats.filter((b) => b.row === rowId)
+    .sort((a, b) => a.ord - b.ord);
+  const smOrphans = (p) => {
+    const ids = new Set(smRows(p).map((r) => r.id));
+    return p.beats.filter((b) => !ids.has(b.row));
+  };
+  const smVisible = (p) => smByChannel(p.tracks.filter((t) => t.on));
+  const smArmedTrack = (p) => p.tracks.find((t) => t.id === p.armed && t.on) || null;
+  /* The reference is FIXED at channel order, never at whatever happens to be
+     armed, because counterpoint is against the STORY's tone. That is what The
+     Road is doing: bleak story, characters joking. A later tidy that re-points
+     this at the armed line breaks the device silently, which is why it says so
+     here, where the rule is written. */
+  const smStoryLine = (p) => smByChannel(p.tracks.filter((t) => t.kind !== 'target'))[0] || null;
+  const smActual = (p) => p.tracks.filter((t) => t.kind === 'actual');
+
+  /* Two independent readings, never multiplied together. DIRECTION is the word's
+     mood against the beat's tone; the SCORE never enters this at all. Words
+     offered against the tone are a CHOICE, not a warning — The Road's characters
+     crack jokes, and gallows humour and bathos are devices with names. So
+     nothing anywhere calls one wrong. */
+  function smReadWord(word, beatVal) {
+    if (beatVal == null) return null;
+    const sign = SM_MOODSIGN[word.mood || 'mid'];
+    if (sign === 0) return { k: 'level', say: 'level' };
+    if (beatVal !== 0 && Math.sign(sign) !== Math.sign(beatVal)) {
+      return { k: 'counter', say: 'counterpoint' };
+    }
+    return { k: 'serves', say: 'serves the tone' };
+  }
+
+  /* The one thing that ties the three faces together: a box's target is set on
+     the graph and READ where the writing happens. Without this the graph is a
+     picture beside the work rather than the brief for it.
+
+     Both numbers round to whole ones. A box averaging 0, 0 and −1 is about zero
+     to a class; at −0.3 it is a spreadsheet talking, and this number gets read
+     aloud. */
+  function smGapOf(p, rowId) {
+    if (!p.shape) return null;
+    const act = smVisible(p).find((t) => t.kind === 'actual');
+    const tgt = smVisible(p).find((t) => t.kind === 'target');
+    if (!act || !tgt) return null;
+    const list = smBeats(p, rowId);
+    const a = list.filter((b) => b.v[act.id] != null).map((b) => b.v[act.id]);
+    const g = list.filter((b) => b.v[tgt.id] != null).map((b) => b.v[tgt.id]);
+    if (!a.length || !g.length) return null;
+    const avg = (xs) => Math.round(xs.reduce((n, x) => n + x, 0) / xs.length);
+    return { at: avg(a), want: avg(g) };
+  }
+
+  /* TWO tests, and they are two because the swap destroys nothing and they ask
+     different questions. Folding them back into one is the drift to watch for,
+     because the symmetry is inviting — and what it costs is a teacher told she
+     may not change the spine on the grounds that she has typed one beat. */
+  const smWritten = (p) => Object.keys(p.strokes || {}).some((k) => (p.strokes[k] || []).length);
+  // Only ACTUAL values close the swap window. Seeding the target from a plan's
+  // shape is a RESOURCE act that writes a value to every moody box, and counting
+  // it here would let one gear tap permanently shut the window on a map holding
+  // no class work at all. This is the same helper the reset and the work count
+  // use — one restatement drifting looser is how the wrong sheet got ticked.
+  const smPlotted = (p) => {
+    const act = smActual(p);
+    return p.beats.some((b) => act.some((t) => b.v[t.id] != null));
+  };
+  const smAxisSet = (p) => (p.axisWords || [])
+    .some((s, i) => s !== (SM_AXIS_WORDS[p.steps] || [])[i]);
+
+  /* What belongs to THIS class rather than to the resource, stated as a COUNT
+     before it goes — a reset that does not say what it is about to take is a
+     reset nobody trusts. */
+  function smClassWork(p) {
+    const boxes = Object.keys(p.strokes).filter((k) => (p.strokes[k] || []).length).length;
+    const act = smActual(p);
+    let plotted = 0;
+    for (const b of p.beats) for (const t of act) if (b.v[t.id] != null) plotted++;
+    const moments = p.moments.length;
+    const bits = [];
+    if (boxes) bits.push(boxes + ' box' + (boxes === 1 ? '' : 'es') + ' of writing');
+    if (plotted) bits.push(plotted + ' plotted feeling' + (plotted === 1 ? '' : 's'));
+    if (moments) bits.push(moments + ' recorded moment' + (moments === 1 ? '' : 's'));
+    return { any: bits.length > 0, say: bits.join(', ').replace(/, ([^,]*)$/, ' and $1'), boxes, plotted, moments };
+  }
+
+  // ------------------------------------------------------------- the writing surface
+  const smRuleSet = (p) => SM_RULES[p.rule] || SM_RULES.lks2;
+  // "room for the last descender" — the 0.35 of a pitch below the final rule.
+  // The sheet takes its viewBox from THIS, not from a literal, which is what
+  // makes handwriting print as written at every band rather than only at the one
+  // that happened to be eyeballed.
+  const smWriteH = (p) => {
+    const rs = smRuleSet(p);
+    return Math.round(rs.pitch * p.lines + rs.pitch * 0.35);
+  };
+  function smRuleMarkup(p) {
+    const rs = smRuleSet(p);
+    let s = '';
+    for (let i = 1; i <= p.lines; i++) {
+      const y = rs.pitch * i;
+      s += '<line x1="10" y1="' + y + '" x2="' + (SM_WRITE_W - 10) + '" y2="' + y
+        + '" stroke="#b6c2d1" stroke-width="1.6"/>';
+      // the letter a child aims at: sit on the solid line, reach the dashed one
+      if (rs.guide) {
+        const g = (y - rs.pitch * 0.45).toFixed(1);
+        s += '<line x1="10" y1="' + g + '" x2="' + (SM_WRITE_W - 10) + '" y2="' + g
+          + '" stroke="#cfd8e3" stroke-width="1.2" stroke-dasharray="9 7"/>';
+      }
+    }
+    return s;
+  }
+
+  // ------------------------------------------------------------- the graph
+  /* Geometry, shared by the face and the printed sheet so the two cannot
+     disagree. Beats sit at a FIXED pitch from the band's left edge, taken from
+     the CAP and never from the live count — dividing by how many beats a band
+     holds means adding a fifth beat moves the four the class is already reading,
+     which is the one thing this widget's whole creed forbids.
+
+     ghosts and cover are OPTIONS and both are off for a sheet. A hollow dot on
+     the zero line reads on paper as a plotted zero, and it is worse now that a
+     placed TARGET dot is also hollow — a printed hollow dot would mean either
+     "we want it here" or "nobody chose". No sheet draws a ghost and no sheet
+     reads a cover flag. */
+  function smGraphMarkup(p, o) {
+    const compact = !!o.compact;
+    const ghosts = !!o.ghosts;
+    const cover = !!o.cover;
+    const W = 1000, H = compact ? 200 : 440;
+    const padL = compact ? 58 : 126, padR = 28, padT = 16, padB = compact ? 42 : 98;
+    const rows = smRows(p);
+    if (!rows.length) return { svg: '', W, H };
+    const bw = (W - padL - padR) / rows.length;
+    const zero = padT + (H - padT - padB) / 2, half = (H - padT - padB) / 2;
+    const yOf = (v) => zero - (v / ((p.steps - 1) / 2)) * half;
+    const DIA = compact ? 12 : 18, R = compact ? 5.5 : 8.5;
+    const bx = (ri, bi, ch) => padL + ri * bw + (bw / (SM_CAP.beats + 1)) * (bi + 1) + (ch - 1) * DIA;
+    const armed = ghosts ? (smArmedTrack(p) || {}).id : null;
+    const vis = smVisible(p);
+    let s = '';
+    for (let i = 0; i < p.steps; i++) {
+      const v = smValOfStep(i, p.steps), y = yOf(v), z = v === 0;
+      s += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y
+        + '" stroke="' + (z ? '#aebbb7' : '#e9eeed') + '" stroke-width="' + (z ? 2 : 1) + '"/>';
+      s += '<text x="' + (padL - 11) + '" y="' + (y + 4) + '" text-anchor="end" font-size="'
+        + (compact ? 11 : 13) + '" font-family="' + GT_FONT + '" fill="' + (z ? '#5b6b7b' : '#7f8f96') + '">'
+        + '<tspan font-weight="800" font-size="' + (compact ? 12 : 14) + '">' + xmlEsc(smSigned(v)) + '</tspan>'
+        + (compact ? '' : '<tspan dx="7">' + xmlEsc(p.axisWords[i] || '') + '</tspan>') + '</text>';
+    }
+    rows.forEach((r, ri) => {
+      if (ri) {
+        s += '<line x1="' + (padL + ri * bw) + '" y1="' + padT + '" x2="' + (padL + ri * bw)
+          + '" y2="' + (H - padB) + '" stroke="#e9eeed"/>';
+      }
+      if (!cover) {
+        s += '<text x="' + (padL + ri * bw + bw / 2) + '" y="' + (H - padB + (compact ? 21 : 28))
+          + '" text-anchor="middle" font-size="' + (compact ? 11 : 13.5)
+          + '" font-weight="800" letter-spacing="0.4" font-family="' + GT_FONT
+          + '" fill="#0f766e">' + xmlEsc(r.box.toUpperCase()) + '</text>';
+      }
+    });
+    // the gap ribbon first, so both lines sit on top of it. Drawn at the CENTRE
+    // lane deliberately — it describes a REGION, not a line, so it does not sit
+    // exactly between the two polylines it is about.
+    const act = vis.find((t) => t.kind === 'actual');
+    const tgt = vis.find((t) => t.kind === 'target');
+    if (act && tgt) {
+      const a = [], g = [];
+      rows.forEach((r, ri) => smBeats(p, r.id).forEach((b, bi) => {
+        if (b.v[act.id] == null || b.v[tgt.id] == null) return;
+        const x = bx(ri, bi, 1).toFixed(1);
+        a.push(x + ',' + yOf(b.v[act.id]).toFixed(1));
+        g.push(x + ',' + yOf(b.v[tgt.id]).toFixed(1));
+      }));
+      if (a.length > 1) {
+        s += '<polygon points="' + a.concat(g.reverse()).join(' ') + '" fill="#7c3aed" opacity="'
+          + (compact ? 0.09 : 0.11) + '"/>';
+      }
+    }
+    for (const t of vis) {
+      const pts = [];
+      rows.forEach((r, ri) => smBeats(p, r.id).forEach((b, bi) => {
+        // the line joins only PLACED dots: a line drawn through unplaced beats
+        // would assert feelings nobody chose — and it prints
+        if (b.v[t.id] != null) pts.push(bx(ri, bi, t.ch).toFixed(1) + ',' + yOf(b.v[t.id]).toFixed(1));
+      }));
+      if (pts.length > 1) {
+        s += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + SM_CH[t.ch].col
+          + '" stroke-width="' + (compact ? 2.2 : 3.4) + '" stroke-linejoin="round" stroke-linecap="round"'
+          + (t.kind === 'target' ? ' stroke-dasharray="' + (compact ? '6 4' : '9 6') + '"' : '') + '/>';
+      }
+    }
+    rows.forEach((r, ri) => smBeats(p, r.id).forEach((b, bi) => {
+      for (const t of vis) {
+        const x = bx(ri, bi, t.ch);
+        if (b.v[t.id] != null) s += smDot(x, yOf(b.v[t.id]), t.ch, t.kind === 'target', R, b.id);
+        else if (t.id === armed) s += smDot(x, zero, t.ch, true, R, b.id);
+      }
+      // NO per-beat text label under the axis, and the arithmetic is why. Beats
+      // sit at a fixed pitch of bw/(cap+1) so a new one cannot move the ones the
+      // class is reading — at six boxes across a 1000-unit plot that pitch is
+      // about 20 units, and at three boxes about 40. No wording fits either, so
+      // the mock's 16-character label draws every beat in a box on top of the
+      // one beside it. Measured on the board, 2026-07-31.
+      //
+      // The dot is the affordance instead: it carries data-beat, so tapping it
+      // opens that beat's panel, which names it in full. The box name under the
+      // axis is the label that survives, and it is the one that has room.
+    }));
+    return { svg: s, W, H };
+  }
+  function smDot(x, y, ch, hollow, R, id) {
+    const col = SM_CH[ch].col;
+    const f = hollow ? '#ffffff' : col, sw = hollow ? 2.4 : 1.8;
+    const a = id ? ' data-beat="' + xmlEsc(id) + '"' : '';
+    if (SM_CH[ch].shape === 'square') {
+      return '<rect x="' + (x - R) + '" y="' + (y - R) + '" width="' + (2 * R) + '" height="' + (2 * R)
+        + '" rx="2" fill="' + f + '" stroke="' + col + '" stroke-width="' + sw + '"' + a + '/>';
+    }
+    if (SM_CH[ch].shape === 'triangle') {
+      return '<polygon points="' + x + ',' + (y - R - 1) + ' ' + (x + R + 1) + ',' + (y + R) + ' '
+        + (x - R - 1) + ',' + (y + R) + '" fill="' + f + '" stroke="' + col + '" stroke-width="' + sw + '"' + a + '/>';
+    }
+    return '<circle cx="' + x + '" cy="' + y + '" r="' + R + '" fill="' + f + '" stroke="' + col
+      + '" stroke-width="' + sw + '"' + a + '/>';
+  }
+
+  // ------------------------------------------------------------- the sheets
+  /* Three SVG STRING emitters, not a port of an HTML sheet: print.js's lint
+     requires a root <svg> with a viewBox and errors on <foreignObject> and on a
+     <style> holding anything but @font-face, so none of a div-built sheet is
+     buildable. Everything needed is already private in this file — gtSvg,
+     gtHead's shrink-to-fit title, gtWidth's measured widths, gtWrap and xmlEsc.
+
+     All three are ONE aspect (1000 × at least 1414), because openDialog plans
+     page 1 freely and forces the rest to agree: a landscape graph sheet ticked
+     beside a tall map sheet would letterbox catastrophically.
+
+     No sheet reads a cover flag and no sheet draws a ghost. And no sheet carries
+     a child's name — a moment's `who` is screen-only in v1, because the map
+     sheet is the one that goes home in a book bag and a named child's attainment
+     in thirty other families' bags is a disclosure nothing here has reasoned
+     about. §14 rule 5's "no child names" governs PACK text and does NOT cover
+     this, which is why it is said again, here. */
+  const SM_SHEET_H = 1414;
+  const smSheetTitle = (p, what) => (p.arc ? p.arc.name : 'Story map') + ' — ' + what;
+
+  function smMapSvg(p) {
+    const parts = [];
+    let y = gtHead(parts, smSheetTitle(p, 'the map'), 10) + 34;
+    const rows = smRows(p);
+    for (const r of rows) {
+      const list = smBeats(p, r.id);
+      parts.push('<text x="' + GT_PAD + '" y="' + y + '" font-family="' + GT_FONT
+        + '" font-size="21" font-weight="800" fill="#0f766e">' + xmlEsc(r.box.toUpperCase()) + '</text>');
+      if (r.hint) {
+        parts.push('<text x="' + (GT_PAD + gtWidth(r.box.toUpperCase(), 21, 800) + 14) + '" y="' + y
+          + '" font-family="' + GT_FONT + '" font-size="15" font-style="italic" fill="#8b9aa2">'
+          + xmlEsc(r.hint) + '</text>');
+      }
+      y += 12;
+      if (!list.length) {
+        y += 26;
+        parts.push('<text x="' + GT_PAD + '" y="' + y + '" font-family="' + GT_FONT
+          + '" font-size="15" font-style="italic" fill="#b6c2d1">nothing here yet</text>');
+        y += 30;
+        continue;
+      }
+      const cw = 172, gap = 14;
+      const perRow = Math.max(1, Math.floor((GT_W - GT_PAD * 2 + gap) / (cw + gap)));
+      let cellTop = y + 14;
+      list.forEach((b, i) => {
+        const col = i % perRow;
+        if (col === 0 && i) cellTop += 176;
+        const x = GT_PAD + col * (cw + gap);
+        parts.push('<rect x="' + x + '" y="' + cellTop + '" width="' + cw + '" height="164" rx="9" fill="#ffffff" stroke="#cfdad7"/>');
+        if (b.img) {
+          parts.push('<image x="' + (x + 7) + '" y="' + (cellTop + 7) + '" width="' + (cw - 14)
+            + '" height="70" preserveAspectRatio="xMidYMid slice" href="' + xmlEsc(b.img) + '"/>');
+        } else {
+          parts.push('<rect x="' + (x + 7) + '" y="' + (cellTop + 7) + '" width="' + (cw - 14)
+            + '" height="70" rx="6" fill="none" stroke="#e4eae8" stroke-dasharray="5 5"/>');
+        }
+        const lines = gtWrap(b.t || '…', cw - 16, 13, 500).slice(0, 4);
+        lines.forEach((ln, li) => parts.push('<text x="' + (x + 8) + '" y="' + (cellTop + 96 + li * 17)
+          + '" font-family="' + GT_FONT + '" font-size="13" font-weight="500" fill="#1e2c33">' + xmlEsc(ln) + '</text>'));
+        b.vocab.slice(0, 3).forEach((wd, wi) => parts.push('<text x="' + (x + 8) + '" y="' + (cellTop + 152 - wi * 15)
+          + '" font-family="' + GT_FONT + '" font-size="11.5" font-weight="700" fill="#0a544e">' + xmlEsc(wd) + '</text>'));
+      });
+      y = cellTop + 190;
+    }
+    return gtSvg(parts.join(''), Math.max(SM_SHEET_H, y + 40));
+  }
+
+  function smBoxSvg(p) {
+    const parts = [];
+    let y = gtHead(parts, smSheetTitle(p, 'boxing up'), 10) + 30;
+    const rs = smRuleSet(p);
+    const wh = smWriteH(p);
+    const colW = 250, gap = 20;
+    const writeX = GT_PAD + colW + gap;
+    const writeW = GT_W - GT_PAD - writeX;
+    // the printed surface takes its height from the SAME ruleSet/lines pass the
+    // face used, so the aspect is right at every band and at every line count
+    const scale = writeW / SM_WRITE_W;
+    for (const r of smRows(p)) {
+      const list = smBeats(p, r.id);
+      const cellH = Math.max(96, Math.round(wh * scale) + 22, list.length * 44 + 46);
+      parts.push('<line x1="' + GT_PAD + '" y1="' + y + '" x2="' + (GT_W - GT_PAD) + '" y2="' + y
+        + '" stroke="#dbe3e1"/>');
+      parts.push('<text x="' + GT_PAD + '" y="' + (y + 26) + '" font-family="' + GT_FONT
+        + '" font-size="17" font-weight="800" fill="#0f766e">' + xmlEsc(r.box.toUpperCase()) + '</text>');
+      gtWrap(r.hint || '', colW - 6, 12.5, 400).slice(0, 2).forEach((ln, li) => parts.push(
+        '<text x="' + GT_PAD + '" y="' + (y + 44 + li * 15) + '" font-family="' + GT_FONT
+        + '" font-size="12.5" font-style="italic" fill="#8b9aa2">' + xmlEsc(ln) + '</text>'));
+      let my = y + 74;
+      for (const b of list) {
+        gtWrap(b.t || '…', colW - 8, 12.5, 400).slice(0, 2).forEach((ln, li) => parts.push(
+          '<text x="' + GT_PAD + '" y="' + (my + li * 15) + '" font-family="' + GT_FONT
+          + '" font-size="12.5" fill="#40525c">' + xmlEsc(ln) + '</text>'));
+        my += 34;
+      }
+      const ink = p.strokes[r.id] || [];
+      const gy = y + 12;
+      parts.push('<rect x="' + writeX + '" y="' + gy + '" width="' + writeW + '" height="'
+        + Math.round(wh * scale) + '" rx="6" fill="#fffdf7" stroke="#e4eae8"/>');
+      // Ruled UNDER the writing at the guided bands, because those are the bands
+      // whose whole purpose is letter formation against a line — a child's
+      // letters floating with no baseline defeats the sheet.
+      const ruled = rs.guide || !ink.length;
+      parts.push('<g transform="translate(' + writeX + ' ' + gy + ') scale(' + scale.toFixed(4) + ')">'
+        + (ruled ? smRuleMarkup(p) : '')
+        + (window.SagePen ? window.SagePen.markup(ink) : '') + '</g>');
+      y += cellH;
+    }
+    return gtSvg(parts.join(''), Math.max(SM_SHEET_H, y + 40));
+  }
+
+  function smGraphSvg(p) {
+    const parts = [];
+    let y = gtHead(parts, smSheetTitle(p, 'the shape'), 10) + 20;
+    const g = smGraphMarkup(p, { compact: false, ghosts: false, cover: false });
+    if (!g.svg) return null;
+    const w = GT_W - GT_PAD * 2;
+    const scale = w / g.W;
+    parts.push('<g transform="translate(' + GT_PAD + ' ' + y + ') scale(' + scale.toFixed(4) + ')">' + g.svg + '</g>');
+    y += Math.round(g.H * scale) + 34;
+    // A key that stands alone: swatch, wording, shape AND the dashed/solid
+    // distinction — a shape-and-name key with no swatch regresses the rule that
+    // a printed sheet has to be readable without the board beside it.
+    let kx = GT_PAD;
+    for (const t of smVisible(p)) {
+      parts.push('<g transform="translate(' + kx + ' ' + y + ')">'
+        + smDot(11, -5, t.ch, t.kind === 'target', 9, null)
+        + '<line x1="26" y1="-5" x2="66" y2="-5" stroke="' + SM_CH[t.ch].col + '" stroke-width="3.4"'
+        + (t.kind === 'target' ? ' stroke-dasharray="9 6"' : '') + '/>'
+        + '<text x="76" y="0" font-family="' + GT_FONT + '" font-size="15" font-weight="700" fill="#1e2c33">'
+        + xmlEsc(t.name) + (t.kind === 'target' ? ' — where we want it' : '') + '</text></g>');
+      kx += 110 + gtWidth(t.name + (t.kind === 'target' ? ' — where we want it' : ''), 15, 700);
+      if (kx > GT_W - 260) { kx = GT_PAD; y += 34; }
+    }
+    return gtSvg(parts.join(''), Math.max(SM_SHEET_H, y + 60));
+  }
+
+  /* Page kinds ARE face ids, and the presence test is THE SAME NAMED FUNCTION
+     called from the builder's first line and from the kind list — because one
+     restatement being looser is exactly how the wrong sheet got pre-ticked
+     before. `i < 0 ? 0 : i` and never `|| 0`: (−1) || 0 is −1. */
+  const SM_PAGES = [
+    ['map', 'The map', smMapSvg],
+    ['box', 'Boxing up', smBoxSvg],
+    ['graph', 'The shape', smGraphSvg],
+  ];
+  function smHasPage(p, kind) {
+    if (!p.arc || !smRows(p).length) return false;
+    if (kind === 'graph') return !!p.shape && smVisible(p).length > 0;
+    return true;
+  }
+  const smPageKinds = (p) => SM_PAGES.map((r) => r[0]).filter((k) => smHasPage(p, k));
+
   // ---------------------------------------------------------------- widget
   function register() {
     const { WIDGETS, el, iconEl, uid, clamp, save, toast } = D;
     const settingRowOr = (label, control) => (D.settingRow ? D.settingRow(label, control)
       : el('div', { class: 'row' }, el('span', {}, label), control));
 
-    /* ---------------------------------------------------------------- story map
-       The shell. Registered first and deliberately empty, so the widget can be seen
-       to arrive in the real app — in the menu, on a screen, through a save and a
-       reload — before any of the interesting code exists to hide a wiring fault.
-       Behaviour lands per docs/story-map-design.md; the mock at .sm-mock.html is the
-       authority on what it should do. */
+    /* ---------------------------------------------------------------- story map */
+
+    /* Seeding is EXPLICIT and TERMINAL, and the chain cannot bottom out: the
+       deck's year band picks a plan, an unbanded plan is offered to everyone,
+       and the last branch is a plan built from nothing. After seeding a spine
+       always holds at least one box, which is what means no face needs a
+       spine-less empty state.
+
+       Seeded ONCE, never re-seeded on a later mount. The banded scalars are
+       seeded in the SAME place from the SAME band — a swap that reseeds the rule
+       and the ladder while the first mount does not is the banding decision
+       quietly failing on the commonest path there is. */
+    function smSeed(p, w) {
+      const deck = (D.deck && D.deck()) || {};
+      const band = gtBandFor(deck.yearGroup);
+      const lib = smArcLib();
+      // A band on a plan is a SPECIALISATION; no band means "offered at every year
+      // group", so the general plan is the right default nearly everywhere — a
+      // Year 4 class opening on a warning tale rather than the mountain is a
+      // guess about their unit. The one place the band must win is ks1, where a
+      // five-part mountain is genuinely too much and a three-part shape is the
+      // whole KS1 curriculum.
+      const banded = lib.find((a) => a.band && a.band === band);
+      const general = lib.find((a) => !a.band);
+      const arc = (band === 'ks1' ? banded || general : general || banded)
+        || lib[0]
+        || smNormArc({ name: 'Story map', rows: [{ box: 'Beginning' }, { box: 'Middle' }, { box: 'End' }] }, false);
+      p.arc = arc;
+      p.shape = arc.shape;
+      // null means offer everything, never assume the youngest — so a deck with
+      // no year group set gets SEVEN steps
+      p.steps = arc.steps || (band === 'ks1' ? 5 : 7);
+      p.axisWords = SM_AXIS_WORDS[p.steps].slice();
+      p.ladder = SM_LADDER_BAND[band] || 'rocket';
+      p.rule = smRuleBandFor(deck.yearGroup);
+      p.lines = SM_RULES[p.rule].lines;
+      p.tracks = [{ id: uid(), name: 'our draft', on: true, kind: 'actual', ch: 0 }];
+      p.armed = p.tracks[0].id;
+      // The bank's seed comes from the genre pack's own vocabulary, copied ONCE
+      // — the copy is what the gear edits, so an edited pack cannot change a
+      // class's words mid-unit and every snapshot carries the class's own list
+      // free. Tagged pack words matter here: untagged, two of the three mood
+      // groups read "nothing here" on day one and the shortfall diagnosis fires
+      // at a teacher who has done nothing wrong.
+      //
+      // A plan taken from a GENRE pack seeds from that pack. A plan taken from
+      // the arc library has no vocabulary of its own, and a shaped arc — a
+      // mountain, a warning tale, a dilemma — is a narrative shape, so it seeds
+      // from the narrative pack rather than opening on an empty bank. A shapeless
+      // arc seeds from nothing, because instructions and an explanation want
+      // their own words and a story's would be wrong.
+      const packs = gtDefaults();
+      const pack = packs.find((g) => g.id === arc.src)
+        || (arc.shape ? packs.find((g) => g.id === 'narrative') : null);
+      p.words = ((pack && pack.vocab) || []).slice(0, GT_CAP.lang)
+        .map((v) => smWord({ w: v.w, src: 'genre', lvl: v.lvl, mood: v.mood })).filter(Boolean);
+      void w;
+    }
+
+    // Refusals are rate-limited to one every 2.5 seconds. A child patting a
+    // locked board fires a toast per pat otherwise, which is modelwrite's own
+    // recorded fix and the reason it is copied rather than re-derived.
+    let smLastRefusal = 0;
+    function smRefuse(msg) {
+      const now = Date.now();
+      if (now - smLastRefusal < 2500) return;
+      smLastRefusal = now;
+      toast(msg);
+    }
+
     WIDGETS.storymap = {
       title: 'Story map', icon: 'storymap', accent: '#c7d2fe', w: 1180, h: 660,
-      defaults: () => ({ face: 'map', stage: 'model', lock: false, room: 'board' }),
+      defaults: () => ({
+        arc: null, allBands: false, beats: [], tracks: [], armed: null,
+        words: [], wordsHidden: false, shown: {}, ladder: 'rocket', moments: [],
+        strokes: {}, rule: 'lks2', lines: 5,
+        face: 'map', stage: 'model', lock: false, room: 'board',
+        refMode: 'strip', coverMap: false, coverBox: false, coverGraph: false,
+        steps: 7, axisWords: [], open: null, capL: 2, capM: 'mid',
+      }),
+
+      /* hasWork asks "is there anything here worth being able to get back", and
+         that is a WIDER question than "did this class do anything". A prepped
+         map — eleven beats, their pictures, a stocked bank, no class work at all
+         — is the most valuable state in the widget, and losing a prep session to
+         a bin sweep is the failure this exists to prevent. Defining it replaces
+         widgetWorthKeeping's JSON-length fallback entirely. */
+      hasWork(w) {
+        const p = w.props || {};
+        if (!p.arc) return false;
+        if ((p.beats || []).length) return true;
+        if (smWritten(p)) return true;
+        if ((p.moments || []).length) return true;
+        if (smPlotted(p)) return true;
+        if ((p.tracks || []).length > 1) return true;
+        if ((p.words || []).length) return true;
+        if (smAxisSet(p)) return true;
+        if ((p.arc.rows || []).some((r) => r.edited)) return true;
+        return false;
+      },
+
+      toPrintablePages(w) {
+        const p = w.props;
+        const out = [];
+        for (const [kind, label, build] of SM_PAGES) {
+          if (!smHasPage(p, kind)) continue;
+          const svg = build(p);
+          if (svg) out.push({ svg, label });
+        }
+        return out;
+      },
+      printCurrent(w) {
+        const i = smPageKinds(w.props).indexOf(w.props.face);
+        return i < 0 ? 0 : i;
+      },
+
       mount(body, w, api) {
         body.classList.add('mntray', 'smwidget');
         const p = w.props;
-        const face = el('div', { class: 'sm-face' });
-        face.append(el('div', { class: 'ct-hint' },
-          'Story map — the shell is wired. Faces land next.'));
-        const bar = el('div', { class: 'sm-quick' });
-        const row = el('div', { class: 'row' });
-        [['map', 'Text map'], ['box', 'Boxing up'], ['graph', 'Emotion graph']].forEach(([id, label]) => {
-          const b = el('button', {
-            class: 'tq-btn' + (p.face === id ? ' active' : ''),
-            onclick: () => { p.face = id; save(); api.refresh(); },
+        smNorm(p);
+        if (!p.arc) { smSeed(p, w); smNorm(p); save(); }
+
+        // TRANSIENT, and deliberately not in props: a half-typed word in the
+        // capture bar would make hasWork fire on a keystroke, and every keystroke
+        // debounces a full save of the whole app.
+        let focusBeat = null, capFocus = false;
+        let capW = '', capBeyond = false, capWho = null;
+        let tool = 'pen', pen = '#1e2c33';
+        // Write areas are built ONCE and re-parented, never rebuilt: a render on
+        // every capture-bar chip tap would otherwise tear down five surfaces,
+        // orphan a stroke in flight and drop pointer capture.
+        const areas = new Map();
+
+        const locked = () => !!p.lock;
+        const bump = () => { save(); };
+
+        const titleEl = el('div', { class: 'sm-title' });
+        const headEl = el('div', { class: 'sm-head' });
+        const stageEl = el('div', { class: 'sm-stage' });
+        const faceEl = el('div', { class: 'sm-face' });
+        const barEl = el('div', { class: 'sm-bar' });
+        body.append(titleEl, headEl, stageEl, faceEl, barEl);
+
+        // ---------------------------------------------------------- chrome
+        function paintChrome() {
+          // The app draws the widget's own title bar and its gear and ⋮ — this row
+          // carries only the two things that must be legible from the back of the
+          // room without anyone reading the bar, and it is absent when neither
+          // applies rather than standing empty.
+          titleEl.textContent = '';
+          if (p.room === 'table') titleEl.append(el('span', { class: 'sm-roomtag' }, 'small group'));
+          if (locked()) titleEl.append(el('span', { class: 'sm-lockmark' }, '· locked'));
+          titleEl.style.display = titleEl.firstChild ? '' : 'none';
+
+          headEl.textContent = '';
+          // the plan's name is content, not a control — it wraps and is never truncated
+          headEl.append(el('span', { class: 'sm-plan' }, p.arc ? p.arc.name : 'No plan'));
+          // The DECK's year band, never the plan's. A plan carrying no band means
+          // "offered at every year group" — a property of the resource — where an
+          // unset year group is a property of the deck and is the thing the
+          // teacher can fix, one place away, under Set year group. Reading the
+          // plan's band here told a Year 4 class it had no year group set.
+          const band = gtBandFor((((D.deck && D.deck()) || {}).yearGroup));
+          // never a blank pill: gtBandName returns '' for a null band by
+          // construction, and a deck ships with no year group set, so the
+          // year-less case is the common one and gets its own amber wording
+          headEl.append(band
+            ? el('span', { class: 'sm-bandchip' }, gtBandName(band))
+            : el('span', { class: 'sm-bandchip none' }, 'No year group set'));
+
+          stageEl.textContent = '';
+          stageEl.className = 'sm-stage s-' + p.stage;
+          for (const [id, label, gloss] of SM_STAGES) {
+            stageEl.append(el('button', {
+              class: 'sm-stbtn b-' + id + (p.stage === id ? ' on' : ''),
+              title: gloss,
+              // The STAGE gates NOTHING. It colours this band, it is stamped onto
+              // a recorded moment, and it survives a reload — that is the whole
+              // list. Two independent things, answering to different people: the
+              // stage is the lesson's stance, the LOCK is whether the board takes
+              // a hand at all, and that is always the teacher's discretion, never
+              // the stage's. Do not wire stage → lock; a later reader will find
+              // it inviting and it is exactly what this forbids.
+              onclick: () => { p.stage = id; bump(); paintChrome(); },
+            }, label));
+          }
+          stageEl.append(el('span', { class: 'sm-stseq' },
+            'stage ' + (SM_STAGE_IDS.indexOf(p.stage) + 1) + ' of 3'));
+
+          barEl.textContent = '';
+          const pills = [['map', 'Text map'], ['box', 'Boxing up']];
+          if (p.shape) pills.push(['graph', 'Emotion graph']);
+          for (const [id, label] of pills) {
+            barEl.append(el('button', {
+              class: 'sm-pill f-' + id + (p.face === id ? ' on' : ''),
+              onclick: () => { p.face = id; bump(); render(); },
+            }, label));
+          }
+          barEl.append(el('span', { class: 'sm-grow' }));
+          barEl.append(el('button', {
+            class: 'sm-barbtn' + (locked() ? ' lockon' : ' ghost'),
+            onclick: () => {
+              // A lock that discards a half-typed beat takes the class's words
+              // away at the exact moment the teacher stopped taking them. Commit
+              // first, then close.
+              if (!locked() && p.open) commitOpenBeat();
+              p.lock = !p.lock;
+              if (locked()) p.open = null;
+              bump(); render();
+            },
+          }, locked() ? '🔒 Locked' : 'Board open'));
+          barEl.append(el('button', {
+            class: 'sm-barbtn' + (coverFlag() ? ' on' : ''),
+            onclick: () => { setCover(!coverFlag()); bump(); render(); },
+          }, 'Cover'));
+          barEl.append(el('button', {
+            class: 'sm-barbtn ghost',
+            onclick: () => openPrint(1),
+          }, 'Print…'));
+        }
+
+        // One button reading a DIFFERENT FLAG per face. A single shared Cover
+        // once blanked the word bank the class was writing from, which is the
+        // recorded regression this shape exists to prevent.
+        const coverFlag = () => (p.face === 'map' ? p.coverMap : p.face === 'box' ? p.coverBox : p.coverGraph);
+        const setCover = (v) => {
+          if (p.face === 'map') p.coverMap = v;
+          else if (p.face === 'box') p.coverBox = v;
+          else p.coverGraph = v;
+        };
+
+        function openPrint(budget) {
+          if (!window.SagePrint) { toast('Printing is not available'); return; }
+          let job = [];
+          try { job = WIDGETS.storymap.toPrintablePages(w); } catch (err) { job = []; }
+          if (!job.length) { toast('Nothing to print yet'); return; }
+          SagePrint.openDialog(job, {
+            title: 'Story map',
+            current: WIDGETS.storymap.printCurrent(w),
+            budget,
+          });
+        }
+
+        // ---------------------------------------------------------- beats
+        function newBeat(rowId) {
+          const list = smBeats(p, rowId);
+          const row = smRows(p).find((r) => r.id === rowId);
+          if (list.length >= SM_CAP.beats) { smRefuse(smFullSay(row, list.length)); return null; }
+          if (p.beats.length >= SM_CAP.mapBeats) { smRefuse('This map is full.'); return null; }
+          const b = {
+            id: uid(), row: rowId,
+            ord: (list.length ? list[list.length - 1].ord : 0) + 1,
+            t: '', note: '', img: null, vocab: [], v: {},
+          };
+          p.beats.push(b);
+          p.open = b.id;
+          focusBeat = b.id;
+          bump();
+          return b;
+        }
+        // ONE template, three sites: the standing note, the Enter chain and any
+        // programmatic add. The refusal speaks the count the box ACTUALLY holds
+        // rather than the cap, because after a swap a box can hold eleven.
+        const smFullSay = (row, n) => (row ? row.box : 'This box') + ' has ' + n
+          + ' beats — the next one wants a box of its own.';
+
+        function commitOpenBeat() {
+          const inp = faceEl.querySelector('.sm-beatin');
+          const b = p.beats.find((x) => x.id === p.open);
+          if (inp && b) b.t = gtStr(inp.value, SM_CAP.beat);
+        }
+
+        // ---------------------------------------------------------- the word bank
+        /* The words are class-facing furniture, not a teacher's list: they sit on
+           the board to be read, covered, and uncovered ONE AT A TIME, so a class
+           earns them rather than being handed them. Same gradual release the rest
+           of the widget runs on. It renders at the head of the map and the
+           boxing-up faces and never on the graph. */
+        function bankEl() {
+          if (!p.words.length) return null;   // an empty bank is ABSENT, never an empty frame
+          const box = el('div', { class: 'sm-bank' });
+          const head = el('div', { class: 'sm-bankhead' });
+          head.append(el('span', { class: 'sm-banktitle' }, 'Words for this'));
+          head.append(el('span', { class: 'sm-grow' }));
+          if (!locked()) {
+            head.append(el('button', {
+              class: 'sm-wbtn ghost',
+              onclick: () => {
+                p.wordsHidden = !p.wordsHidden;
+                p.shown = {};
+                bump(); render();
+              },
+            }, p.wordsHidden ? 'Uncover all' : 'Cover the words'));
+          }
+          box.append(head);
+          if (!locked()) box.append(captureEl());
+
+          const openBeat = p.beats.find((x) => x.id === p.open);
+          const act = smVisible(p).find((t) => t.kind === 'actual');
+          const wantVal = openBeat && act ? openBeat.v[act.id] : null;
+          const want = wantVal == null ? null : (wantVal > 0 ? 'up' : wantVal < 0 ? 'down' : 'mid');
+
+          for (const [mood, label, col] of SM_MOOD_META) {
+            const list = p.words.filter((o) => o.mood === mood);
+            const grp = el('div', {
+              class: 'sm-moodgrp' + (list.length && list.length < 3 ? ' thin' : '')
+                + (want === mood ? ' want' : ''),
+            });
+            const h = el('div', { class: 'sm-moodhead' });
+            h.append(el('span', { class: 'sm-moodlab', style: 'color:' + col }, label));
+            h.append(el('span', { class: 'sm-moodn' }, list.length ? list.length + ' words' : 'nothing here'));
+            grp.append(h);
+            if (!list.length) {
+              grp.append(el('div', { class: 'sm-moodempty' },
+                'No words for this part of the arc yet — the class cannot write what it cannot reach for.'));
+            } else {
+              const row = el('div', { class: 'sm-words' });
+              for (const o of list) row.append(wordChip(o));
+              grp.append(row);
+            }
+            box.append(grp);
+          }
+          if (p.wordsHidden) {
+            const n = Object.keys(p.shown).length;
+            box.append(el('div', { class: 'sm-banknote' },
+              n + ' of ' + p.words.length + ' uncovered — tap a covered word to give it to them'));
+          }
+          box.append(el('div', { class: 'sm-banknote' }, coverageSay()));
+          return box;
+        }
+
+        /* Checked against what THIS plan asks for, not against a neutral tally.
+           A bank stocked only for the fall lets a class write the Problem well
+           and the Opening badly, so the number that matters is the shortfall and
+           not the total. A mood is SHORT when the plan wants it and the bank
+           holds fewer than one more word than there are boxes wanting it. */
+        function coverageSay() {
+          const have = {}, need = {};
+          for (const [m] of SM_MOOD_META) { have[m] = 0; need[m] = 0; }
+          for (const o of p.words) have[o.mood]++;
+          for (const r of smRows(p)) if (r.mood) need[r.mood]++;
+          const short = SM_MOOD_META.map((x) => x[0])
+            .filter((m) => need[m] > 0 && have[m] < need[m] + 1);
+          if (!short.length) {
+            return 'Across the arc: ' + SM_MOOD_META.map(([m]) => have[m] + ' ' + m).join(' · ')
+              + ' — enough for every part of this plan.';
+          }
+          const m = short[0];
+          const boxes = smRows(p).filter((r) => r.mood === m).map((r) => r.box);
+          const names = boxes.length > 1
+            ? boxes.slice(0, -1).join(', ') + ' and ' + boxes[boxes.length - 1] : boxes[0];
+          return 'Short for this plan. ' + names + ' run ' + m + ' and the bank holds '
+            + have[m] + ' word' + (have[m] === 1 ? '' : 's') + ' for that. '
+            + 'A class cannot write what it cannot reach for.';
+        }
+
+        function wordChip(o) {
+          const hidden = p.wordsHidden && !p.shown[o.w];
+          const chip = el('button', {
+            class: 'sm-word' + (hidden ? ' hid' : ''),
+            onclick: () => {
+              if (locked()) { smRefuse('The board is locked. Unlock it to let a hand use it.'); return; }
+              if (hidden) { p.shown[o.w] = true; bump(); render(); return; }
+              const b = p.beats.find((x) => x.id === p.open);
+              if (b) { attachWord(b, o); return; }
+              // The board tap CLIMBS and CLAMPS at the top. Wrapping a 5 back to
+              // a 1 on a class-facing surface, with no undo and a cheerful toast,
+              // is a silent reversal of a claim about the word. The descent lives
+              // in the settings panel.
+              if (o.lvl >= SM_LVLMAX) { smRefuse('“' + o.w + '” is already at the top of the scale.'); return; }
+              o.lvl++;
+              toast('“' + o.w + '” scored ' + (o.lvl + 1) + ' — ' + SM_LVLNAME[o.lvl] + '.');
+              bump(); render();
+            },
+          });
+          const lad = el('span', { class: 'sm-lad' });
+          lad.innerHTML = smLadderArt(p.ladder, o.lvl);
+          chip.append(lad, el('span', {}, o.w));
+          const src = SM_SRC[o.src] || SM_SRC.bank;
+          chip.append(el('span', {
+            class: 'sm-tag', style: 'color:' + src[1] + ';background:' + src[2],
+          }, src[0]));
+          if (o.beyond) chip.append(el('span', { class: 'sm-beyond' }, '★'));
+          return chip;
+        }
+
+        function attachWord(b, o) {
+          if (b.vocab.includes(o.w)) {
+            b.vocab = b.vocab.filter((x) => x !== o.w);
+            bump(); render(); return;
+          }
+          if (b.vocab.length >= SM_CAP.vocabPerBeat) {
+            smRefuse('Four words is the cap for one beat.');
+            return;
+          }
+          b.vocab.push(o.w);
+          const line = smStoryLine(p);
+          const read = line ? smReadWord(o, b.v[line.id]) : null;
+          if (read && read.k === 'counter') {
+            toast('“' + o.w + '” cuts against ' + line.name + ' at ' + smSigned(b.v[line.id])
+              + ' — counterpoint, and a choice.');
+          }
+          bump(); render();
+        }
+
+        /* A child offers a word mid-lesson and it is in the bank, scored, before
+           the moment passes. This is the loop teachers actually love — and the
+           chaining IS the feature: the score and the direction persist across
+           commits, and every chip tap re-focuses the field, so a run of
+           same-score words is type-Enter-type-Enter. Without that re-focus the
+           loop breaks after one word. */
+        function captureEl() {
+          const bar = el('div', { class: 'sm-cap' });
+          bar.append(el('span', { class: 'sm-caplab' }, 'A word they just offered'));
+          const inp = el('input', {
+            class: 'sm-capin', type: 'text', value: capW,
+            placeholder: 'type it before the moment passes…',
+            maxlength: String(GT_CAP.word + 1),
+            oninput: (e) => { capW = e.target.value; },
+            onkeydown: (e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commitCapture(); }
+              else if (e.key === 'Escape') { capW = ''; capBeyond = false; capWho = null; render(); }
+            },
+          });
+          bar.append(inp);
+          const scores = el('div', { class: 'sm-scores' });
+          for (let i = 0; i <= SM_LVLMAX; i++) {
+            const b = el('button', {
+              class: 'sm-sp' + (!capBeyond && p.capL === i ? ' on' : ''),
+              title: SM_LVLNAME[i],
+              onclick: () => { p.capL = i; capBeyond = false; capFocus = true; bump(); render(); },
+            });
+            const g = el('span', { class: 'sm-spa' });
+            g.innerHTML = smLadderArt(p.ladder, i);
+            b.append(g, el('span', { class: 'sm-spn' }, String(i + 1)));
+            scores.append(b);
+          }
+          scores.append(el('button', {
+            class: 'sm-sp beyond' + (capBeyond ? ' on' : ''),
+            title: 'beyond the scale — records a moment',
+            onclick: () => { capBeyond = !capBeyond; capFocus = true; render(); },
+          }, '★'));
+          bar.append(scores);
+          const moods = el('div', { class: 'sm-capmoods' });
+          for (const [m, label, col] of SM_MOOD_META) {
+            moods.append(el('button', {
+              class: 'sm-capmood' + (p.capM === m ? ' on' : ''),
+              style: p.capM === m ? 'background:' + col + ';border-color:' + col : 'color:' + col,
+              title: label,
+              onclick: () => { p.capM = m; capFocus = true; bump(); render(); },
+            }, m === 'up' ? '↑' : m === 'down' ? '↓' : '–'));
+          }
+          bar.append(moods);
+          bar.append(el('button', { class: 'sm-wbtn', onclick: () => commitCapture() }, 'Add'));
+
+          /* "beyond" is not a sixth level. The scale is 1–5 and it has a top;
+             this is a separate mark for the word a class produces once a term,
+             kept separate because it is not a measurement — it is an EVENT, and
+             an event carries context a number cannot. That context is what turns
+             it into an insertion point for a report written from what happened
+             rather than from stock phrasing. */
+          if (capBeyond) {
+            const who = el('div', { class: 'sm-whorow' });
+            who.append(el('span', { class: 'sm-caplab' }, 'Who offered it? — optional, and it stays on this machine'));
+            const names = (D.classNames ? D.classNames() : []);
+            who.append(el('button', {
+              class: 'sm-who' + (capWho == null ? ' on' : ''),
+              onclick: () => { capWho = null; capFocus = true; render(); },
+            }, 'the class'));
+            for (const n of names.slice(0, 40)) {
+              who.append(el('button', {
+                class: 'sm-who' + (capWho === n ? ' on' : ''),
+                onclick: () => { capWho = n; capFocus = true; render(); },
+              }, n));
+            }
+            if (!names.length) {
+              who.append(el('span', { class: 'sm-banknote' },
+                'No class list on this deck — the moment records “the class”.'));
+            }
+            bar.append(who);
+          }
+          return bar;
+        }
+
+        function commitCapture() {
+          const raw = String(capW || '');
+          const wd = gtStr(raw, GT_CAP.word);
+          if (!wd) { smRefuse('Type the word first.'); return; }
+          // the cap is SPOKEN, never silent: a teacher who watches a word commit
+          // shorter than she typed it cannot tell a cap from a bug from a lost save
+          if (raw.trim().length > GT_CAP.word) {
+            toast('That is longer than ' + GT_CAP.word + ' characters — kept the first ' + GT_CAP.word + '.');
+          }
+          if (p.words.some((o) => o.w.toLowerCase() === wd.toLowerCase())) {
+            smRefuse('“' + wd + '” is already in the bank.');
+            capW = ''; capFocus = true; render(); return;
+          }
+          if (p.words.length >= GT_CAP.lang) { smRefuse('The bank holds ' + GT_CAP.lang + ' words.'); return; }
+          const lvl = capBeyond ? SM_LVLMAX : p.capL;
+          p.words.push(smWord({ w: wd, src: 'bank', lvl, mood: p.capM, beyond: capBeyond }));
+          if (capBeyond) recordMoment(wd);
+          else toast('“' + wd + '” added — ' + SM_LVLNAME[lvl] + ', '
+            + (p.capM === 'up' ? 'lifts' : p.capM === 'down' ? 'falls' : 'level') + '.');
+          capW = ''; capBeyond = false;
+          capFocus = true;
+          bump(); render();
+        }
+
+        function recordMoment(wd) {
+          const deck = (D.deck && D.deck()) || {};
+          const b = p.beats.find((x) => x.id === p.open) || null;
+          const row = b ? smRows(p).find((r) => r.id === b.row) : null;
+          if (p.moments.length >= SM_CAP.moments) p.moments.pop();
+          p.moments.unshift({
+            w: wd, score: SM_LVLMAX + 1, who: capWho,
+            box: row ? row.box : null,
+            beat: b ? (b.t || null) : null,
+            plan: p.arc ? p.arc.name : null,
+            unit: gtStr(deck.subject || deck.name, GT_CAP.name) || null,
+            stage: p.stage, at: Date.now(),
+          });
+          toast('“' + wd + '” recorded as a moment' + (capWho ? ' — ' + capWho : '')
+            + '. It carries where and when with it.');
+          capWho = null;
+        }
+
+        // ---------------------------------------------------------- text map face
+        function mapFace() {
+          const bank = bankEl();
+          if (bank) faceEl.append(bank);
+          const orphans = smOrphans(p);
+          if (orphans.length) {
+            const tray = el('div', { class: 'sm-tray' });
+            tray.append(el('div', { class: 'sm-traylab' }, 'Beats with no box'));
+            const row = el('div', { class: 'sm-beats' });
+            for (const b of orphans) row.append(beatCard(b));
+            tray.append(row);
+            faceEl.append(tray);
+          }
+          for (const r of smRows(p)) {
+            const band = el('div', { class: 'sm-band' });
+            const head = el('div', { class: 'sm-bandhead' });
+            head.append(el('span', { class: 'sm-boxname' }, r.box));
+            if (r.hint) head.append(el('span', { class: 'sm-boxhint' }, r.hint));
+            head.append(el('span', { class: 'sm-grow' }));
+            const gap = gapChip(r.id);
+            if (gap) head.append(gap);
+            band.append(head);
+            const list = smBeats(p, r.id);
+            const row = el('div', { class: 'sm-beats' });
+            for (const b of list) row.append(beatCard(b));
+            if (list.length >= SM_CAP.beats) {
+              row.append(el('div', { class: 'sm-capnote' }, smFullSay(r, list.length)));
+            } else if (!locked()) {
+              row.append(el('button', {
+                class: 'sm-addbeat sm-big',
+                title: 'Add a beat to ' + r.box,
+                onclick: () => { newBeat(r.id); render(); },
+              }, '+'));
+            }
+            band.append(row);
+            if (p.open && list.some((b) => b.id === p.open)) band.append(panelEl(p.open));
+            faceEl.append(band);
+          }
+          if (p.open && smOrphans(p).some((b) => b.id === p.open)) faceEl.append(panelEl(p.open));
+        }
+
+        function gapChip(rowId) {
+          const g = smGapOf(p, rowId);
+          if (!g) return null;
+          const met = g.at === g.want;
+          return el('span', { class: 'sm-gap' + (met ? ' met' : '') },
+            met ? 'at ' + smSigned(g.at) + ' — where we wanted it'
+              : 'at ' + smSigned(g.at) + ' → aiming for ' + smSigned(g.want));
+        }
+
+        function beatCard(b) {
+          const sel = p.open === b.id;
+          const card = el('button', {
+            class: 'sm-beat' + (sel ? ' sel' : '') + (b.t ? '' : ' blank'),
+            onclick: () => {
+              if (locked()) { smRefuse('The board is locked. Unlock it to let a hand use it.'); return; }
+              if (p.open === b.id) { commitOpenBeat(); p.open = null; }
+              else { commitOpenBeat(); p.open = b.id; focusBeat = b.id; }
+              bump(); render();
+            },
+          });
+          const thumb = el('span', { class: 'sm-thumb' + (b.img ? '' : ' ghost') });
+          // a picture and a ghost frame occupy the SAME footprint, so a picture
+          // arriving can never change the card's size
+          if (b.img) thumb.append(el('img', { src: b.img, alt: '' }));
+          card.append(thumb);
+          const txt = el('span', { class: 'sm-btext' + (b.t ? '' : ' blank') + (p.coverMap ? ' cov' : '') },
+            b.t || 'not written yet');
+          card.append(txt);
+          if (!p.coverMap) {
+            if (b.vocab.length) {
+              const meta = el('span', { class: 'sm-bmeta' });
+              const line = smStoryLine(p);
+              for (const wd of b.vocab) {
+                const o = p.words.find((x) => x.w === wd);
+                const read = o && line ? smReadWord(o, b.v[line.id]) : null;
+                meta.append(el('span', { class: read && read.k === 'counter' ? 'cp' : '' }, wd));
+              }
+              card.append(meta);
+            }
+            if (b.note) card.append(el('span', { class: 'sm-bnote' }, '“' + b.note + '”'));
+          }
+          return card;
+        }
+
+        // ---------------------------------------------------------- the beat panel
+        function panelEl(id) {
+          const b = p.beats.find((x) => x.id === id);
+          if (!b) return el('span');
+          const row = smRows(p).find((r) => r.id === b.row);
+          const box = el('div', { class: 'sm-panel' });
+          const top = el('div', { class: 'sm-ptop' });
+          const inp = el('input', {
+            class: 'sm-beatin', type: 'text', value: b.t,
+            placeholder: 'what happens here…',
+            oninput: (e) => {
+              const v = e.target.value;
+              if (v.length > SM_CAP.beat) {
+                // the editor stops accepting at its target's cap and SAYS SO.
+                // Nothing is ever clipped on commit: a teacher who watches two
+                // sentences commit as one and a half cannot tell a cap from a bug
+                // from a lost save, and the half she loses is the half the class
+                // agreed.
+                e.target.value = v.slice(0, SM_CAP.beat);
+                smRefuse('A beat holds ' + SM_CAP.beat + ' characters.');
+              }
+              b.t = gtStr(e.target.value, SM_CAP.beat);
+              // LIVE-PATCH the card, never re-render: the caret has to survive
+              // every keystroke, and a render-on-input design loses it.
+              const card = faceEl.querySelector('.sm-beat.sel');
+              if (card) {
+                const t = card.querySelector('.sm-btext');
+                if (t) {
+                  t.textContent = b.t || 'not written yet';
+                  t.classList.toggle('blank', !b.t);
+                }
+                card.classList.toggle('blank', !b.t);
+              }
+              bump();
+            },
+            onkeydown: (e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                // the loop that runs a hundred times a lesson
+                const list = smBeats(p, b.row);
+                if (list.length >= SM_CAP.beats) { smRefuse(smFullSay(row, list.length)); return; }
+                newBeat(b.row); render();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                p.open = null; bump(); render();
+              }
+            },
+          });
+          top.append(inp);
+          top.append(el('button', {
+            class: 'sm-pclose sm-big', title: 'Close',
+            onclick: () => { commitOpenBeat(); p.open = null; bump(); render(); },
+          }, '×'));
+          box.append(top);
+          box.append(el('div', { class: 'sm-enterhint' },
+            'Enter starts the next beat in ' + (row ? row.box : 'this box') + '.'));
+
+          /* The panel is unambiguously the TEACHER's surface — children do not
+             touch the board — so Cover does NOT reach it. Covering the panel
+             blinds the only person who is about to reveal the word, and you
+             cannot type into a covered field. The board stays covered; the
+             teacher can still work. */
+          if (p.coverMap) {
+            box.append(el('div', { class: 'sm-plab' }, 'Cover is on, so this beat stays covered on the board.'));
+          }
+
+          // pictures, as a row of options all visible at once — a cycle hides
+          // every option but the next one
+          if (!locked()) {
+            box.append(el('div', { class: 'sm-plab' }, 'What it looks like'));
+            const pick = el('div', { class: 'sm-pickrow' });
+            pick.append(el('button', {
+              class: 'sm-pick none' + (b.img ? '' : ' on'),
+              onclick: () => { b.img = null; bump(); render(); },
+            }, '—'));
+            pick.append(el('button', {
+              class: 'sm-pick',
+              onclick: () => {
+                // pickImage attaches img.onload only and has NO img.onerror, so a
+                // HEIC or a corrupt JPEG never calls back at all — cancel and
+                // failure are indistinguishable here. No spinner is shown for
+                // that reason; a stuck one would be the visible bug.
+                D.pickImage((data) => {
+                  if (!data) return;
+                  if (String(data).length > SM_CAP.pic) {
+                    toast('That picture is too big for a beat — try a smaller one.');
+                    return;
+                  }
+                  b.img = data; bump(); render();
+                }, SM_CAP.picW);
+              },
+            }, '＋'));
+            if (b.img) pick.append(el('img', { class: 'sm-pickimg', src: b.img, alt: '' }));
+            box.append(pick);
+          }
+
+          // how it feels — one panel for every line, because per-line panels
+          // would give one beat two notes, which is what b.v exists to prevent
+          const armed = smArmedTrack(p);
+          if (p.shape && armed && !locked()) {
+            box.append(el('div', { class: 'sm-plab' },
+              'Feeling on ' + armed.name + ' — taps write to this line only'));
+            const chips = el('div', { class: 'sm-chiprow' });
+            for (let i = 0; i < p.steps; i++) {
+              const v = smValOfStep(i, p.steps);
+              const on = b.v[armed.id] === v;
+              chips.append(el('button', {
+                class: 'sm-step' + (on ? ' set' : '') + (v === 0 ? ' mid' : ''),
+                style: on ? 'background:' + SM_CH[armed.ch].col : '',
+                // a TOGGLE, so 150 taps is byte-identical to none at an even count
+                onclick: () => {
+                  if (on) delete b.v[armed.id]; else b.v[armed.id] = v;
+                  bump(); render();
+                },
+              }, el('span', { class: 'sm-num' }, smSigned(v)),
+              el('span', { class: 'sm-wd' }, p.axisWords[i] || '')));
+            }
+            box.append(chips);
+          }
+
+          // the words, re-ordered under this beat's tone. Nothing is hidden and
+          // nothing is called wrong.
+          if (p.words.length && !locked()) {
+            const line = smStoryLine(p);
+            const val = line ? b.v[line.id] : null;
+            const groups = val == null
+              ? [['all of them', p.words]]
+              : [
+                [val === 0 ? 'level with it' : 'for this tone',
+                  p.words.filter((o) => (val === 0 ? o.mood === 'mid' : SM_MOODSIGN[o.mood] === Math.sign(val)))],
+                [val === 0 ? 'or tip it either way' : 'neutral',
+                  p.words.filter((o) => (val === 0 ? o.mood !== 'mid' : o.mood === 'mid'))],
+                ['against it — on purpose',
+                  p.words.filter((o) => val !== 0 && SM_MOODSIGN[o.mood] === -Math.sign(val))],
+              ];
+            for (const [label, list] of groups) {
+              if (!list.length) continue;
+              box.append(el('div', { class: 'sm-plab' }, label));
+              const row2 = el('div', { class: 'sm-words' });
+              for (const o of list) {
+                const chip = el('button', {
+                  class: 'sm-word' + (b.vocab.includes(o.w) ? ' picked' : ''),
+                  onclick: () => attachWord(b, o),
+                }, o.w);
+                const read = smReadWord(o, val);
+                // the reading badge renders only when the word is ATTACHED
+                if (read && b.vocab.includes(o.w)) {
+                  chip.append(el('span', { class: 'sm-rd ' + read.k }, read.say));
+                }
+                row2.append(chip);
+              }
+              box.append(row2);
+            }
+          }
+
+          if (!locked()) {
+            box.append(el('div', { class: 'sm-plab' }, 'A note for you'));
+            box.append(el('input', {
+              class: 'sm-noteline', type: 'text', value: b.note,
+              placeholder: 'a craft note, for you…',
+              oninput: (e) => {
+                if (e.target.value.length > SM_CAP.note) {
+                  e.target.value = e.target.value.slice(0, SM_CAP.note);
+                  smRefuse('A note holds ' + SM_CAP.note + ' characters.');
+                }
+                b.note = gtStr(e.target.value, SM_CAP.note);
+                bump();
+              },
+            }));
+            const mv = el('div', { class: 'sm-mvrow' });
+            const list = smBeats(p, b.row);
+            const i = list.indexOf(b);
+            if (i > 0) {
+              mv.append(el('button', {
+                class: 'sm-mv',
+                // ord is a FRACTIONAL sort key, so nothing is renumbered and no
+                // index is ever a reference
+                onclick: () => {
+                  const prev = list[i - 1];
+                  const before = i > 1 ? list[i - 2].ord : prev.ord - 1;
+                  b.ord = (before + prev.ord) / 2;
+                  bump(); render();
+                },
+              }, '← earlier'));
+            }
+            if (i >= 0 && i < list.length - 1) {
+              mv.append(el('button', {
+                class: 'sm-mv',
+                onclick: () => {
+                  const next = list[i + 1];
+                  const after = i + 2 < list.length ? list[i + 2].ord : next.ord + 1;
+                  b.ord = (next.ord + after) / 2;
+                  bump(); render();
+                },
+              }, 'later →'));
+            }
+            mv.append(el('button', {
+              class: 'sm-mv del',
+              onclick: () => {
+                D.confirmDialog('Delete this beat? Its picture, its words and its plotted feelings go with it.',
+                  () => {
+                    p.beats = p.beats.filter((x) => x.id !== b.id);
+                    p.open = null; bump(); render();
+                  }, { label: 'Delete', danger: true });
+              },
+            }, 'Delete beat'));
+            box.append(mv);
+          }
+          return box;
+        }
+
+        // ---------------------------------------------------------- boxing up face
+        /* A HANDWRITTEN ruled page. There are no typed cells anywhere: the left
+           column is a VIEW of that box's beats — a view, so no beat is authored
+           on this face and no band here carries a + beat — and the right is a
+           ruled surface the teacher writes on while thirty children copy. Nothing
+           written on the right touches the beats the class has been orally
+           rehearsing from all week, which is now true in the strongest possible
+           way: ink and beats share nothing at all. This is the move from
+           imitation to innovation. */
+        function boxFace() {
+          const bank = bankEl();
+          if (bank) faceEl.append(bank);
+          if (!locked()) {
+            const ctl = el('div', { class: 'sm-wctl' });
+            ctl.append(el('button', {
+              class: 'sm-wbtn ghost',
+              onclick: () => {
+                const i = (SM_RULE_IDS.indexOf(p.rule) + 1) % SM_RULE_IDS.length;
+                p.rule = SM_RULE_IDS[i];
+                p.lines = SM_RULES[p.rule].lines;
+                const rs = SM_RULES[p.rule];
+                toast(rs.name + ' — ' + p.lines + ' lines a box'
+                  + (rs.guide ? ', with a midline to reach for' : ''));
+                bump(); render();
+              },
+            }, 'Lines: ' + smRuleSet(p).name));
+            ctl.append(el('button', {
+              class: 'sm-wbtn ghost',
+              onclick: () => {
+                if (p.lines <= SM_CAP.writeMin) { smRefuse('Two lines is the floor.'); return; }
+                p.lines--; bump(); render();
+              },
+            }, '−'));
+            ctl.append(el('span', { class: 'sm-wcount' }, p.lines + ' lines'));
+            ctl.append(el('button', {
+              class: 'sm-wbtn ghost',
+              onclick: () => {
+                if (p.lines >= SM_CAP.writeMax) { smRefuse('Fourteen lines is as tall as a box goes.'); return; }
+                p.lines++; bump(); render();
+              },
+            }, '+'));
+            if (p.shape) {
+              ctl.append(el('button', {
+                class: 'sm-wbtn ghost',
+                onclick: () => { p.refMode = p.refMode === 'side' ? 'strip' : 'side'; bump(); render(); },
+              }, p.refMode === 'side' ? 'Shape beside' : 'Shape above'));
+            }
+            ctl.append(el('span', { class: 'sm-grow' }));
+            // two NAMED entry points with two STATED budgets — not one control at
+            // two settings, and the budget is remembered nowhere
+            ctl.append(el('button', { class: 'sm-wbtn ghost', onclick: () => openPrint(8) }, 'Print for the wall…'));
+            faceEl.append(ctl);
+          } else {
+            faceEl.append(el('div', { class: 'sm-locknote' },
+              'Board locked — the boxes and the shape stay up to copy from.'));
+          }
+
+          const wrap = el('div', { class: 'sm-boxwrap' + (p.refMode === 'side' && p.shape ? ' side' : '') });
+          if (p.shape && smVisible(p).length) {
+            const ref = el('div', { class: 'sm-graphref' });
+            const g = smGraphMarkup(p, { compact: true, ghosts: false, cover: false });
+            if (g.svg) {
+              ref.innerHTML = '<svg class="sm-graphsvg" viewBox="0 0 ' + g.W + ' ' + g.H + '" '
+                + 'role="img" aria-label="The shape, for reference">' + g.svg + '</svg>';
+              wrap.append(ref);
+            }
+          }
+          const rowsWrap = el('div', { class: 'sm-boxrows' });
+          for (const r of smRows(p)) rowsWrap.append(boxRow(r));
+          wrap.append(rowsWrap);
+          faceEl.append(wrap);
+        }
+
+        function boxRow(r) {
+          const row = el('div', { class: 'sm-brow' });
+          const left = el('div', { class: 'sm-bcol' });
+          left.append(el('div', { class: 'sm-boxname' }, r.box));
+          if (r.hint) left.append(el('div', { class: 'sm-boxhint' }, r.hint));
+          const gap = gapChip(r.id);
+          if (gap) left.append(gap);
+          for (const b of smBeats(p, r.id)) {
+            const chip = el('div', { class: 'sm-mchip' });
+            const t = el('span', { class: 'sm-mt' + (b.img ? '' : ' ghost') });
+            if (b.img) t.append(el('img', { src: b.img, alt: '' }));
+            chip.append(t, el('span', { class: 'sm-mx' }, b.t || '…'));
+            left.append(chip);
+          }
+          row.append(left);
+          row.append(writeArea(r));
+          return row;
+        }
+
+        /* The pen has to be beside the box you are writing in. One toolbar at the
+           top of a 700px face is a stretch back up the wall for box 4, and on a
+           wall-mounted board that stretch is the whole objection. So every
+           writing row carries its own. Tool and ink are GLOBAL widget state; only
+           Clear is per row. */
+        function writeArea(r) {
+          let a = areas.get(r.id);
+          if (!a) {
+            const NS = 'http://www.w3.org/2000/svg';
+            const wrap = el('div', { class: 'sm-warea' });
+            const tools = el('div', { class: 'sm-rowtools' });
+            const svgWrap = el('div', { class: 'sm-wsvgwrap' });
+            const svg = document.createElementNS(NS, 'svg');
+            svg.setAttribute('class', 'sm-wsvg');
+            const bg = document.createElementNS(NS, 'g');
+            const layer = document.createElementNS(NS, 'g');
+            svg.append(bg, layer);
+            svgWrap.append(svg);
+            wrap.append(tools, svgWrap);
+            a = { wrap, tools, svg, bg, layer };
+            a.pen = window.SagePen && window.SagePen.attach(svg, {
+              view: () => [SM_WRITE_W, smWriteH(p)],
+              strokes: () => (p.strokes[r.id] = p.strokes[r.id] || []),
+              add: (s) => { p.strokes[r.id].push(s); },
+              replace: (list) => { p.strokes[r.id] = list; },
+              layer: () => a.layer,
+              tool: () => tool,
+              ink: () => pen,
+              width: () => Math.max(3, Math.round(smRuleSet(p).pitch * 0.14)),
+              eraseR: () => Math.max(9, Math.round(smRuleSet(p).pitch * 0.42)),
+              cap: () => SM_CAP.strokesPerBox,
+              capMsg: () => r.box + ' is full — start the next box.',
+              locked: () => (locked()
+                ? 'The board is locked. Unlock it to write, or to hand the pen over.'
+                : p.coverBox ? 'Cover is on — the writing is hidden.' : ''),
+              onRefuse: smRefuse,
+              onChange: () => { paintInk(a, r); bump(); },
+            });
+            areas.set(r.id, a);
+          }
+          paintTools(a, r);
+          paintInk(a, r);
+          return a.wrap;
+        }
+
+        function paintTools(a, r) {
+          a.tools.textContent = '';
+          if (locked()) return;
+          const mk = (label, on, fn, cls) => el('button', {
+            class: 'sm-rt' + (on ? ' on' : '') + (cls ? ' ' + cls : ''), onclick: fn,
           }, label);
-          row.append(b);
+          a.tools.append(mk('✎ Pen', tool === 'pen', () => { tool = 'pen'; render(); }));
+          a.tools.append(mk('Rub out', tool === 'rub', () => { tool = 'rub'; render(); }));
+          a.tools.append(el('span', { class: 'sm-rtsep' }));
+          for (const c of ['#1e2c33', '#1d4ed8', '#a13b4b']) {
+            a.tools.append(el('button', {
+              class: 'sm-rtink' + (pen === c && tool === 'pen' ? ' on' : ''),
+              style: 'background:' + c,
+              title: 'ink',
+              // picking an ink also switches back to the pen, because reaching
+              // for a colour is never a request to rub out
+              onclick: () => { pen = c; tool = 'pen'; render(); },
+            }));
+          }
+          a.tools.append(el('span', { class: 'sm-rtsep' }));
+          a.tools.append(mk('Clear ' + r.box, false, () => {
+            if (!(p.strokes[r.id] || []).length) { smRefuse('Nothing written in ' + r.box + ' yet.'); return; }
+            D.confirmDialog('Clear the writing in ' + r.box + '?', () => {
+              if (typeof D.snapshotBefore === 'function') D.snapshotBefore(w, 'Story map');
+              p.strokes[r.id] = [];
+              paintInk(a, r); bump();
+            }, { label: 'Clear', danger: true });
+          }, 'del'));
+        }
+
+        function paintInk(a, r) {
+          const h = smWriteH(p);
+          a.svg.setAttribute('viewBox', '0 0 ' + SM_WRITE_W + ' ' + h);
+          const list = p.strokes[r.id] || [];
+          // The ground, the rules and the placeholder are the BACKGROUND group;
+          // the ink is its own. Only the group that changed is rebuilt, so a
+          // score tap in the capture bar cannot tear down a surface.
+          let bg = '<rect x="0" y="0" width="' + SM_WRITE_W + '" height="' + h + '" fill="'
+            + (p.coverBox ? '#1e2c33' : '#fffdf7') + '"/>';
+          if (!p.coverBox) {
+            bg += smRuleMarkup(p);
+            if (!list.length) {
+              bg += '<text x="18" y="' + (smRuleSet(p).pitch * 0.92).toFixed(1)
+                + '" font-family="' + GT_FONT + '" font-size="' + (smRuleSet(p).pitch * 0.5).toFixed(1)
+                + '" font-style="italic" fill="#cfd8e3">write it here</text>';
+            }
+          }
+          a.bg.innerHTML = bg;
+          a.layer.innerHTML = p.coverBox || !window.SagePen ? '' : window.SagePen.markup(list);
+        }
+
+        // ---------------------------------------------------------- graph face
+        function graphFace() {
+          faceEl.append(legendEl());
+          const holder = el('div', { class: 'sm-graphhold' });
+          const g = smGraphMarkup(p, { compact: false, ghosts: true, cover: p.coverGraph });
+          if (!g.svg) {
+            faceEl.append(el('div', { class: 'sm-empty' }, 'Beats start on the Text map.'));
+            return;
+          }
+          holder.innerHTML = '<svg class="sm-graphsvg" viewBox="0 0 ' + g.W + ' ' + g.H + '" '
+            + 'role="img" aria-label="Emotion graph">' + g.svg + '</svg>';
+          holder.querySelectorAll('[data-beat]').forEach((n) => {
+            n.style.cursor = 'pointer';
+            n.addEventListener('click', () => {
+              if (locked()) { smRefuse('The board is locked. Unlock it to let a hand use it.'); return; }
+              const id = n.getAttribute('data-beat');
+              p.open = p.open === id ? null : id;
+              if (p.open) focusBeat = id;
+              bump(); render();
+            });
+          });
+          faceEl.append(holder);
+          if (p.open) faceEl.append(panelEl(p.open));
+        }
+
+        /* The legend's three positions NEVER move: an empty channel renders a
+           dashed, inert "free channel" chip that holds its place. ON (swatch
+           filled) and ARMED (thicker border plus a halo) are two INDEPENDENT
+           states — a chip can be on and not armed, and that is the common case. */
+        function legendEl() {
+          const lg = el('div', { class: 'sm-legend' });
+          for (let ch = 0; ch < 3; ch++) {
+            const onCh = p.tracks.filter((t) => t.ch === ch);
+            const live = onCh.find((t) => t.on) || null;
+            if (!onCh.length) {
+              lg.append(el('span', { class: 'sm-lchip empty' }, 'free channel'));
+              continue;
+            }
+            const shown = live || onCh[0];
+            const chip = el('button', {
+              class: 'sm-lchip' + (live ? '' : ' off') + (p.armed === (live && live.id) ? ' armed' : ''),
+              style: 'color:' + SM_CH[ch].col,
+              onclick: () => cycleChannel(ch),
+            });
+            chip.append(el('span', { class: 'sm-sw' + (live ? ' on' : '') }));
+            chip.append(el('span', {}, shown.name + (live ? '' : ' (off)')));
+            if (live && live.kind === 'target') chip.append(el('span', { class: 'sm-kd' }, 'target'));
+            if (onCh.length > 1) {
+              chip.append(el('span', { class: 'sm-kd' },
+                (onCh.indexOf(shown) + 1) + ' of ' + onCh.length));
+            }
+            lg.append(chip);
+          }
+          return lg;
+        }
+
+        // FOUR outcomes, not three.
+        function cycleChannel(ch) {
+          if (locked()) { smRefuse('The board is locked. Unlock it to let a hand use it.'); return; }
+          const onCh = p.tracks.filter((t) => t.ch === ch);
+          if (!onCh.length) return;
+          const live = onCh.find((t) => t.on);
+          if (!live) { airLine(onCh[0].id); bump(); render(); return; }
+          if (p.armed !== live.id) { p.armed = live.id; bump(); render(); return; }
+          if (onCh.length > 1) {
+            const nx = onCh[(onCh.indexOf(live) + 1) % onCh.length];
+            airLine(nx.id);
+            toast(nx.name + ' is on the ' + SM_CH[ch].name + ' channel now — ' + live.name + ' steps off.');
+            bump(); render(); return;
+          }
+          // a graph with nothing visible has no destination for a chip and no
+          // colour for a ghost
+          if (smVisible(p).length === 1) { smRefuse('The last visible line stays — something has to be armed.'); return; }
+          live.on = false;
+          const q = smVisible(p)[0];
+          p.armed = q ? q.id : null;
+          bump(); render();
+        }
+        // the SINGLE mutation for "on air": everything else on that channel steps
+        // off, this one steps on, and it is armed
+        function airLine(id) {
+          const t = p.tracks.find((x) => x.id === id);
+          if (!t) return;
+          for (const q of p.tracks) if (q.ch === t.ch) q.on = false;
+          t.on = true;
+          p.armed = t.id;
+        }
+
+        // ---------------------------------------------------------- render
+        function render() {
+          body.classList.toggle('sm-table', p.room === 'table');
+          body.classList.toggle('sm-locked', locked());
+          paintChrome();
+          // detach the live surfaces before the wipe so their nodes, their
+          // listeners and any pointer capture survive it
+          for (const a of areas.values()) if (a.wrap.parentNode) a.wrap.remove();
+          faceEl.textContent = '';
+          if (!p.arc || !smRows(p).length) {
+            faceEl.append(el('div', { class: 'sm-empty' }, 'No plan yet — pick one in settings.'));
+            return;
+          }
+          if (p.face === 'map') mapFace();
+          else if (p.face === 'box') boxFace();
+          else graphFace();
+          // focus is handed back by two one-shot flags consumed at the very end,
+          // each set by the action that should give the keyboard back
+          if (focusBeat) {
+            const inp = faceEl.querySelector('.sm-beatin');
+            if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+            focusBeat = null;
+          }
+          if (capFocus) {
+            const ci = faceEl.querySelector('.sm-capin');
+            if (ci) { ci.focus(); ci.setSelectionRange(ci.value.length, ci.value.length); }
+            capFocus = false;
+          }
+        }
+        render();
+      },
+
+      settings(box, w, api) {
+        const p = w.props;
+        smNorm(p);
+        const redraw = () => { save(); api.refresh(); };
+
+        /* THE STALENESS GUARD IS MANDATORY HERE, and it is mandatory BECAUSE the
+           gear lives in the app's own settings panel: this function builds a
+           panel holding a captured reference to p.arc, while api.refresh() is
+           save-plus-remount and does not rebuild it. Always MUTATE the existing
+           arc rather than swapping in a new one — the recorded failure is that
+           edits went to a dead object and were silently lost while the live one
+           was pruned against the new ids. `p.arc = next` is not the model to
+           copy, and there are shipped call sites in this file that do it. */
+        function setArc(next) {
+          if (p.arc && typeof p.arc === 'object') Object.assign(p.arc, next);
+          else p.arc = next;
+          return p.arc;
+        }
+
+        // ---- the plan
+        box.append(el('h4', {}, 'The plan'));
+        box.append(el('div', { class: 'hint' },
+          'Swapping a plan whole needs an empty map — re-word or add boxes instead once the class has started.'));
+        const swapShut = smPlotted(p) || smWritten(p);
+        for (const a of smArcLib()) {
+          const cur = p.arc && a.name === p.arc.name;
+          box.append(el('button', {
+            class: 'sm-planbtn' + (cur ? ' cur' : ''),
+            onclick: () => {
+              // re-picking a byte-identical spine would pool every beat into the
+              // first box to get back where you started, so it does nothing
+              if (cur) return;
+              if (swapShut) {
+                const bits = [];
+                if (smPlotted(p)) bits.push('plotted feelings');
+                if (smWritten(p)) bits.push('writing in a box');
+                toast('This map has ' + bits.join(' and ') + ' on “' + p.arc.name
+                  + '”. Re-word or add boxes instead — swapping a plan whole needs an empty map.');
+                return;
+              }
+              if (typeof D.snapshotBefore === 'function') D.snapshotBefore(w, 'Story map');
+              const first = a.rows[0];
+              const n = p.beats.length;
+              // index 0 is where the beats are KEPT, never what they are MATCHED
+              // to. A five-part → dilemma mapping by position would put the
+              // Opening's beats under Dilemma and the Ending's under Moral, read
+              // aloud to a class as their plan and printed as their plan. A guess
+              // dressed as a placement is worse than no placement, because nobody
+              // checks it.
+              let ord = 1;
+              for (const b of p.beats.slice().sort((x, y) => x.ord - y.ord)) {
+                b.row = first.id;
+                b.ord = ord++;
+              }
+              setArc(a);
+              p.shape = a.shape;
+              if (!p.shape && p.face === 'graph') p.face = 'map';
+              // the banded scalars reseed from the INCOMING plan's band, in the
+              // same place the first seed sets them
+              const band = a.band || gtBandFor(((D.deck && D.deck()) || {}).yearGroup);
+              p.ladder = SM_LADDER_BAND[band] || p.ladder;
+              const nextSteps = a.steps || p.steps;
+              if (nextSteps !== p.steps) {
+                // words matched by VALUE, never by index — the outermost are the
+                // ones dropped, and the confirm names both counts
+                const was = p.axisWords.slice(), wasSteps = p.steps;
+                p.steps = nextSteps;
+                const next = [];
+                for (let i = 0; i < p.steps; i++) {
+                  const v = smValOfStep(i, p.steps);
+                  const j = Array.from({ length: wasSteps }, (_, k) => k)
+                    .find((k) => smValOfStep(k, wasSteps) === v);
+                  next.push(j == null ? SM_AXIS_WORDS[p.steps][i] : was[j]);
+                }
+                p.axisWords = next;
+              }
+              // destroys nothing, because the window was open
+              p.strokes = {};
+              toast(n + ' beat' + (n === 1 ? '' : 's') + ' moved to ' + first.box);
+              redraw();
+            },
+          }, el('span', { class: 'pn' }, a.name),
+          el('span', { class: 'pb' }, (a.band ? gtBandName(a.band) : 'no band — offered at every year group')
+            + ' · ' + a.rows.length + ' boxes' + (a.shape ? '' : ' · no emotion graph'))));
+        }
+
+        // ---- the lines
+        box.append(el('h4', {}, 'The lines'));
+        box.append(el('div', { class: 'hint' },
+          'Three colours, because that is what a board can carry — but name as many lines as the '
+          + 'story needs and put one on air at a time. A line is either where the writing IS, or '
+          + 'where it should GET TO.'));
+        for (const t of p.tracks) {
+          const row = el('div', { class: 'sm-lrow' });
+          row.append(el('input', {
+            type: 'text', value: t.name, maxlength: String(SM_CAP.track),
+            oninput: (e) => { t.name = gtStr(e.target.value, SM_CAP.track); save(); },
+          }));
+          row.append(D.selectInput(SM_CH.map((c, i) => [String(i), c.name]), String(t.ch), (v) => {
+            t.ch = smInt(v, 0, 2, 0); redraw();
+          }));
+          if (gtBandFor(((D.deck && D.deck()) || {}).yearGroup) !== 'ks1') {
+            row.append(el('button', {
+              class: 'sm-wbtn ghost',
+              onclick: () => { t.kind = t.kind === 'target' ? 'actual' : 'target'; redraw(); },
+            }, t.kind === 'target' ? 'where we want it' : 'where we are'));
+          }
+          row.append(el('button', {
+            class: 'sm-wbtn ghost' + (t.on ? ' on' : ''),
+            onclick: () => {
+              if (t.on && p.tracks.filter((x) => x.on).length === 1) {
+                toast('The last visible line stays — something has to be armed.');
+                return;
+              }
+              if (t.on) t.on = false;
+              else { for (const q of p.tracks) if (q.ch === t.ch) q.on = false; t.on = true; p.armed = t.id; }
+              redraw();
+            },
+          }, t.on ? 'on air' : 'parked'));
+          row.append(el('button', {
+            class: 'sm-wbtn ghost del',
+            onclick: () => {
+              if (p.tracks.length === 1) { toast('A map keeps one line.'); return; }
+              D.confirmDialog('Delete “' + t.name + '”? Every feeling plotted on it goes too.', () => {
+                p.tracks = p.tracks.filter((x) => x.id !== t.id);
+                for (const b of p.beats) delete b.v[t.id];
+                smNorm(p);
+                redraw();
+              }, { label: 'Delete', danger: true });
+            },
+          }, '✕'));
+          box.append(row);
+        }
+        if (p.tracks.length < SM_CAP.lines) {
+          box.append(el('button', {
+            class: 'sm-wbtn',
+            onclick: () => {
+              const used = new Set(p.tracks.map((t) => t.ch));
+              const ch = [0, 1, 2].find((c) => !used.has(c));
+              // ids are D.uid() and never 't'+length: delete a line, add another,
+              // and a positional id collides with the dead one — and because b.v
+              // is keyed by track id the two would share every plotted feeling
+              p.tracks.push({
+                id: uid(), name: 'line ' + (p.tracks.length + 1),
+                on: ch != null, kind: 'actual', ch: ch == null ? 0 : ch,
+              });
+              redraw();
+            },
+          }, 'Add a line'));
+        }
+
+        if (p.shape) {
+          box.append(el('button', {
+            class: 'sm-wbtn',
+            onclick: () => {
+              const tgt = p.tracks.find((t) => t.kind === 'target');
+              if (!tgt) { toast('No target line yet — mark a line as target under The lines first.'); return; }
+              if (typeof D.snapshotBefore === 'function') D.snapshotBefore(w, 'Story map');
+              const lim = (p.steps - 1) / 2;
+              let n = 0;
+              for (const r of smRows(p)) {
+                if (!r.mood) continue;
+                const v = Math.max(-lim, Math.min(lim, SM_MOODVAL[r.mood]));
+                for (const b of smBeats(p, r.id)) { b.v[tgt.id] = v; n++; }
+              }
+              toast('Target set on ' + n + ' beat' + (n === 1 ? '' : 's')
+                + ' from the plan’s shape. Now argue with it.');
+              redraw();
+            },
+          }, 'Seed the target line from this shape'));
+        }
+
+        // ---- the words
+        box.append(el('h4', {}, 'The words'));
+        box.append(el('div', { class: 'hint' },
+          'A word’s score is DICTION — how rarely a primary writer reaches for it — and not how '
+          + 'strong the feeling is: wistful is mild and scores top. Mood is a separate axis, and '
+          + 'only mood decides counterpoint. Pack words arrive already tagged.'));
+        const paste = el('textarea', {
+          class: 'sm-paste', rows: '4',
+          placeholder: 'one word a line · desolate, 5, down · first, then, next, S, 1',
         });
-        bar.append(row);
-        body.append(face, bar);
+        box.append(paste);
+        /* A comma is only a delimiter if what follows it is actually a source or
+           a level. Otherwise the line is one phrase — "first, then, next" is SEN
+           sequencing language, and splitting it on its commas destroys it. The
+           tools are untidy, not the person. */
+        function parsePaste() {
+          const out = [];
+          for (const raw of String(paste.value || '').split('\n')) {
+            if (!raw.trim()) continue;
+            const parts = raw.split(',').map((s) => s.trim());
+            let lvl = null, mood = null, src = null;
+            while (parts.length > 1) {
+              const tail = parts[parts.length - 1].toLowerCase();
+              if (mood == null && gtMood(tail)) { mood = tail; parts.pop(); continue; }
+              if (lvl == null && /^[1-5]$/.test(tail)) { lvl = +tail - 1; parts.pop(); continue; }
+              if (lvl == null && SM_LVLNAME.indexOf(tail) >= 0) { lvl = SM_LVLNAME.indexOf(tail); parts.pop(); continue; }
+              if (src == null && SM_SRCALIAS[tail]) { src = SM_SRCALIAS[tail]; parts.pop(); continue; }
+              break;
+            }
+            const o = smWord({
+              w: parts.join(', '), src: src || 'bank',
+              lvl: lvl == null ? 2 : lvl, mood: mood || 'mid',
+            });
+            if (o) out.push(o);
+          }
+          return out;
+        }
+        function addWords(list, replace) {
+          if (!list.length) { toast('Paste a list first.'); return; }
+          if (typeof D.snapshotBefore === 'function') D.snapshotBefore(w, 'Story map');
+          // never prunes attached words off beats: an attached word is typed work
+          if (replace) p.words = [];
+          let added = 0, dup = 0;
+          for (const o of list) {
+            if (p.words.length >= GT_CAP.lang) break;
+            if (p.words.some((x) => x.w.toLowerCase() === o.w.toLowerCase())) { dup++; continue; }
+            p.words.push(o); added++;
+          }
+          // say what happened in BOTH directions — silence is this rail's failure mode
+          toast(added + ' word' + (added === 1 ? '' : 's') + ' added'
+            + (dup ? ' · ' + dup + ' already there.' : '.'));
+          paste.value = '';
+          redraw();
+        }
+        const pasteRow = el('div', { class: 'sm-lrow' });
+        pasteRow.append(el('button', { class: 'sm-wbtn', onclick: () => addWords(parsePaste(), false) }, 'Add these words'));
+        pasteRow.append(el('button', {
+          class: 'sm-wbtn ghost del',
+          onclick: () => {
+            const list = parsePaste();
+            if (!list.length) { toast('Paste a list first.'); return; }
+            D.confirmDialog('Replace all ' + p.words.length + ' words with these ' + list.length + '?',
+              () => addWords(list, true), { label: 'Replace', danger: true });
+          },
+        }, 'Replace the whole list'));
+        box.append(pasteRow);
+
+        for (const o of p.words) {
+          const row = el('div', { class: 'sm-lrow' });
+          const lad = el('span', { class: 'sm-lad' });
+          lad.innerHTML = smLadderArt(p.ladder, o.lvl);
+          row.append(lad, el('span', { class: 'sm-wordname' }, o.w));
+          row.append(el('button', {
+            class: 'sm-wbtn ghost',
+            onclick: () => { o.mood = o.mood === 'up' ? 'mid' : o.mood === 'mid' ? 'down' : 'up'; redraw(); },
+          }, o.mood));
+          row.append(el('button', {
+            class: 'sm-wbtn ghost',
+            onclick: () => { o.lvl = o.lvl > 0 ? o.lvl - 1 : 0; redraw(); },
+          }, '−'));
+          row.append(el('span', { class: 'sm-lvlname' }, (o.lvl + 1) + ' · ' + SM_LVLNAME[o.lvl]));
+          row.append(el('button', {
+            class: 'sm-wbtn ghost',
+            onclick: () => { o.lvl = o.lvl < SM_LVLMAX ? o.lvl + 1 : SM_LVLMAX; redraw(); },
+          }, '+'));
+          row.append(el('button', {
+            class: 'sm-wbtn ghost del',
+            onclick: () => { p.words = p.words.filter((x) => x !== o); redraw(); },
+          }, '✕'));
+          box.append(row);
+        }
+
+        // ---- the climb
+        box.append(el('h4', {}, 'The climb'));
+        const lrow = el('div', { class: 'sm-lrow' });
+        for (const k of SM_LADDERS) {
+          const b = el('button', {
+            class: 'sm-ladpick' + (p.ladder === k ? ' on' : ''),
+            title: k,
+            onclick: () => { p.ladder = k; redraw(); },
+          });
+          for (const lv of [0, 2, 4]) {
+            const s = el('span', { class: 'sm-lad' });
+            s.innerHTML = smLadderArt(k, lv);
+            b.append(s);
+          }
+          lrow.append(b);
+        }
+        box.append(lrow);
+
+        // ---- the room
+        box.append(el('h4', {}, 'The room'));
+        box.append(el('div', { class: 'hint' },
+          'Everything here is sized for a wall three metres away and thirty children. Four children '
+          + 'round a laptop is a different room: closer, smaller, and their hands SHOULD be on it. '
+          + 'One setting, so it is a distance and not eleven separate sizes.'));
+        const rrow = el('div', { class: 'sm-lrow' });
+        for (const [id, label] of [['board', 'Whole class'], ['table', 'Small group']]) {
+          rrow.append(el('button', {
+            class: 'sm-wbtn' + (p.room === id ? '' : ' ghost'),
+            onclick: () => {
+              p.room = id;
+              // THE ONE SANCTIONED EXCEPTION to "the lock is never the setting's":
+              // in a small group the hands are the point. Switching BACK does not
+              // re-lock — the unlock is a consequence of the room, the re-lock is
+              // a teacher's decision.
+              if (id === 'table' && p.lock) {
+                p.lock = false;
+                toast('Small group — board unlocked, because their hands are the point.');
+              }
+              redraw();
+            },
+          }, label));
+        }
+        box.append(rrow);
+
+        // ---- moments
+        if (p.moments.length) {
+          box.append(el('h4', {}, 'Moments'));
+          box.append(el('div', { class: 'hint' },
+            'A flag is not a sixth level. “Beyond” is a separate mark for the word a class produces '
+            + 'once a term — an EVENT, carrying which box, which text, which lesson and, if you said '
+            + 'so, who. Moments stay on this machine and never print.'));
+          for (const m of p.moments) {
+            const mb = el('div', { class: 'sm-moment' });
+            mb.append(el('b', {}, '“' + m.w + '”'));
+            mb.append(el('span', { class: 'sm-ctx' },
+              [m.who || 'the class', m.box ? 'at the ' + m.box : null, m.unit,
+                SM_STAGE_NAME(m.stage)].filter(Boolean).join(' · ')));
+            mb.append(el('button', {
+              class: 'sm-wbtn ghost del',
+              onclick: () => {
+                if (typeof D.snapshotBefore === 'function') D.snapshotBefore(w, 'Story map');
+                p.moments = p.moments.filter((x) => x !== m);
+                redraw();
+              },
+            }, 'Delete'));
+            box.append(mb);
+          }
+          const m0 = p.moments[0];
+          const ins = el('div', { class: 'sm-insert' });
+          ins.append(el('div', { class: 'sm-insertlab' }, 'What a report can say'));
+          ins.append(el('div', {}, 'During our ' + (m0.unit || 'unit') + ', '
+            + (m0.who || 'the class') + ' offered “' + m0.w + '”'
+            + (m0.box ? ' at the ' + m0.box : '')
+            + ' — a word beyond what the year group is expected to reach for.'));
+          ins.append(el('div', { class: 'sm-rhet' },
+            (m0.who || 'The class') + ' has made good progress in writing this term.'));
+          box.append(ins);
+        }
+
+        // ---- reset
+        /* The plan, the beats, their pictures and the words are the RESOURCE —
+           you built it once and it should outlive the class that used it. The
+           handwriting, the plotted draft and the moments are THIS class's work.
+           Reset clears the second and keeps the first. */
+        box.append(el('h4', {}, 'A new class'));
+        const work = smClassWork(p);
+        box.append(el('div', { class: 'hint' },
+          work.any ? 'This map holds ' + work.say + '.' : 'This map holds no class work yet.'));
+        box.append(el('button', {
+          class: 'sm-wbtn ghost del',
+          onclick: () => {
+            const cw = smClassWork(p);
+            if (!cw.any) { toast('Nothing to clear — this map is already just the resource.'); return; }
+            D.confirmDialog('Clear ' + cw.say + '? The plan, the beats, their pictures, the target '
+              + 'line and the words all stay.', () => {
+              // the largest destructive act a hand can perform here, and it
+              // cannot refuse the way everything else does, so it must be
+              // recoverable
+              if (typeof D.snapshotBefore === 'function') D.snapshotBefore(w, 'Story map');
+              p.strokes = {};
+              const act = smActual(p);
+              for (const b of p.beats) for (const t of act) delete b.v[t.id];
+              p.wordsHidden = false;
+              p.shown = {};
+              // moments are the most class-specific object in the widget: they
+              // name children who have left
+              p.moments = [];
+              toast('Cleared ' + cw.say + '. Kept the plan, ' + p.beats.length + ' beats, their '
+                + 'pictures, the target line and the words.');
+              redraw();
+            }, { label: 'Clear', danger: true });
+          },
+        }, 'Reset for a new class'));
+
+        box.append(el('div', { class: 'hint' },
+          'Three lessons, three bits of paper, all describing the same five or six boxes. The board '
+          + 'is for MODELLING — the children write on their own boards, which is why the lock, the '
+          + 'stage band and the covers are all first-class controls. This is a teaching tool, not a '
+          + 'painting-by-numbers story maker.'));
       },
     };
 

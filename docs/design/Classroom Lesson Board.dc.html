@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400;1,700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#EDEFEC;font-family:Nunito,system-ui,sans-serif}
+a{color:#0C7C6C}a:hover{color:#0A5F53}
+.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}
+.dv-tid{font:800 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#123F38;color:#fff;border-radius:4px;text-decoration:none}
+.dv-tname{font-weight:800;font-size:13px;color:#123F38}
+.dv-opts{display:flex;flex-wrap:wrap;gap:38px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.dv-oid{font:800 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#123F38;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font-size:12.5px;color:rgba(0,0,0,.55);max-width:1000px}
+.dv-card{max-width:100%;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden}
+.dv-opt:target .dv-oid{background:#0C7C6C;color:#fff}
+.dv-next{margin:22px 0 0;font-size:12.5px;color:rgba(0,0,0,.5)}
+</style>
+</helmet>
+<header style="padding:40px 44px 30px;background:#123F38;color:#DCEAE4">
+<div style="max-width:1100px;display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:baseline;gap:14px"><span style="font-weight:800;font-size:26px;color:#fff">Modelling board — I do · we do · you do</span><span style="font-weight:800;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#7FB8AA">Mockups · built on your Story Map screens</span></div>
+<p style="margin:0;font-size:15px;line-height:1.6;max-width:820px;color:#BCD6CE">Everything here reuses the chrome you already have — dark board frame, Story Map card, the <em>Model · Together · Over-to-you</em> bar, word bank, boxing-up paper, emotion graph. What is new is the machinery that makes the hand-off visible, and the places where a teacher's ad-hoc brilliance currently falls on the floor.</p>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:4px">
+<div style="background:#0E332E;border:1px solid #245149;border-radius:12px;padding:16px 18px"><div style="font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7FB8AA;margin-bottom:8px">One dial runs the lesson</div><p style="margin:0;font-size:13.5px;line-height:1.55;color:#CFE6DF"><strong style="color:#fff">How much help is on</strong> sits in the stage bar. It moves itself when you change stage, and you can drag it back. It is the single control that covers the word bank, shrinks the criteria and hides the model — so scaffolds never fade by accident.</p></div>
+<div style="background:#0E332E;border:1px solid #245149;border-radius:12px;padding:16px 18px"><div style="font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7FB8AA;margin-bottom:8px">Catch the brilliance</div><p style="margin:0;font-size:13.5px;line-height:1.55;color:#CFE6DF">The word panel is live in <em>every</em> stage and now records <strong style="color:#fff">who said it</strong>. A word offered at 10:42 by Amira is in the bank, on the board with her name on it, and in tomorrow's plan by the time she sits down.</p></div>
+<div style="background:#0E332E;border:1px solid #245149;border-radius:12px;padding:16px 18px"><div style="font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7FB8AA;margin-bottom:8px">Runs for a group, not just a class</div><p style="margin:0;font-size:13.5px;line-height:1.55;color:#CFE6DF">The <strong style="color:#fff">Whole class</strong> pill switches the board to an EAL or SEN group. A TA gets the same board with more help on, stems showing, and the teacher's notes swapped for TA prompts.</p></div>
+</div>
+<div style="font-size:12.5px;line-height:1.6;color:#8FBFB2;border-top:1px solid #245149;padding-top:14px"><strong style="color:#BCD6CE">Assumed:</strong> two surfaces only (classroom board + teacher tablet) · children write in books, on whiteboards or on paper — never on a device · one lesson, one section of the story mountain · Year 4 shown, sizes hold from Y1 to Y6 · nothing auto-advances, the teacher moves every stage by hand.</div>
+</div>
+</header>
+<section class="dv-turn" id="t1" style="background:#EDEFEC">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">First pass — one lesson end to end, then atomic variations to mix and match</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a><span><strong>The lesson, end to end — clickable.</strong> Tap the stage pills, slide the help dial, catch a word, cover the bank, tap names in the tray, finish into Review.</span></div>
+<div class="dv-card" data-screen-label="Board · lesson" style="width:1400px;background:#123F38;border:none;padding:14px;border-radius:22px">
+
+<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 10px 14px">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="width:28px;height:28px;border-radius:9px;background:#2A5852;display:grid;place-items:center"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="#8BD3BE" stroke-width="2"></circle><circle cx="8" cy="8" r="2.2" fill="#8BD3BE"></circle></svg></div>
+<span style="font-weight:700;font-size:16px;color:#CFE6DF">Year 4 · Traditional tales</span>
+<span style="padding:5px 11px;border-radius:8px;background:#2A5852;font-weight:800;font-size:11.5px;letter-spacing:.1em;color:#DCEAE4">YEAR 4</span>
+</div>
+<div style="display:flex;align-items:center;gap:16px">
+<span style="font-size:13.5px;color:#7FB8AA">{{ clockLabel }}</span>
+<span style="font-size:13.5px;color:#7FB8AA">the widget, on a board</span>
+</div>
+</div>
+
+<div style="background:#fff;border-radius:16px;overflow:hidden">
+
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 22px;border-bottom:1px solid #EDF1EF">
+<div style="display:flex;align-items:center;gap:14px">
+<span style="font-weight:800;font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:#8A9B96">Story map</span>
+<button onClick="{{ cycleGroup }}" style="display:flex;align-items:center;gap:7px;padding:7px 14px;border:none;border-radius:999px;background:#E7EDEA;font-family:inherit;font-weight:800;font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:#3A4E52;cursor:pointer" style-hover="background:#D9F0E8;color:#0C7C6C">{{ groupLabel }}<span style="font-size:10px;opacity:.6">▼</span></button>
+<sc-if value="{{ isGroup }}" hint-placeholder-val="{{ false }}"><span style="padding:6px 12px;border-radius:999px;background:#FDF3E2;font-weight:700;font-size:12.5px;color:#8A5A12">{{ groupNote }}</span></sc-if>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<sc-if value="{{ supportOff }}" hint-placeholder-val="{{ true }}"><button onClick="{{ toggleSupport }}" style="display:flex;align-items:center;gap:8px;padding:9px 14px;border:1.5px solid #DCE5E1;border-radius:11px;background:#fff;font-family:inherit;font-weight:800;font-size:14px;color:#5F6F6A;cursor:pointer" style-hover="border-color:#0C7C6C;color:#0C7C6C"><span style="width:26px;height:15px;border-radius:999px;background:#DCE5E1;display:flex;align-items:center;padding:2px"><span style="width:11px;height:11px;border-radius:999px;background:#fff"></span></span>Extra support</button></sc-if>
+<sc-if value="{{ supportOn }}" hint-placeholder-val="{{ false }}"><button onClick="{{ toggleSupport }}" style="display:flex;align-items:center;gap:8px;padding:9px 14px;border:1.5px solid #0C7C6C;border-radius:11px;background:#D9F0E8;font-family:inherit;font-weight:800;font-size:14px;color:#0A5F53;cursor:pointer"><span style="width:26px;height:15px;border-radius:999px;background:#0C7C6C;display:flex;align-items:center;justify-content:flex-end;padding:2px"><span style="width:11px;height:11px;border-radius:999px;background:#fff"></span></span>Extra support</button></sc-if>
+<button style="padding:9px 15px;border:1.5px solid #DCE5E1;border-radius:11px;background:#fff;font-family:inherit;font-weight:800;font-size:14px;color:#20302C;cursor:pointer" style-hover="border-color:#B9C8C2">⚙ gear</button>
+<button style="padding:9px 15px;border:1.5px solid #DCE5E1;border-radius:11px;background:#fff;font-family:inherit;font-weight:800;font-size:14px;color:#20302C;cursor:pointer" style-hover="border-color:#B9C8C2">⋮ Duplicate</button>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;gap:14px;padding:16px 22px 14px">
+<span style="font-weight:800;font-size:30px;color:#16302B;letter-spacing:-.01em">Five-part story mountain</span>
+<span style="padding:6px 14px;border-radius:999px;background:#D9F0E8;font-weight:800;font-size:13px;letter-spacing:.08em;color:#0A5F53">YEARS 3–4</span>
+<span style="margin-left:auto;font-size:14px;color:#8A9B96">Section on the board: <strong style="color:#0C7C6C">{{ sectionName }}</strong></span>
+</div>
+
+<div style="display:flex;align-items:center;gap:16px;padding:11px 22px;background:#EAF5F1;border-top:1px solid #DCEAE4;border-bottom:1px solid #DCEAE4">
+<sc-for list="{{ stagePills }}" as="p" hint-placeholder-count="3">
+<sc-if value="{{ p.active }}" hint-placeholder-val="{{ false }}"><button onClick="{{ p.tap }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:10px 26px;border:none;border-radius:999px;background:#33474C;font-family:inherit;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.14)"><span style="font-weight:800;font-size:19px;color:#fff">{{ p.label }}</span><span style="font-weight:700;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#9FC4BC">{{ p.sub }}</span></button></sc-if>
+<sc-if value="{{ p.idle }}" hint-placeholder-val="{{ true }}"><button onClick="{{ p.tap }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:10px 26px;border:none;border-radius:999px;background:#fff;font-family:inherit;cursor:pointer" style-hover="background:#F4FBF8"><span style="font-weight:800;font-size:19px;color:#3A4E52">{{ p.label }}</span><span style="font-weight:700;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#9FB3AD">{{ p.sub }}</span></button></sc-if>
+</sc-for>
+<div style="width:1px;height:34px;background:#CFE0D9"></div>
+<sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}"><button onClick="{{ goReview }}" style="padding:10px 22px;border:none;border-radius:999px;background:#33474C;font-family:inherit;font-weight:800;font-size:17px;color:#fff;cursor:pointer">Review</button></sc-if>
+<sc-if value="{{ notReview }}" hint-placeholder-val="{{ true }}"><button onClick="{{ goReview }}" style="padding:10px 22px;border:1.5px dashed #B9CFC7;border-radius:999px;background:transparent;font-family:inherit;font-weight:800;font-size:17px;color:#7C918B;cursor:pointer" style-hover="border-color:#0C7C6C;color:#0C7C6C">Review</button></sc-if>
+
+<div style="margin-left:auto;display:flex;align-items:center;gap:14px">
+<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">
+<span style="font-weight:800;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#7C918B">How much help is on</span>
+<div style="display:flex;background:#fff;border:1.5px solid #CFE0D9;border-radius:999px;padding:3px;gap:2px">
+<sc-for list="{{ helpNotches }}" as="h" hint-placeholder-count="4">
+<sc-if value="{{ h.on }}" hint-placeholder-val="{{ false }}"><button onClick="{{ h.tap }}" style="padding:7px 15px;border:none;border-radius:999px;background:#0C7C6C;font-family:inherit;font-weight:800;font-size:13.5px;color:#fff;cursor:pointer">{{ h.label }}</button></sc-if>
+<sc-if value="{{ h.off }}" hint-placeholder-val="{{ true }}"><button onClick="{{ h.tap }}" style="padding:7px 15px;border:none;border-radius:999px;background:transparent;font-family:inherit;font-weight:700;font-size:13.5px;color:#7C918B;cursor:pointer" style-hover="background:#EAF5F1;color:#0C7C6C">{{ h.label }}</button></sc-if>
+</sc-for>
+</div>
+</div>
+<span style="font-weight:800;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#7C918B">{{ stageCount }}</span>
+</div>
+</div>
+
+<sc-if value="{{ isModel }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;align-items:center;gap:18px;padding:16px 22px;background:#0F5F53">
+<span style="padding:6px 13px;border-radius:8px;background:#0A4A41;font-weight:800;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:#8BD3BE">I do</span>
+<span style="font-weight:800;font-size:23px;color:#fff">Watch me. I am writing the Opening.</span>
+<span style="margin-left:auto;font-size:15px;color:#9FD8C9">Pens down · you do the Build-up in a minute</span>
+</div>
+</sc-if>
+<sc-if value="{{ isTogether }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:18px;padding:16px 22px;background:#D9F0E8;border-bottom:1px solid #B8DED0">
+<span style="padding:6px 13px;border-radius:8px;background:#0C7C6C;font-weight:800;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:#fff">We do</span>
+<span style="font-weight:800;font-size:23px;color:#0A4A41">Our turn. Give me a word for the Build-up.</span>
+<span style="margin-left:auto;font-size:15px;color:#3E7A6D">I hold the pen · you choose the words</span>
+</div>
+</sc-if>
+<sc-if value="{{ isSolo }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:18px;padding:16px 22px;background:#FBF1DC;border-bottom:1px solid #EDDCB8">
+<span style="padding:6px 13px;border-radius:8px;background:#B4741A;font-weight:800;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:#fff">You do</span>
+<span style="font-weight:800;font-size:23px;color:#6B4610">Over to you. Build-up, in your books.</span>
+<span style="margin-left:auto;font-size:15px;color:#8A5A12">My pen is down · I am coming round</span>
+</div>
+</sc-if>
+<sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:18px;padding:16px 22px;background:#F3ECFE;border-bottom:1px solid #DDCBFB">
+<span style="padding:6px 13px;border-radius:8px;background:#6D28D9;font-weight:800;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:#fff">After</span>
+<span style="font-weight:800;font-size:23px;color:#4C1D95">What we keep, and who needs the scaffold back.</span>
+<span style="margin-left:auto;font-size:15px;color:#6D28D9">90 seconds, before they line up</span>
+</div>
+</sc-if>
+
+<sc-if value="{{ notReview }}" hint-placeholder-val="{{ true }}">
+<div style="padding:16px 22px 0">
+<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+<span style="font-weight:800;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:#8A9B96;margin-right:2px">{{ criteriaTitle }}</span>
+<sc-for list="{{ criteria }}" as="c" hint-placeholder-count="4">
+<sc-if value="{{ c.big }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:10px;padding:12px 20px;border-radius:12px;background:#FBF1DC;border:2px solid #E4C88B;font-weight:800;font-size:20px;color:#6B4610">{{ c.text }}</span></sc-if>
+<sc-if value="{{ c.small }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:#F4F8F6;border:1.5px solid #E1EAE6;font-weight:700;font-size:14.5px;color:#3F534E"><span style="color:#0C7C6C;font-weight:800">✓</span>{{ c.text }}</span></sc-if>
+</sc-for>
+</div>
+</div>
+
+<div style="margin:16px 22px 0;border:1.5px solid #E1EAE6;border-radius:16px;overflow:hidden">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px">
+<div style="display:flex;align-items:baseline;gap:14px">
+<span style="font-weight:800;font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:#8A9B96">Words to reach for</span>
+<span style="font-size:13.5px;color:#9FB3AD">{{ caughtLine }}</span>
+</div>
+<div style="display:flex;gap:10px">
+<sc-if value="{{ uncovered }}" hint-placeholder-val="{{ true }}"><button onClick="{{ toggleCover }}" style="padding:10px 18px;border:1.5px solid #DCE5E1;border-radius:11px;background:#fff;font-family:inherit;font-weight:800;font-size:15px;color:#20302C;cursor:pointer;white-space:nowrap" style-hover="border-color:#0C7C6C;color:#0C7C6C">Cover the words</button></sc-if>
+<sc-if value="{{ covered }}" hint-placeholder-val="{{ false }}"><button onClick="{{ toggleCover }}" style="padding:10px 18px;border:1.5px solid #0C7C6C;border-radius:11px;background:#D9F0E8;font-family:inherit;font-weight:800;font-size:15px;color:#0A5F53;cursor:pointer">Uncover</button></sc-if>
+</div>
+</div>
+
+<sc-if value="{{ covered }}" hint-placeholder-val="{{ false }}">
+<div style="margin:0 18px 18px;padding:26px;border-radius:14px;background:#EAF5F1;border:2px dashed #A9CFC3;display:flex;align-items:center;gap:22px">
+<svg width="42" height="42" viewBox="0 0 40 40" style="flex:none"><rect x="3" y="7" width="34" height="26" rx="5" fill="#fff" stroke="#A9CFC3" stroke-width="2"></rect><rect x="9" y="15" width="16" height="3" rx="1.5" fill="#CFE0D9"></rect><rect x="9" y="22" width="22" height="3" rx="1.5" fill="#CFE0D9"></rect><path d="M6 34 L34 6" stroke="#0C7C6C" stroke-width="3" stroke-linecap="round"></path></svg>
+<div style="display:flex;flex-direction:column;gap:4px">
+<span style="font-weight:800;font-size:22px;color:#0A4A41">The words are covered — reach for them from memory.</span>
+<span style="font-size:15px;color:#3E7A6D">{{ peekLine }}</span>
+</div>
+<button onClick="{{ peek }}" style="margin-left:auto;padding:14px 24px;border:none;border-radius:12px;background:#0C7C6C;font-family:inherit;font-weight:800;font-size:17px;color:#fff;cursor:pointer" style-hover="background:#0A5F53">Peek for 20 seconds</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ uncovered }}" hint-placeholder-val="{{ true }}">
+<div style="padding:0 18px 16px">
+
+<div style="background:#DCF0EA;border:1.5px solid #9BCFC0;border-radius:14px;padding:14px 16px">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+<span style="font-weight:800;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#0A5F53">A word they just offered</span>
+<div style="display:flex;align-items:center;gap:8px">
+<span style="font-weight:700;font-size:12.5px;color:#3E7A6D">who said it</span>
+<sc-for list="{{ nameChips }}" as="n" hint-placeholder-count="5">
+<sc-if value="{{ n.on }}" hint-placeholder-val="{{ false }}"><button onClick="{{ n.tap }}" style="padding:6px 13px;border:2px solid #0A5F53;border-radius:999px;background:#0C7C6C;font-family:inherit;font-weight:800;font-size:14px;color:#fff;cursor:pointer">{{ n.name }}</button></sc-if>
+<sc-if value="{{ n.off }}" hint-placeholder-val="{{ true }}"><button onClick="{{ n.tap }}" style="padding:6px 13px;border:1.5px solid #A9CFC3;border-radius:999px;background:#fff;font-family:inherit;font-weight:700;font-size:14px;color:#3E7A6D;cursor:pointer" style-hover="border-color:#0C7C6C">{{ n.name }}</button></sc-if>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<input value="{{ draft }}" onChange="{{ onDraft }}" placeholder="type it before the moment passes…" style="flex:1;padding:14px 16px;border:1.5px solid #B7DBCF;border-radius:11px;background:#fff;font-family:inherit;font-style:italic;font-size:19px;color:#20302C;outline:none">
+<sc-for list="{{ scoreBtns }}" as="s" hint-placeholder-count="5">
+<sc-if value="{{ s.on }}" hint-placeholder-val="{{ false }}"><button onClick="{{ s.tap }}" style="width:52px;height:52px;border:2px solid #0C7C6C;border-radius:11px;background:#fff;font-family:inherit;font-weight:800;font-size:18px;color:#0A5F53;cursor:pointer">{{ s.n }}</button></sc-if>
+<sc-if value="{{ s.off }}" hint-placeholder-val="{{ true }}"><button onClick="{{ s.tap }}" style="width:52px;height:52px;border:1.5px solid #CFE0D9;border-radius:11px;background:#fff;font-family:inherit;font-weight:700;font-size:18px;color:#7C918B;cursor:pointer" style-hover="border-color:#0C7C6C">{{ s.n }}</button></sc-if>
+</sc-for>
+<button onClick="{{ toggleStar }}" style="width:52px;height:52px;border:2px solid #B45309;border-radius:11px;background:#FEF6E7;font-size:20px;color:#B45309;cursor:pointer" title="Keep for next time">★</button>
+<div style="width:1px;height:34px;background:#A9CFC3"></div>
+<sc-for list="{{ bandBtns }}" as="b" hint-placeholder-count="3">
+<sc-if value="{{ b.on }}" hint-placeholder-val="{{ false }}"><button onClick="{{ b.tap }}" style="width:52px;height:52px;border:2px solid #0C7C6C;border-radius:11px;background:#fff;font-family:inherit;font-weight:800;font-size:20px;color:#0A5F53;cursor:pointer" title="{{ b.title }}">{{ b.glyph }}</button></sc-if>
+<sc-if value="{{ b.off }}" hint-placeholder-val="{{ true }}"><button onClick="{{ b.tap }}" style="width:52px;height:52px;border:1.5px solid #CFE0D9;border-radius:11px;background:#fff;font-family:inherit;font-weight:700;font-size:20px;color:#7C918B;cursor:pointer" style-hover="border-color:#0C7C6C" title="{{ b.title }}">{{ b.glyph }}</button></sc-if>
+</sc-for>
+<button onClick="{{ addWord }}" style="padding:15px 26px;border:none;border-radius:11px;background:#0C7C6C;font-family:inherit;font-weight:800;font-size:18px;color:#fff;cursor:pointer" style-hover="background:#0A5F53">Add</button>
+</div>
+<div style="margin-top:9px;font-size:13.5px;color:#3E7A6D">↑ for the lifts · – for the level · ↓ for the falls — it lands in the right band with {{ byLabel }} name on it.</div>
+</div>
+
+<sc-for list="{{ bands }}" as="bd" hint-placeholder-count="3">
+<div style="margin-top:14px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:9px">
+<sc-if value="{{ bd.isLift }}" hint-placeholder-val="{{ true }}"><span style="font-weight:800;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#0A5F53">For the lifts</span></sc-if>
+<sc-if value="{{ bd.isLevel }}" hint-placeholder-val="{{ false }}"><span style="font-weight:800;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#5F6F6A">For the level</span></sc-if>
+<sc-if value="{{ bd.isFall }}" hint-placeholder-val="{{ false }}"><span style="font-weight:800;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#A3243F">For the falls</span></sc-if>
+<span style="font-size:13.5px;color:#9FB3AD">{{ bd.count }}</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px">
+<sc-for list="{{ bd.words }}" as="w" hint-placeholder-count="6">
+<sc-if value="{{ w.plain }}" hint-placeholder-val="{{ true }}">
+<button onClick="{{ w.tap }}" style="display:inline-flex;align-items:center;gap:10px;padding:9px 15px;border:1.5px solid #DCE5E1;border-radius:999px;background:#fff;font-family:inherit;cursor:pointer" style-hover="border-color:#0C7C6C">
+<span style="display:flex;flex-direction:column-reverse;gap:2px;width:5px">
+<sc-for list="{{ w.pips }}" as="p" hint-placeholder-count="5">
+<sc-if value="{{ p.on }}" hint-placeholder-val="{{ false }}"><span style="height:3px;border-radius:2px;background:#0C7C6C"></span></sc-if>
+<sc-if value="{{ p.off }}" hint-placeholder-val="{{ true }}"><span style="height:3px;border-radius:2px;background:#E1EAE6"></span></sc-if>
+</sc-for>
+</span>
+<span style="font-weight:700;font-size:19px;color:#20302C;white-space:nowrap">{{ w.word }}</span>
+<sc-if value="{{ w.isHFW }}" hint-placeholder-val="{{ false }}"><span style="padding:3px 8px;border-radius:6px;background:#EEF1F0;font-weight:800;font-size:11.5px;letter-spacing:.06em;color:#5F6F6A">HFW</span></sc-if>
+<sc-if value="{{ w.isBank }}" hint-placeholder-val="{{ false }}"><span style="padding:3px 8px;border-radius:6px;background:#EDE4FE;font-weight:800;font-size:11.5px;letter-spacing:.06em;color:#6D28D9">bank</span></sc-if>
+<sc-if value="{{ w.isPack }}" hint-placeholder-val="{{ false }}"><span style="padding:3px 8px;border-radius:6px;background:#D7EFE8;font-weight:800;font-size:11.5px;letter-spacing:.06em;color:#0A5F53">pack</span></sc-if>
+<sc-if value="{{ w.isE }}" hint-placeholder-val="{{ false }}"><span style="padding:3px 8px;border-radius:6px;background:#FDE7EF;font-weight:800;font-size:11.5px;color:#C2185B">E</span></sc-if>
+<sc-if value="{{ w.isS }}" hint-placeholder-val="{{ false }}"><span style="padding:3px 8px;border-radius:6px;background:#FDF0D9;font-weight:800;font-size:11.5px;color:#B4741A">S</span></sc-if>
+<sc-if value="{{ w.hasBy }}" hint-placeholder-val="{{ false }}"><span style="padding:3px 9px;border-radius:999px;background:#FEF6E7;border:1px solid #E9C98F;font-weight:800;font-size:12px;color:#B45309">{{ w.by }}</span></sc-if>
+<sc-if value="{{ w.hasPic }}" hint-placeholder-val="{{ false }}"><span style="width:26px;height:26px;border-radius:7px;background:#EAF5F1;border:1px dashed #A9CFC3"></span></sc-if>
+</button>
+</sc-if>
+</sc-for>
+</div>
+</div>
+</sc-for>
+
+<div style="margin-top:14px;font-size:14.5px;line-height:1.55;color:#5F6F6A"><strong style="color:#A3243F">Short for this plan.</strong> Opening, Resolution and Ending run up and the bank holds 2 words for that. A class cannot write what it cannot reach for.</div>
+<div style="margin-top:4px;font-size:13.5px;color:#9FB3AD">Tap a word to climb its score, 1 to 5 · the climb is drawn beside it</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<div style="padding:18px 22px 20px">
+
+<sc-if value="{{ isModel }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;gap:18px;align-items:flex-start">
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+<span style="font-weight:800;font-size:17px;letter-spacing:.1em;text-transform:uppercase;color:#0C7C6C">Opening</span>
+<span style="font-style:italic;font-size:15px;color:#8A9B96">Who, where, when — and a reason to read on</span>
+<span style="padding:6px 14px;border-radius:999px;background:#F3ECFE;border:1.5px solid #D9C7FB;font-weight:800;font-size:13.5px;color:#6D28D9">at +1 → aiming for +2</span>
+<div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+<span style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8A9B96">Lines</span>
+<div style="display:flex;border:1.5px solid #DCE5E1;border-radius:10px;overflow:hidden">
+<sc-for list="{{ lineBtns }}" as="l" hint-placeholder-count="3">
+<sc-if value="{{ l.on }}" hint-placeholder-val="{{ false }}"><button onClick="{{ l.tap }}" style="padding:8px 14px;border:none;background:#33474C;font-family:inherit;font-weight:800;font-size:13.5px;color:#fff;cursor:pointer">{{ l.label }}</button></sc-if>
+<sc-if value="{{ l.off }}" hint-placeholder-val="{{ true }}"><button onClick="{{ l.tap }}" style="padding:8px 14px;border:none;background:#fff;font-family:inherit;font-weight:700;font-size:13.5px;color:#5F6F6A;cursor:pointer" style-hover="background:#F4F8F6">{{ l.label }}</button></sc-if>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="position:relative;background:#FDFBF2;border:1.5px solid #DDE7E0;border-radius:14px;padding:14px 22px 22px;min-height:250px">
+<sc-if value="{{ lineWide }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;left:22px;right:22px;top:14px;bottom:22px;background:repeating-linear-gradient(to bottom,transparent 0 47px,#CFDDD3 47px 48px)"></div></sc-if>
+<sc-if value="{{ lineGuide }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:22px;right:22px;top:14px;bottom:22px;background:repeating-linear-gradient(to bottom,transparent 0 23px,#EADFC5 23px 24px,transparent 24px 47px,#CFDDD3 47px 48px)"></div></sc-if>
+<div style="position:relative;font-size:27px;line-height:48px;color:#16302B">Katie set off down the <mark style="background:#FEF0CF;padding:0 4px;border-radius:4px">golden</mark> path, her <mark style="background:#EDE4FE;padding:0 4px;border-radius:4px">basket</mark> swinging, certain that nothing in the wood could touch her.<span style="display:inline-block;width:3px;height:30px;background:#0C7C6C;vertical-align:-6px;margin-left:2px"></span></div>
+</div>
+<div style="display:flex;gap:14px;margin-top:12px;align-items:flex-start">
+<div style="flex:1;padding:12px 16px;border-left:3px solid #A3243F;background:#FDEFF3;border-radius:0 10px 10px 0">
+<div style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#A3243F;margin-bottom:4px">Said out loud as I wrote it</div>
+<p style="margin:0;font-style:italic;font-size:16px;line-height:1.5;color:#7A2338">“I chose <strong>golden</strong> because the morning has to feel safe. If it starts safe, the wood can take it away later.”</p>
+</div>
+</div>
+</div>
+
+<sc-if value="{{ railOn }}" hint-placeholder-val="{{ true }}">
+<div style="width:360px;flex:none;background:#22343A;border-radius:14px;padding:16px 18px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+<svg width="14" height="15" viewBox="0 0 16 16" style="flex:none"><rect x="2.5" y="1.5" width="11" height="13" rx="2" fill="none" stroke="#9FC4BC" stroke-width="1.6"></rect><circle cx="8" cy="12" r="1" fill="#9FC4BC"></circle></svg>
+<span style="font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#9FC4BC">Your tablet only — not on the board</span>
+</div>
+<div style="font-weight:800;font-size:16px;color:#fff;margin-bottom:10px">Think aloud, in this order</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="padding:11px 14px;background:#2E434A;border-radius:10px;font-size:14.5px;line-height:1.45;color:#DCEAE4"><strong style="color:#8BD3BE">1 ·</strong> Name the job. “A reader has to know who, where and when.”</div>
+<div style="padding:11px 14px;background:#2E434A;border-radius:10px;font-size:14.5px;line-height:1.45;color:#DCEAE4"><strong style="color:#8BD3BE">2 ·</strong> Choose in front of them. Reject a word out loud before you accept one.</div>
+<div style="padding:11px 14px;background:#2E434A;border-radius:10px;font-size:14.5px;line-height:1.45;color:#DCEAE4"><strong style="color:#8BD3BE">3 ·</strong> Read it back. Point at the criterion it just met.</div>
+<div style="padding:11px 14px;background:#3A2A2E;border:1px solid #6B3B46;border-radius:10px;font-size:14.5px;line-height:1.45;color:#F3C9D3"><strong style="color:#F19AAE">Do not</strong> take suggestions yet. Hands stay down — this stage is yours.</div>
+</div>
+<div style="margin-top:14px;padding-top:14px;border-top:1px solid #3A4E52;font-size:13.5px;line-height:1.5;color:#9FC4BC">Next stage hands the words over. The dial drops to <strong style="color:#fff">Most</strong> on its own — slide it back if they are not ready.</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isTogether }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:18px;align-items:flex-start">
+<div style="width:330px;flex:none;border:1.5px solid #E1EAE6;border-radius:14px;padding:14px 16px;background:#F7FBF9">
+<div style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8A9B96;margin-bottom:4px">Offered, waiting on you</div>
+<div style="font-size:13.5px;color:#9FB3AD;margin-bottom:12px">Three hands up. Nothing is lost while you deal with them.</div>
+<div style="display:flex;flex-direction:column;gap:9px">
+<div style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:#fff;border:1.5px solid #DCE5E1;border-radius:11px">
+<span style="font-weight:800;font-size:19px;color:#20302C">crept</span>
+<span style="padding:3px 9px;border-radius:999px;background:#FEF6E7;border:1px solid #E9C98F;font-weight:800;font-size:12px;color:#B45309">Lena</span>
+<span style="margin-left:auto;display:flex;gap:6px"><button style="width:36px;height:36px;border:none;border-radius:9px;background:#D9F0E8;font-size:16px;color:#0A5F53;cursor:pointer">✓</button><button style="width:36px;height:36px;border:none;border-radius:9px;background:#F4F8F6;font-size:14px;color:#8A9B96;cursor:pointer">✕</button></span>
+</div>
+<div style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:#fff;border:1.5px solid #DCE5E1;border-radius:11px">
+<span style="font-weight:800;font-size:19px;color:#20302C">gloomy</span>
+<span style="padding:3px 9px;border-radius:999px;background:#FEF6E7;border:1px solid #E9C98F;font-weight:800;font-size:12px;color:#B45309">Jay</span>
+<span style="margin-left:auto;display:flex;gap:6px"><button style="width:36px;height:36px;border:none;border-radius:9px;background:#D9F0E8;font-size:16px;color:#0A5F53;cursor:pointer">✓</button><button style="width:36px;height:36px;border:none;border-radius:9px;background:#F4F8F6;font-size:14px;color:#8A9B96;cursor:pointer">✕</button></span>
+</div>
+<div style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:#fff;border:1.5px solid #DCE5E1;border-radius:11px">
+<span style="font-weight:800;font-size:19px;color:#20302C">nervous</span>
+<span style="padding:3px 9px;border-radius:999px;background:#FEF6E7;border:1px solid #E9C98F;font-weight:800;font-size:12px;color:#B45309">Noor</span>
+<span style="margin-left:auto;display:flex;gap:6px"><button style="width:36px;height:36px;border:none;border-radius:9px;background:#D9F0E8;font-size:16px;color:#0A5F53;cursor:pointer">✓</button><button style="width:36px;height:36px;border:none;border-radius:9px;background:#F4F8F6;font-size:14px;color:#8A9B96;cursor:pointer">✕</button></span>
+</div>
+</div>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #E1EAE6">
+<div style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8A9B96;margin-bottom:8px">Who is doing the choosing</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<span style="padding:9px 12px;border-radius:9px;background:#0C7C6C;font-weight:800;font-size:14.5px;color:#fff">Hands up, I scribe</span>
+<span style="padding:9px 12px;border-radius:9px;background:#fff;border:1.5px solid #DCE5E1;font-weight:700;font-size:14.5px;color:#5F6F6A">Talk partners first, then hands</span>
+<span style="padding:9px 12px;border-radius:9px;background:#fff;border:1.5px solid #DCE5E1;font-weight:700;font-size:14.5px;color:#5F6F6A">Cold call from the tray</span>
+</div>
+</div>
+</div>
+
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+<span style="font-weight:800;font-size:17px;letter-spacing:.1em;text-transform:uppercase;color:#0C7C6C">Build-up</span>
+<span style="font-style:italic;font-size:15px;color:#8A9B96">Something starts to go wrong</span>
+<span style="padding:6px 14px;border-radius:999px;background:#F3ECFE;border:1.5px solid #D9C7FB;font-weight:800;font-size:13.5px;color:#6D28D9">at 0 → aiming for -1</span>
+</div>
+<div style="position:relative;background:#FDFBF2;border:1.5px solid #DDE7E0;border-radius:14px;padding:14px 22px 22px;min-height:210px">
+<div style="position:absolute;left:22px;right:22px;top:14px;bottom:22px;background:repeating-linear-gradient(to bottom,transparent 0 47px,#CFDDD3 47px 48px)"></div>
+<div style="position:relative;font-size:27px;line-height:48px;color:#16302B">The trees closed in behind her. Something <span style="display:inline-block;min-width:150px;border-bottom:3px solid #0C7C6C;text-align:center;color:#9FB3AD">?</span> between the trunks, and Katie</div>
+</div>
+<div style="display:flex;align-items:center;gap:12px;margin-top:12px;padding:12px 16px;background:#DCF0EA;border:1.5px solid #9BCFC0;border-radius:12px">
+<span style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#0A5F53">Say it before you write it</span>
+<span style="padding:8px 14px;border-radius:999px;background:#fff;font-weight:700;font-size:16px;color:#20302C">Something ______ between the trees…</span>
+<span style="padding:8px 14px;border-radius:999px;background:#fff;font-weight:700;font-size:16px;color:#20302C">As she ______, she ______.</span>
+<span style="margin-left:auto;font-size:13.5px;color:#3E7A6D">stems drop away at <strong>A little</strong></span>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSolo }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:18px;align-items:stretch">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;background:#FBF1DC;border:2px solid #EDDCB8;border-radius:16px;padding:22px 24px">
+<div style="display:flex;align-items:flex-start;gap:20px">
+<div style="flex:1">
+<div style="font-weight:800;font-size:38px;line-height:1.15;color:#6B4610;margin-bottom:6px">Write the Build-up.</div>
+<div style="font-size:20px;line-height:1.45;color:#8A5A12">Three or four sentences. Something starts to go wrong.</div>
+<div style="display:flex;gap:10px;margin-top:16px">
+<span style="padding:12px 20px;border-radius:12px;background:#B4741A;font-weight:800;font-size:19px;color:#fff">In your books</span>
+<span style="padding:12px 20px;border-radius:12px;background:#fff;border:1.5px solid #E4C88B;font-weight:700;font-size:19px;color:#8A5A12">Whiteboards</span>
+<span style="padding:12px 20px;border-radius:12px;background:#fff;border:1.5px solid #E4C88B;font-weight:700;font-size:19px;color:#8A5A12">On the sheet</span>
+</div>
+</div>
+<div style="width:190px;flex:none;text-align:center;background:#fff;border:1.5px solid #E4C88B;border-radius:14px;padding:14px">
+<div style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#B4741A">Time left</div>
+<div style="font-weight:800;font-size:52px;line-height:1.1;color:#6B4610;font-variant-numeric:tabular-nums">8:00</div>
+<div style="font-size:13.5px;color:#8A5A12">then we read two out</div>
+</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:auto;padding-top:20px;border-top:1.5px solid #EDDCB8">
+<span style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#B4741A;align-self:center;margin-right:4px">Stuck?</span>
+<span style="padding:10px 16px;border-radius:10px;background:#fff;border:1.5px solid #E4C88B;font-weight:700;font-size:16px;color:#6B4610">1 · Read your last sentence again</span>
+<span style="padding:10px 16px;border-radius:10px;background:#fff;border:1.5px solid #E4C88B;font-weight:700;font-size:16px;color:#6B4610">2 · Ask your partner</span>
+<span style="padding:10px 16px;border-radius:10px;background:#fff;border:1.5px solid #E4C88B;font-weight:700;font-size:16px;color:#6B4610">3 · Then ask me</span>
+</div>
+</div>
+
+<sc-if value="{{ railOn }}" hint-placeholder-val="{{ true }}">
+<div style="width:400px;flex:none;background:#22343A;border-radius:16px;padding:16px 18px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+<svg width="14" height="15" viewBox="0 0 16 16" style="flex:none"><rect x="2.5" y="1.5" width="11" height="13" rx="2" fill="none" stroke="#9FC4BC" stroke-width="1.6"></rect><circle cx="8" cy="12" r="1" fill="#9FC4BC"></circle></svg>
+<span style="font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#9FC4BC">Your tablet only</span>
+</div>
+<div style="font-weight:800;font-size:17px;color:#fff;margin-bottom:3px">Tap a name as you walk the room</div>
+<div style="font-size:13.5px;color:#9FC4BC;margin-bottom:12px">writing → needs a hand → done. {{ countHand }} need a hand · {{ countDone }} finished</div>
+<div style="display:flex;flex-wrap:wrap;gap:7px">
+<sc-for list="{{ tray }}" as="t" hint-placeholder-count="24">
+<sc-if value="{{ t.isWriting }}" hint-placeholder-val="{{ true }}"><button onClick="{{ t.tap }}" style="padding:8px 12px;border:1.5px solid #3A4E52;border-radius:9px;background:#2E434A;font-family:inherit;font-weight:700;font-size:14px;color:#BCD6CE;cursor:pointer">{{ t.name }}</button></sc-if>
+<sc-if value="{{ t.isHand }}" hint-placeholder-val="{{ false }}"><button onClick="{{ t.tap }}" style="display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border:1.5px solid #C4536B;border-radius:9px;background:#5E2231;font-family:inherit;font-weight:800;font-size:14px;color:#FFD9E1;cursor:pointer"><span style="width:8px;height:8px;border-radius:999px;background:#F19AAE"></span>{{ t.name }}</button></sc-if>
+<sc-if value="{{ t.isDone }}" hint-placeholder-val="{{ false }}"><button onClick="{{ t.tap }}" style="display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border:1.5px solid #2E8F79;border-radius:9px;background:#124A40;font-family:inherit;font-weight:800;font-size:14px;color:#8BD3BE;cursor:pointer"><span style="width:8px;height:8px;border-radius:999px;background:#8BD3BE"></span>{{ t.name }}</button></sc-if>
+</sc-for>
+</div>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #3A4E52;font-size:13.5px;line-height:1.5;color:#9FC4BC">Anyone still flagged when you finish goes straight onto tomorrow's <strong style="color:#fff">scaffold back on</strong> list.</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:18px;align-items:start">
+<div style="border:1.5px solid #E1EAE6;border-radius:14px;padding:16px 18px">
+<div style="font-weight:800;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#8A9B96;margin-bottom:3px">Caught today</div>
+<div style="font-size:14px;color:#9FB3AD;margin-bottom:12px">Keep it and it is in the bank tomorrow, with the name still on it.</div>
+<sc-if value="{{ hasKeep }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:9px">
+<sc-for list="{{ keepList }}" as="k" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1.5px solid #DCE5E1;border-radius:11px">
+<span style="font-weight:800;font-size:19px;color:#20302C">{{ k.word }}</span>
+<span style="padding:3px 9px;border-radius:999px;background:#FEF6E7;border:1px solid #E9C98F;font-weight:800;font-size:12px;color:#B45309">{{ k.by }}</span>
+<sc-if value="{{ k.parked }}" hint-placeholder-val="{{ true }}"><button onClick="{{ k.tap }}" style="margin-left:auto;padding:9px 16px;border:1.5px solid #DCE5E1;border-radius:9px;background:#fff;font-family:inherit;font-weight:800;font-size:14.5px;color:#5F6F6A;cursor:pointer" style-hover="border-color:#0C7C6C;color:#0C7C6C">Keep</button></sc-if>
+<sc-if value="{{ k.kept }}" hint-placeholder-val="{{ false }}"><button onClick="{{ k.tap }}" style="margin-left:auto;padding:9px 16px;border:none;border-radius:9px;background:#0C7C6C;font-family:inherit;font-weight:800;font-size:14.5px;color:#fff;cursor:pointer">★ Kept</button></sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ noKeep }}" hint-placeholder-val="{{ true }}"><div style="padding:22px 16px;border:1.5px dashed #DCE5E1;border-radius:11px;text-align:center;font-size:15px;line-height:1.5;color:#9FB3AD">Nothing caught yet.<br>Type a word into <strong style="color:#5F6F6A">A word they just offered</strong> during the lesson and it lands here with the child's name on it.</div></sc-if>
+</div>
+
+<div style="border:1.5px solid #E1EAE6;border-radius:14px;padding:16px 18px">
+<div style="font-weight:800;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#8A9B96;margin-bottom:3px">Scaffold back on tomorrow</div>
+<div style="font-size:14px;color:#9FB3AD;margin-bottom:12px">Flagged while you walked the room.</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+<sc-for list="{{ flaggedNames }}" as="f" hint-placeholder-count="2">
+<span style="padding:9px 14px;border-radius:999px;background:#FDEFF3;border:1.5px solid #E9C3CE;font-weight:800;font-size:16px;color:#A3243F">{{ f.name }}</span>
+</sc-for>
+</div>
+<div style="padding:12px 14px;background:#F4F8F6;border-radius:11px;font-size:14.5px;line-height:1.5;color:#3F534E">They start tomorrow at <strong style="color:#0C7C6C">Together</strong> with help on <strong style="color:#0C7C6C">Everything</strong>, in Mrs Patel's group. Everyone else starts at <strong>Over-to-you</strong>.</div>
+</div>
+
+<div style="border:1.5px solid #D9C7FB;border-radius:14px;padding:16px 18px;background:#FAF7FF">
+<div style="font-weight:800;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#6D28D9;margin-bottom:3px">Set up tomorrow</div>
+<div style="font-size:14px;color:#8B6FC4;margin-bottom:12px">One tap. Nothing retyped.</div>
+<div style="display:flex;flex-direction:column;gap:9px">
+<div style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:#fff;border:1.5px solid #E4D8FB;border-radius:11px;font-weight:700;font-size:15px;color:#3F534E"><span style="color:#6D28D9;font-weight:800">→</span>Next section: <strong>Problem</strong></div>
+<div style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:#fff;border:1.5px solid #E4D8FB;border-radius:11px;font-weight:700;font-size:15px;color:#3F534E"><span style="color:#6D28D9;font-weight:800">→</span>Draft sits at -1, wants -3</div>
+<button style="margin-top:4px;padding:14px;border:none;border-radius:11px;background:#6D28D9;font-family:inherit;font-weight:800;font-size:17px;color:#fff;cursor:pointer">Print the two reminders for books</button>
+<button style="padding:14px;border:1.5px solid #D9C7FB;border-radius:11px;background:#fff;font-family:inherit;font-weight:800;font-size:17px;color:#6D28D9;cursor:pointer">Build tomorrow's board</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding:14px 22px;border-top:1px solid #EDF1EF;background:#F7F9F8">
+<div style="display:flex;gap:12px;flex:none">
+<button style="padding:12px 22px;border:1.5px solid #B8DED0;border-radius:12px;background:#D9F0E8;font-family:inherit;font-weight:800;font-size:17px;color:#0A5F53;cursor:pointer;white-space:nowrap">Text map</button>
+<button style="padding:12px 22px;border:none;border-radius:12px;background:#6D28D9;font-family:inherit;font-weight:800;font-size:17px;color:#fff;cursor:pointer;white-space:nowrap">Boxing up</button>
+<a href="#1f" style="padding:12px 22px;border:1.5px solid #E9C3CE;border-radius:12px;background:#FDEFF3;font-weight:800;font-size:17px;color:#A3243F;text-decoration:none;white-space:nowrap">Emotion graph</a>
+</div>
+<div style="display:flex;gap:12px;align-items:center;flex:none">
+<sc-if value="{{ isSolo }}" hint-placeholder-val="{{ false }}"><button onClick="{{ goReview }}" style="padding:12px 24px;border:none;border-radius:12px;background:#0C7C6C;font-family:inherit;font-weight:800;font-size:17px;color:#fff;cursor:pointer;white-space:nowrap">Finish → Review</button></sc-if>
+<button style="padding:12px 20px;border:1.5px solid #DCE5E1;border-radius:12px;background:#fff;font-family:inherit;font-weight:700;font-size:16px;color:#3F534E;cursor:pointer;white-space:nowrap">Board open</button>
+<button onClick="{{ toggleCover }}" style="padding:12px 20px;border:1.5px solid #DCE5E1;border-radius:12px;background:#EEF1F0;font-family:inherit;font-weight:700;font-size:16px;color:#3F534E;cursor:pointer;white-space:nowrap">Cover</button>
+<button style="padding:12px 20px;border:1.5px solid #DCE5E1;border-radius:12px;background:#fff;font-family:inherit;font-weight:700;font-size:16px;color:#3F534E;cursor:pointer;white-space:nowrap">Print…</button>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a><span><strong>The teacher's tablet.</strong> The remote for the board: everything the class must not see, plus one big hand-over button that says exactly what is about to change.</span></div>
+<div class="dv-card" data-screen-label="Teacher tablet" style="width:1080px;background:#1A2A30;border:none;padding:16px;border-radius:26px">
+<div style="background:#F4F8F6;border-radius:16px;overflow:hidden">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:#fff;border-bottom:1px solid #E1EAE6">
+<div style="display:flex;align-items:center;gap:12px"><span style="font-weight:800;font-size:16px;color:#16302B">4H · Literacy</span><span style="font-size:14px;color:#8A9B96">10:42</span></div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 13px;border-radius:999px;background:#D9F0E8"><span style="width:9px;height:9px;border-radius:999px;background:#0C7C6C"></span><span style="font-weight:800;font-size:14px;color:#0A5F53">Board is live · Together</span></div>
+<span style="font-size:14px;color:#8A9B96">Mrs Hale</span>
+</div>
+<div style="display:flex;gap:14px;padding:16px">
+<div style="flex:1.35;min-width:0;display:flex;flex-direction:column;gap:14px">
+<div style="background:#fff;border:1.5px solid #E1EAE6;border-radius:14px;padding:16px 18px">
+<div style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8A9B96;margin-bottom:10px">Hand over</div>
+<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+<span style="font-weight:800;font-size:24px;color:#16302B">Together</span>
+<span style="font-size:22px;color:#B9C8C2">→</span>
+<span style="font-weight:800;font-size:24px;color:#B4741A">Over-to-you</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:7px;margin-bottom:14px">
+<div style="display:flex;align-items:center;gap:9px;font-size:15px;color:#3F534E"><span style="width:20px;height:20px;border-radius:6px;background:#FDEFF3;display:grid;place-items:center;font-size:11px;color:#A3243F">✕</span>The word bank covers itself</div>
+<div style="display:flex;align-items:center;gap:9px;font-size:15px;color:#3F534E"><span style="width:20px;height:20px;border-radius:6px;background:#FDEFF3;display:grid;place-items:center;font-size:11px;color:#A3243F">✕</span>Sentence stems come off the board</div>
+<div style="display:flex;align-items:center;gap:9px;font-size:15px;color:#3F534E"><span style="width:20px;height:20px;border-radius:6px;background:#FEF6E7;display:grid;place-items:center;font-size:11px;color:#B45309">↓</span>Five criteria become two, at twice the size</div>
+<div style="display:flex;align-items:center;gap:9px;font-size:15px;color:#3F534E"><span style="width:20px;height:20px;border-radius:6px;background:#D9F0E8;display:grid;place-items:center;font-size:11px;color:#0A5F53">✓</span>Your model stays, shrunk to a strip</div>
+</div>
+<div style="display:flex;gap:10px">
+<button style="flex:1;padding:18px;border:none;border-radius:13px;background:#0C7C6C;font-family:inherit;font-weight:800;font-size:20px;color:#fff;cursor:pointer">Hand over now</button>
+<button style="padding:18px 20px;border:1.5px solid #DCE5E1;border-radius:13px;background:#fff;font-family:inherit;font-weight:800;font-size:17px;color:#5F6F6A;cursor:pointer;white-space:nowrap">Not yet — keep stems</button>
+</div>
+</div>
+<div style="background:#fff;border:1.5px solid #E1EAE6;border-radius:14px;padding:16px 18px">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8A9B96">Catch a word</span><span style="font-size:13.5px;color:#9FB3AD">goes to the board the moment you tap Add</span></div>
+<input placeholder="type it before the moment passes…" style="width:100%;box-sizing:border-box;padding:16px;border:1.5px solid #DCE5E1;border-radius:12px;font-family:inherit;font-style:italic;font-size:19px;color:#20302C;outline:none">
+<div style="display:flex;flex-wrap:wrap;gap:7px;margin:11px 0">
+<span style="padding:9px 14px;border-radius:999px;background:#0C7C6C;font-weight:800;font-size:15px;color:#fff">Amira</span>
+<span style="padding:9px 14px;border-radius:999px;background:#F4F8F6;border:1.5px solid #DCE5E1;font-weight:700;font-size:15px;color:#5F6F6A">Jay</span>
+<span style="padding:9px 14px;border-radius:999px;background:#F4F8F6;border:1.5px solid #DCE5E1;font-weight:700;font-size:15px;color:#5F6F6A">Kofi</span>
+<span style="padding:9px 14px;border-radius:999px;background:#F4F8F6;border:1.5px solid #DCE5E1;font-weight:700;font-size:15px;color:#5F6F6A">Lena</span>
+<span style="padding:9px 14px;border-radius:999px;background:#F4F8F6;border:1.5px solid #DCE5E1;font-weight:700;font-size:15px;color:#5F6F6A">Noor</span>
+<span style="padding:9px 14px;border-radius:999px;background:#F4F8F6;border:1.5px dashed #C7D4CF;font-weight:700;font-size:15px;color:#9FB3AD">+ someone else</span>
+</div>
+<div style="display:flex;gap:9px">
+<button style="flex:1;padding:15px;border:1.5px solid #DCE5E1;border-radius:12px;background:#fff;font-family:inherit;font-weight:800;font-size:16px;color:#0A5F53;cursor:pointer">↑ Lift</button>
+<button style="flex:1;padding:15px;border:1.5px solid #DCE5E1;border-radius:12px;background:#fff;font-family:inherit;font-weight:800;font-size:16px;color:#5F6F6A;cursor:pointer">– Level</button>
+<button style="flex:1;padding:15px;border:2px solid #0C7C6C;border-radius:12px;background:#EAF5F1;font-family:inherit;font-weight:800;font-size:16px;color:#A3243F;cursor:pointer">↓ Fall</button>
+<button style="padding:15px 26px;border:none;border-radius:12px;background:#0C7C6C;font-family:inherit;font-weight:800;font-size:17px;color:#fff;cursor:pointer">Add</button>
+</div>
+</div>
+</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+<div style="background:#123F38;border-radius:14px;padding:12px">
+<div style="font-weight:800;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#7FB8AA;margin-bottom:8px">What the class can see</div>
+<div style="background:#fff;border-radius:9px;padding:10px 11px">
+<div style="display:flex;gap:5px;margin-bottom:8px"><span style="padding:4px 9px;border-radius:999px;background:#EEF1F0;font-weight:800;font-size:9px;color:#8A9B96">MODEL</span><span style="padding:4px 9px;border-radius:999px;background:#33474C;font-weight:800;font-size:9px;color:#fff">TOGETHER</span><span style="padding:4px 9px;border-radius:999px;background:#EEF1F0;font-weight:800;font-size:9px;color:#8A9B96">OVER-TO-YOU</span></div>
+<div style="font-weight:800;font-size:12px;color:#0A4A41;margin-bottom:6px">Our turn. Give me a word for the Build-up.</div>
+<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px"><span style="padding:3px 7px;border-radius:999px;background:#F4F8F6;border:1px solid #E1EAE6;font-size:10px;color:#3F534E">hesitated</span><span style="padding:3px 7px;border-radius:999px;background:#F4F8F6;border:1px solid #E1EAE6;font-size:10px;color:#3F534E">edged</span><span style="padding:3px 7px;border-radius:999px;background:#F4F8F6;border:1px solid #E1EAE6;font-size:10px;color:#3F534E">gloom</span><span style="padding:3px 7px;border-radius:999px;background:#F4F8F6;border:1px solid #E1EAE6;font-size:10px;color:#3F534E">trembling</span></div>
+<div style="height:38px;border-radius:5px;background:#FDFBF2;border:1px solid #E4EBE6"></div>
+</div>
+</div>
+<div style="flex:1;background:#fff;border:1.5px solid #E1EAE6;border-radius:14px;padding:14px 16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px"><span style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8A9B96">The room</span><span style="font-size:13px;color:#A3243F;font-weight:800">2 need a hand</span></div>
+<div style="display:flex;flex-wrap:wrap;gap:6px">
+<span style="padding:7px 11px;border-radius:9px;background:#FDEFF3;border:1.5px solid #E9C3CE;display:inline-flex;align-items:center;gap:7px;font-weight:800;font-size:13.5px;color:#A3243F"><span style="width:8px;height:8px;border-radius:999px;background:#D8657D"></span>Esme</span>
+<span style="padding:7px 11px;border-radius:9px;background:#FDEFF3;border:1.5px solid #E9C3CE;display:inline-flex;align-items:center;gap:7px;font-weight:800;font-size:13.5px;color:#A3243F"><span style="width:8px;height:8px;border-radius:999px;background:#D8657D"></span>Lena</span>
+<span style="padding:7px 11px;border-radius:9px;background:#F4F8F6;border:1.5px solid #E1EAE6;font-weight:700;font-size:13.5px;color:#5F6F6A">Amira</span>
+<span style="padding:7px 11px;border-radius:9px;background:#F4F8F6;border:1.5px solid #E1EAE6;font-weight:700;font-size:13.5px;color:#5F6F6A">Ben</span>
+<span style="padding:7px 11px;border-radius:9px;background:#F4F8F6;border:1.5px solid #E1EAE6;font-weight:700;font-size:13.5px;color:#5F6F6A">Chi</span>
+<span style="padding:7px 11px;border-radius:9px;background:#F4F8F6;border:1.5px solid #E1EAE6;font-weight:700;font-size:13.5px;color:#5F6F6A">Dev</span>
+<span style="padding:7px 11px;border-radius:9px;background:#F4F8F6;border:1.5px solid #E1EAE6;font-weight:700;font-size:13.5px;color:#5F6F6A">Finn</span>
+<span style="padding:7px 11px;border-radius:9px;background:#F4F8F6;border:1.5px solid #E1EAE6;font-weight:700;font-size:13.5px;color:#5F6F6A">Gia</span>
+<span style="padding:7px 11px;border-radius:9px;background:#F4F8F6;border:1.5px solid #E1EAE6;font-weight:700;font-size:13.5px;color:#5F6F6A">Iris</span>
+<span style="padding:7px 11px;border-radius:9px;background:#F4F8F6;border:1.5px solid #E1EAE6;font-weight:700;font-size:13.5px;color:#5F6F6A">+15</span>
+</div>
+<div style="margin-top:12px;padding:11px 13px;background:#F3ECFE;border-radius:10px;font-size:13.5px;line-height:1.5;color:#4C1D95"><strong>Nudge:</strong> Kofi has offered three words and written two lines. Cold-call him for the read-back.</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a><span><strong>Three ways to catch a word.</strong> Same panel, three input models — pick one per teacher, or let the board decide by whether it is touch.</span></div>
+<div style="display:flex;gap:16px;align-items:stretch">
+<div class="dv-card" style="width:430px;padding:18px;background:#fff;display:flex;flex-direction:column">
+<div style="font-weight:800;font-size:15px;color:#16302B;margin-bottom:2px">Type and score</div>
+<div style="font-size:13px;color:#8A9B96;margin-bottom:14px">Fastest at a keyboard. Never leaves the home row.</div>
+<div style="background:#DCF0EA;border:1.5px solid #9BCFC0;border-radius:12px;padding:12px">
+<input placeholder="edged" style="width:100%;box-sizing:border-box;padding:11px 13px;border:1.5px solid #B7DBCF;border-radius:9px;font-family:inherit;font-style:italic;font-size:16px;outline:none">
+<div style="display:flex;gap:5px;margin-top:9px">
+<span style="flex:1;text-align:center;padding:9px 0;border:1.5px solid #CFE0D9;border-radius:8px;background:#fff;font-weight:700;font-size:14px;color:#7C918B">1</span>
+<span style="flex:1;text-align:center;padding:9px 0;border:1.5px solid #CFE0D9;border-radius:8px;background:#fff;font-weight:700;font-size:14px;color:#7C918B">2</span>
+<span style="flex:1;text-align:center;padding:9px 0;border:2px solid #0C7C6C;border-radius:8px;background:#fff;font-weight:800;font-size:14px;color:#0A5F53">3</span>
+<span style="flex:1;text-align:center;padding:9px 0;border:1.5px solid #CFE0D9;border-radius:8px;background:#fff;font-weight:700;font-size:14px;color:#7C918B">4</span>
+<span style="flex:1;text-align:center;padding:9px 0;border:1.5px solid #CFE0D9;border-radius:8px;background:#fff;font-weight:700;font-size:14px;color:#7C918B">5</span>
+<span style="flex:1;text-align:center;padding:9px 0;border:1.5px solid #CFE0D9;border-radius:8px;background:#fff;font-weight:700;font-size:14px;color:#0A5F53">↓</span>
+<span style="padding:9px 16px;border-radius:8px;background:#0C7C6C;font-weight:800;font-size:14px;color:#fff">Add</span>
+</div>
+</div>
+<div style="margin-top:auto;padding:12px 12px 10px;background:#F4F8F6;border-radius:9px;font-size:13px;line-height:1.5;color:#5F6F6A"><strong style="color:#16302B">Keys:</strong> type · 1–5 for the climb · ↑↓ for the band · Enter. Roughly two seconds a word.</div>
+</div>
+<div class="dv-card" style="width:430px;padding:18px;background:#fff;display:flex;flex-direction:column">
+<div style="font-weight:800;font-size:15px;color:#16302B;margin-bottom:2px">Drag into the band</div>
+<div style="font-size:13px;color:#8A9B96;margin-bottom:14px">For a touch board. The children see where the word belongs.</div>
+<div style="background:#F7FBF9;border:1.5px solid #E1EAE6;border-radius:12px;padding:12px">
+<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#fff;border:2px solid #0C7C6C;border-radius:999px;width:fit-content;box-shadow:0 6px 14px rgba(12,124,108,.22);margin:0 auto 10px"><span style="font-weight:800;font-size:17px;color:#20302C">edged</span></div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="padding:10px 12px;border:1.5px dashed #A9CFC3;border-radius:9px;background:#fff;font-weight:800;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:#0A5F53">For the lifts</div>
+<div style="padding:10px 12px;border:1.5px dashed #C7D4CF;border-radius:9px;background:#fff;font-weight:800;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:#5F6F6A">For the level</div>
+<div style="padding:14px 12px;border:2.5px solid #A3243F;border-radius:9px;background:#FDEFF3;font-weight:800;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:#A3243F">For the falls · drop it here</div>
+</div>
+</div>
+<div style="margin-top:auto;padding:12px 12px 10px;background:#F4F8F6;border-radius:9px;font-size:13px;line-height:1.5;color:#5F6F6A"><strong style="color:#16302B">Teaching value:</strong> dragging is the lesson — “does this word lift us or drop us?” asked with a thumb.</div>
+</div>
+<div class="dv-card" style="width:430px;padding:18px;background:#fff;display:flex;flex-direction:column">
+<div style="font-weight:800;font-size:15px;color:#16302B;margin-bottom:2px">Write it with the pen</div>
+<div style="font-size:13px;color:#8A9B96;margin-bottom:14px">You are already holding the pen. Do not put it down.</div>
+<div style="background:#FDFBF2;border:1.5px solid #DDE7E0;border-radius:12px;padding:12px;position:relative">
+<div style="position:absolute;left:12px;right:12px;top:34px;height:1px;background:#CFDDD3"></div>
+<div style="position:absolute;left:12px;right:12px;top:58px;border-top:1px dashed #EADFC5"></div>
+<div style="position:relative;font-size:30px;line-height:60px;color:#16302B;font-style:italic">edged</div>
+<div style="display:flex;align-items:center;gap:7px;margin-top:6px"><span style="padding:6px 11px;border-radius:999px;background:#D9F0E8;font-weight:800;font-size:13px;color:#0A5F53">reads as “edged” ✓</span><span style="padding:6px 11px;border-radius:999px;background:#fff;border:1.5px solid #DCE5E1;font-weight:700;font-size:13px;color:#5F6F6A">not that? retype</span></div>
+</div>
+<div style="margin-top:auto;padding:12px 12px 10px;background:#F4F8F6;border-radius:9px;font-size:13px;line-height:1.5;color:#5F6F6A"><strong style="color:#16302B">Bonus:</strong> the letter formation you model is the letter formation they copy — same guides as the writing frame.</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1d">
+<div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a><span><strong>How much should be on the board?</strong> Left is the teaching board. Right is the same lesson with one tap on <em>Calm board</em> — what a child looks up at while writing.</span></div>
+<div style="display:flex;gap:16px;align-items:stretch">
+<div class="dv-card" data-screen-label="Everything visible" style="width:660px;background:#123F38;border:none;padding:10px;border-radius:16px">
+<div style="background:#fff;border-radius:11px;overflow:hidden">
+<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid #EDF1EF"><span style="font-weight:800;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#8A9B96">Story map</span><span style="padding:3px 8px;border-radius:999px;background:#E7EDEA;font-weight:800;font-size:9px;letter-spacing:.08em;color:#3A4E52">WHOLE CLASS</span><span style="margin-left:auto;font-size:11px;color:#B9C8C2">gear · duplicate</span></div>
+<div style="display:flex;gap:5px;padding:8px 12px;background:#EAF5F1"><span style="padding:6px 14px;border-radius:999px;background:#fff;font-weight:800;font-size:12px;color:#3A4E52">Model</span><span style="padding:6px 14px;border-radius:999px;background:#33474C;font-weight:800;font-size:12px;color:#fff">Over-to-you</span><span style="margin-left:auto;font-size:10px;font-weight:800;letter-spacing:.1em;color:#7C918B">STAGE 3 OF 3</span></div>
+<div style="padding:10px 12px">
+<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px"><span style="padding:4px 9px;border-radius:999px;background:#F4F8F6;border:1px solid #E1EAE6;font-size:11px;color:#3F534E">✓ who, where, when</span><span style="padding:4px 9px;border-radius:999px;background:#F4F8F6;border:1px solid #E1EAE6;font-size:11px;color:#3F534E">✓ a feeling word</span><span style="padding:4px 9px;border-radius:999px;background:#F4F8F6;border:1px solid #E1EAE6;font-size:11px;color:#3F534E">✓ -ed opener</span><span style="padding:4px 9px;border-radius:999px;background:#F4F8F6;border:1px solid #E1EAE6;font-size:11px;color:#3F534E">✓ full stops</span><span style="padding:4px 9px;border-radius:999px;background:#F4F8F6;border:1px solid #E1EAE6;font-size:11px;color:#3F534E">✓ joined print</span></div>
+<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px"><span style="padding:4px 8px;border-radius:999px;border:1px solid #DCE5E1;font-size:11px;color:#20302C">safe</span><span style="padding:4px 8px;border-radius:999px;border:1px solid #DCE5E1;font-size:11px;color:#20302C">golden</span><span style="padding:4px 8px;border-radius:999px;border:1px solid #DCE5E1;font-size:11px;color:#20302C">glanced</span><span style="padding:4px 8px;border-radius:999px;border:1px solid #DCE5E1;font-size:11px;color:#20302C">whispered</span><span style="padding:4px 8px;border-radius:999px;border:1px solid #DCE5E1;font-size:11px;color:#20302C">wistful</span><span style="padding:4px 8px;border-radius:999px;border:1px solid #DCE5E1;font-size:11px;color:#20302C">hesitated</span><span style="padding:4px 8px;border-radius:999px;border:1px solid #DCE5E1;font-size:11px;color:#20302C">edged</span><span style="padding:4px 8px;border-radius:999px;border:1px solid #DCE5E1;font-size:11px;color:#20302C">frantic</span><span style="padding:4px 8px;border-radius:999px;border:1px solid #DCE5E1;font-size:11px;color:#20302C">trembling</span><span style="padding:4px 8px;border-radius:999px;border:1px solid #DCE5E1;font-size:11px;color:#20302C">gloom</span><span style="padding:4px 8px;border-radius:999px;border:1px solid #DCE5E1;font-size:11px;color:#20302C">desolate</span></div>
+<div style="display:flex;gap:8px"><div style="flex:1;height:70px;border-radius:8px;background:#FDFBF2;border:1px solid #DDE7E0"></div><div style="width:150px;height:70px;border-radius:8px;background:#22343A"></div></div>
+</div>
+</div>
+<div style="text-align:center;font-size:12px;color:#9FC4BC;padding:8px 0 2px">Everything visible — right for you, loud for them</div>
+</div>
+<div class="dv-card" data-screen-label="Calm board" style="width:660px;background:#123F38;border:none;padding:10px;border-radius:16px">
+<div style="background:#fff;border-radius:11px;overflow:hidden;display:flex;flex-direction:column;min-height:262px">
+<div style="padding:26px 28px;background:#FBF1DC;flex:1">
+<div style="font-weight:800;font-size:34px;line-height:1.15;color:#6B4610;margin-bottom:10px">Write the Build-up.</div>
+<div style="display:flex;gap:9px;margin-bottom:18px"><span style="padding:11px 18px;border-radius:11px;background:#fff;border:2px solid #E4C88B;font-weight:800;font-size:19px;color:#6B4610">A feeling word</span><span style="padding:11px 18px;border-radius:11px;background:#fff;border:2px solid #E4C88B;font-weight:800;font-size:19px;color:#6B4610">Full stops</span></div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between"><span style="font-size:17px;color:#8A5A12">Stuck? last sentence → partner → me</span><span style="font-weight:800;font-size:44px;color:#6B4610;font-variant-numeric:tabular-nums">8:00</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:#F7F9F8;border-top:1px solid #EDF1EF"><span style="font-size:12.5px;color:#8A9B96">Everything else is still there —</span><span style="padding:5px 11px;border-radius:999px;background:#fff;border:1.5px solid #DCE5E1;font-weight:800;font-size:12.5px;color:#3F534E">Show the board again</span></div>
+</div>
+<div style="text-align:center;font-size:12px;color:#9FC4BC;padding:8px 0 2px">Calm board — one tap, nothing lost</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1e">
+<div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a><span><strong>The same board, run by a TA with an EAL group.</strong> Amber chrome so nobody mistakes it for the class board. Help pinned to <em>Everything</em>, pictures on every word, first language allowed on the way in.</span></div>
+<div class="dv-card" data-screen-label="TA group board" style="width:900px;background:#4A3410;border:none;padding:12px;border-radius:18px">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 8px 10px"><div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;font-size:14px;color:#EBD9B4">Year 4 · Traditional tales</span><span style="padding:4px 10px;border-radius:7px;background:#6B4610;font-weight:800;font-size:10.5px;letter-spacing:.1em;color:#F5E7C8">EAL GROUP</span></div><span style="font-size:13px;color:#C9AE78">Mrs Patel · 5 children · library corner</span></div>
+<div style="background:#fff;border-radius:13px;overflow:hidden">
+<div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid #EDF1EF"><span style="font-weight:800;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:#8A9B96">Story map</span><span style="padding:6px 13px;border-radius:999px;background:#FBF1DC;font-weight:800;font-size:11.5px;letter-spacing:.08em;color:#8A5A12">EAL GROUP</span><span style="margin-left:auto;padding:6px 13px;border-radius:999px;background:#D9F0E8;font-weight:800;font-size:13px;color:#0A5F53">Help: Everything · pinned</span></div>
+<div style="padding:16px 18px">
+<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px"><span style="font-weight:800;font-size:24px;color:#16302B">Build-up</span><span style="font-style:italic;font-size:15px;color:#8A9B96">Something starts to go wrong</span></div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+<div style="display:flex;align-items:center;gap:10px;padding:8px 14px 8px 8px;border:1.5px solid #DCE5E1;border-radius:14px"><span style="width:44px;height:44px;border-radius:9px;background:#EAF5F1;border:1.5px dashed #A9CFC3;display:grid;place-items:center;font-weight:800;font-size:9.5px;letter-spacing:.1em;color:#7FB0A2">PIC</span><span style="display:flex;flex-direction:column"><span style="font-weight:800;font-size:20px;color:#20302C">hesitated</span><span style="font-size:13px;color:#8A9B96">stopped, not sure</span></span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:8px 14px 8px 8px;border:1.5px solid #DCE5E1;border-radius:14px"><span style="width:44px;height:44px;border-radius:9px;background:#EAF5F1;border:1.5px dashed #A9CFC3;display:grid;place-items:center;font-weight:800;font-size:9.5px;letter-spacing:.1em;color:#7FB0A2">PIC</span><span style="display:flex;flex-direction:column"><span style="font-weight:800;font-size:20px;color:#20302C">edged</span><span style="font-size:13px;color:#8A9B96">moved slowly, sideways</span></span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:8px 14px 8px 8px;border:1.5px solid #DCE5E1;border-radius:14px"><span style="width:44px;height:44px;border-radius:9px;background:#EAF5F1;border:1.5px dashed #A9CFC3;display:grid;place-items:center;font-weight:800;font-size:9.5px;letter-spacing:.1em;color:#7FB0A2">PIC</span><span style="display:flex;flex-direction:column"><span style="font-weight:800;font-size:20px;color:#20302C">gloom</span><span style="font-size:13px;color:#8A9B96">dark, hard to see</span></span></div>
+</div>
+<div style="display:flex;gap:14px">
+<div style="flex:1;background:#DCF0EA;border:1.5px solid #9BCFC0;border-radius:13px;padding:14px 16px">
+<div style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#0A5F53;margin-bottom:9px">Say it, then write it</div>
+<div style="display:flex;flex-direction:column;gap:7px">
+<span style="padding:11px 14px;border-radius:10px;background:#fff;font-weight:700;font-size:18px;color:#20302C">Something ______ between the trees.</span>
+<span style="padding:11px 14px;border-radius:10px;background:#fff;font-weight:700;font-size:18px;color:#20302C">Katie felt ______.</span>
+</div>
+<div style="margin-top:10px;font-size:13.5px;color:#3E7A6D">Say it in any language first. Then say it in English. Then write it.</div>
+</div>
+<div style="width:280px;flex:none;background:#FBF1DC;border:1.5px solid #EDDCB8;border-radius:13px;padding:14px 16px">
+<div style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#8A5A12;margin-bottom:9px">For you, Mrs Patel</div>
+<div style="font-size:14.5px;line-height:1.55;color:#6B4610">Anything they offer here goes into the <strong>class</strong> bank with their name on it — so it comes back on the big board this afternoon and they hear it read out.</div>
+<button style="width:100%;margin-top:11px;padding:12px;border:none;border-radius:10px;background:#B4741A;font-family:inherit;font-weight:800;font-size:15px;color:#fff;cursor:pointer">Send 3 words to the class bank</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1f">
+<div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a><span><strong>Emotion graph for upper KS2 — more than one character.</strong> Tap a name to arm it; the rest dim rather than disappear so the class can see arcs cross. Section captions no longer collide.</span></div>
+<div class="dv-card" data-screen-label="Emotion graph" style="width:980px;padding:18px 20px;background:#fff">
+<div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:6px">
+<sc-for list="{{ arcs }}" as="a" hint-placeholder-count="4">
+<sc-if value="{{ a.on }}" hint-placeholder-val="{{ true }}"><button onClick="{{ a.tap }}" style="display:flex;align-items:center;gap:9px;padding:9px 16px;border:2px solid #16302B;border-radius:999px;background:#fff;font-family:inherit;font-weight:800;font-size:15px;color:#16302B;cursor:pointer"><svg width="12" height="12" style="flex:none"><circle cx="6" cy="6" r="6" fill="{{ a.color }}"></circle></svg>{{ a.label }}<span style="font-weight:700;font-size:11px;letter-spacing:.1em;color:#9FB3AD">{{ a.role }}</span></button></sc-if>
+<sc-if value="{{ a.off }}" hint-placeholder-val="{{ false }}"><button onClick="{{ a.tap }}" style="display:flex;align-items:center;gap:9px;padding:9px 16px;border:1.5px solid #DCE5E1;border-radius:999px;background:#fff;font-family:inherit;font-weight:700;font-size:15px;color:#9FB3AD;cursor:pointer"><svg width="12" height="12" style="flex:none;opacity:.35"><circle cx="6" cy="6" r="6" fill="{{ a.color }}"></circle></svg>{{ a.label }}<span style="font-weight:700;font-size:11px;letter-spacing:.1em;color:#C7D4CF">{{ a.role }}</span></button></sc-if>
+</sc-for>
+</div>
+<div style="font-size:13.5px;color:#8A9B96;margin-bottom:10px">Armed: <strong style="color:#16302B">{{ armedLabel }}</strong> — tap a name to arm it, tap it again to send it to the back.</div>
+<div style="border:1.5px solid #E1EAE6;border-radius:14px;padding:6px">
+<svg viewBox="0 0 940 470" style="width:100%;display:block">
+<g font-family="Nunito, system-ui, sans-serif">
+<line x1="170" y1="40" x2="920" y2="40" stroke="#EDF1EF" stroke-width="1"></line>
+<line x1="170" y1="100" x2="920" y2="100" stroke="#EDF1EF" stroke-width="1"></line>
+<line x1="170" y1="160" x2="920" y2="160" stroke="#EDF1EF" stroke-width="1"></line>
+<line x1="170" y1="220" x2="920" y2="220" stroke="#B9C8C2" stroke-width="1.5"></line>
+<line x1="170" y1="280" x2="920" y2="280" stroke="#EDF1EF" stroke-width="1"></line>
+<line x1="170" y1="340" x2="920" y2="340" stroke="#EDF1EF" stroke-width="1"></line>
+<line x1="170" y1="400" x2="920" y2="400" stroke="#EDF1EF" stroke-width="1"></line>
+<text x="158" y="46" text-anchor="end" font-size="17" font-weight="700" fill="#8A9B96">as happy as it gets</text>
+<text x="158" y="106" text-anchor="end" font-size="18" font-weight="800" fill="#3F534E">+2 happy</text>
+<text x="158" y="166" text-anchor="end" font-size="18" font-weight="800" fill="#3F534E">+1 a bit happy</text>
+<text x="158" y="226" text-anchor="end" font-size="18" font-weight="800" fill="#3F534E">0 all right</text>
+<text x="158" y="286" text-anchor="end" font-size="18" font-weight="800" fill="#3F534E">−1 a bit sad</text>
+<text x="158" y="346" text-anchor="end" font-size="18" font-weight="800" fill="#3F534E">−2 sad</text>
+<text x="158" y="406" text-anchor="end" font-size="17" font-weight="700" fill="#8A9B96">−3 as sad as it gets</text>
+<line x1="290" y1="30" x2="290" y2="410" stroke="#EDF1EF" stroke-width="1"></line>
+<line x1="440" y1="30" x2="440" y2="410" stroke="#EDF1EF" stroke-width="1"></line>
+<line x1="590" y1="30" x2="590" y2="410" stroke="#EDF1EF" stroke-width="1"></line>
+<line x1="740" y1="30" x2="740" y2="410" stroke="#EDF1EF" stroke-width="1"></line>
+<g opacity="{{ opDraft }}">
+<polyline points="215,160 365,220 515,280 665,220 815,160" fill="none" stroke="#9FB3AD" stroke-width="4" stroke-dasharray="2 9" stroke-linecap="round"></polyline>
+</g>
+<g opacity="{{ opKatie }}">
+<polyline points="215,100 365,280 515,400 665,220 815,100" fill="none" stroke="#0C7C6C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"></polyline>
+<circle cx="215" cy="100" r="9" fill="#0C7C6C"></circle><circle cx="365" cy="280" r="9" fill="#0C7C6C"></circle><circle cx="515" cy="400" r="9" fill="#0C7C6C"></circle><circle cx="665" cy="220" r="9" fill="#0C7C6C"></circle><circle cx="815" cy="100" r="9" fill="#0C7C6C"></circle>
+</g>
+<g opacity="{{ opWolf }}">
+<polyline points="215,220 365,160 515,100 665,340 815,400" fill="none" stroke="#6D28D9" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"></polyline>
+<rect x="207" y="212" width="16" height="16" rx="3" fill="#6D28D9"></rect><rect x="357" y="152" width="16" height="16" rx="3" fill="#6D28D9"></rect><rect x="507" y="92" width="16" height="16" rx="3" fill="#6D28D9"></rect><rect x="657" y="332" width="16" height="16" rx="3" fill="#6D28D9"></rect><rect x="807" y="392" width="16" height="16" rx="3" fill="#6D28D9"></rect>
+</g>
+<g opacity="{{ opWood }}">
+<polyline points="215,220 365,220 515,280 665,100 815,160" fill="none" stroke="#B4741A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"></polyline>
+<polygon points="215,210 224,226 206,226" fill="#B4741A"></polygon><polygon points="365,210 374,226 356,226" fill="#B4741A"></polygon><polygon points="515,270 524,286 506,286" fill="#B4741A"></polygon><polygon points="665,90 674,106 656,106" fill="#B4741A"></polygon><polygon points="815,150 824,166 806,166" fill="#B4741A"></polygon>
+</g>
+<text x="215" y="438" text-anchor="middle" font-size="17" font-weight="800" letter-spacing="1" fill="#0C7C6C">OPENING</text>
+<text x="365" y="438" text-anchor="middle" font-size="17" font-weight="800" letter-spacing="1" fill="#0C7C6C">BUILD-UP</text>
+<text x="515" y="438" text-anchor="middle" font-size="17" font-weight="800" letter-spacing="1" fill="#0C7C6C">PROBLEM</text>
+<text x="665" y="438" text-anchor="middle" font-size="17" font-weight="800" letter-spacing="1" fill="#0C7C6C">RESOLUTION</text>
+<text x="815" y="438" text-anchor="middle" font-size="17" font-weight="800" letter-spacing="1" fill="#0C7C6C">ENDING</text>
+<text x="215" y="460" text-anchor="middle" font-size="14" fill="#9FB3AD">3 cards</text>
+<text x="365" y="460" text-anchor="middle" font-size="14" fill="#9FB3AD">3 cards</text>
+<text x="515" y="460" text-anchor="middle" font-size="14" fill="#9FB3AD">2 cards</text>
+<text x="665" y="460" text-anchor="middle" font-size="14" fill="#9FB3AD">1 card</text>
+<text x="815" y="460" text-anchor="middle" font-size="14" fill="#9FB3AD">1 card</text>
+</g>
+</svg>
+</div>
+<div style="display:flex;align-items:center;gap:14px;margin-top:12px;padding:12px 16px;background:#F3ECFE;border-radius:11px"><span style="font-weight:800;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#6D28D9;white-space:nowrap">Ask the class</span><span style="font-size:16px;color:#4C1D95">Where do two lines cross? That is the moment your reader has to choose who to worry about.</span></div>
+</div>
+</div>
+
+<div class="dv-opt" id="1g">
+<div class="dv-olabel"><a class="dv-oid" href="#1g">1g</a><span><strong>Three ways to signal where you are in the release.</strong> All three drive the same state — it is only what the room reads at a glance that changes.</span></div>
+<div style="display:flex;gap:16px;align-items:stretch">
+<div class="dv-card" style="width:470px;padding:16px;background:#fff;display:flex;flex-direction:column">
+<div style="font-weight:800;font-size:15px;color:#16302B;margin-bottom:2px">Pills and a dial</div>
+<div style="font-size:13px;color:#8A9B96;margin-bottom:14px">What <a class="dv-oid" href="#1a">1a</a> uses. Familiar, compact, teacher-facing.</div>
+<div style="background:#EAF5F1;border-radius:11px;padding:12px;display:flex;align-items:center;gap:8px">
+<span style="padding:8px 16px;border-radius:999px;background:#fff;font-weight:800;font-size:14px;color:#3A4E52">Model</span>
+<span style="padding:8px 16px;border-radius:999px;background:#33474C;font-weight:800;font-size:14px;color:#fff">Together</span>
+<span style="padding:8px 16px;border-radius:999px;background:#fff;font-weight:800;font-size:14px;color:#3A4E52">Over-to-you</span>
+</div>
+<div style="margin-top:auto;padding-top:12px;display:flex;align-items:center"><div style="display:flex;background:#fff;border:1.5px solid #CFE0D9;border-radius:999px;padding:3px;width:fit-content"><span style="padding:6px 13px;border-radius:999px;font-weight:700;font-size:13px;color:#7C918B">Everything</span><span style="padding:6px 13px;border-radius:999px;background:#0C7C6C;font-weight:800;font-size:13px;color:#fff">Most</span><span style="padding:6px 13px;border-radius:999px;font-weight:700;font-size:13px;color:#7C918B">A little</span><span style="padding:6px 13px;border-radius:999px;font-weight:700;font-size:13px;color:#7C918B">None</span></div></div>
+</div>
+<div class="dv-card" style="width:470px;padding:16px;background:#fff;display:flex;flex-direction:column">
+<div style="font-weight:800;font-size:15px;color:#16302B;margin-bottom:2px">The release ramp</div>
+<div style="font-size:13px;color:#8A9B96;margin-bottom:14px">Shows the scaffolds falling away. Children can see what they are about to lose.</div>
+<div style="display:flex;border-radius:11px;overflow:hidden;border:1.5px solid #E1EAE6">
+<div style="flex:1;padding:11px 12px;background:#0F5F53"><div style="font-weight:800;font-size:13px;color:#fff">My pen</div><div style="font-size:11.5px;color:#9FD8C9;margin-top:3px">words · stems · model · 5 criteria</div></div>
+<div style="flex:1;padding:11px 12px;background:#D9F0E8"><div style="font-weight:800;font-size:13px;color:#0A4A41">Our pen</div><div style="font-size:11.5px;color:#3E7A6D;margin-top:3px">words · stems · 3 criteria</div></div>
+<div style="flex:1;padding:11px 12px;background:#FBF1DC"><div style="font-weight:800;font-size:13px;color:#6B4610">Your pen</div><div style="font-size:11.5px;color:#8A5A12;margin-top:3px">2 criteria</div></div>
+</div>
+<div style="position:relative;height:26px;margin-top:8px"><div style="position:absolute;left:0;right:0;top:11px;height:4px;border-radius:999px;background:#E1EAE6"></div><div style="position:absolute;left:0;width:52%;top:11px;height:4px;border-radius:999px;background:#0C7C6C"></div><div style="position:absolute;left:52%;top:3px;width:20px;height:20px;margin-left:-10px;border-radius:999px;background:#fff;border:3px solid #0C7C6C"></div></div>
+<div style="margin-top:auto;padding-top:6px;font-size:12.5px;color:#8A9B96">Drag the handle to move the whole class along the ramp.</div>
+</div>
+<div class="dv-card" style="width:470px;padding:16px;background:#fff;display:flex;flex-direction:column">
+<div style="font-weight:800;font-size:15px;color:#16302B;margin-bottom:2px">Who is holding the pen</div>
+<div style="font-size:13px;color:#8A9B96;margin-bottom:14px">Nothing to read. Works in Year 1 and in Year 6.</div>
+<div style="display:flex;gap:10px">
+<div style="flex:1;text-align:center;padding:14px 8px;border-radius:12px;background:#F4F8F6;border:1.5px solid #E1EAE6"><div style="height:40px;border-radius:8px;background:#fff;border:1.5px dashed #C7D4CF"></div><div style="font-weight:800;font-size:13px;color:#8A9B96;margin-top:6px">Me</div></div>
+<div style="flex:1;text-align:center;padding:14px 8px;border-radius:12px;background:#D9F0E8;border:2.5px solid #0C7C6C"><div style="height:40px;border-radius:8px;background:#fff;border:1.5px dashed #7FB0A2"></div><div style="font-weight:800;font-size:13px;color:#0A5F53;margin-top:6px">Us</div></div>
+<div style="flex:1;text-align:center;padding:14px 8px;border-radius:12px;background:#F4F8F6;border:1.5px solid #E1EAE6"><div style="height:40px;border-radius:8px;background:#fff;border:1.5px dashed #C7D4CF"></div><div style="font-weight:800;font-size:13px;color:#8A9B96;margin-top:6px">You</div></div>
+</div>
+<div style="margin-top:auto;padding:12px 12px 10px;background:#F4F8F6;border-radius:9px;font-size:12.5px;line-height:1.5;color:#5F6F6A">Three wordless states — the pen slides across when you hand over, a two-second animation the whole room watches. Illustration placeholders; drop your figure set in.</div>
+</div>
+</div>
+</div>
+
+<div id="dv-end"></div>
+</div>
+<p class="dv-next">Try next: "make <a class="dv-oid" href="#1a">1a</a> calmer for the children — hide the teacher controls" · "more ways to signal the hand-off" · "show the TA running <a class="dv-oid" href="#1a">1a</a> with an EAL group"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1500,&quot;height&quot;:1200},&quot;startStage&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Model&quot;,&quot;Together&quot;,&quot;Over-to-you&quot;,&quot;Review&quot;],&quot;default&quot;:&quot;Model&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Lesson&quot;,&quot;label&quot;:&quot;Board opens on&quot;},&quot;showTeacherRail&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Lesson&quot;,&quot;label&quot;:&quot;Show teacher-only panels&quot;},&quot;lineStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Plain&quot;,&quot;Wide&quot;,&quot;Handwriting guides&quot;],&quot;default&quot;:&quot;Wide&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Writing frame&quot;,&quot;label&quot;:&quot;Ruling on the modelled writing&quot;}}">
+class Component extends DCLogic {
+  NAMES = ['Amira','Jay','Kofi','Lena','Noor'];
+  CLASS = ['Amira B','Ben C','Chi D','Dev E','Esme F','Finn G','Gia H','Hal I','Iris J','Jay K','Kofi L','Lena M','Mo N','Noor O','Priya P','Reece Q','Sam R','Theo S','Tomas T','Wren U','Yusuf V','Zainab W','Ada X','Elif Y'];
+
+  state = {
+    stage: 0, help: 0, cover: false, peeks: 3, support: false, group: 0,
+    draft: '', by: 0, score: 3, band: 2, star: false, lines: 1,
+    words: [
+      {w:'safe', tag:'HFW', band:0, s:2},
+      {w:'golden', tag:'bank', band:0, s:4},
+      {w:'ran', tag:'HFW', band:1, s:1},
+      {w:'glanced', tag:'pack', band:1, s:3},
+      {w:'whispered', tag:'pack', band:1, s:3},
+      {w:'wistful', tag:'bank', band:1, s:5},
+      {w:'path (n)', tag:'E', band:1, s:2},
+      {w:'basket (n)', tag:'E', band:1, s:2},
+      {w:'first, then, next', tag:'S', band:1, s:1},
+      {w:'sad', tag:'HFW', band:2, s:1},
+      {w:'scared', tag:'HFW', band:2, s:2},
+      {w:'hesitated', tag:'pack', band:2, s:3},
+      {w:'edged', tag:'pack', band:2, s:3},
+      {w:'frantic', tag:'bank', band:2, s:4},
+      {w:'trembling', tag:'bank', band:2, s:4},
+      {w:'gloom', tag:'pack', band:2, s:4},
+      {w:'desolate', tag:'bank', band:2, s:5}
+    ],
+    tray: null,
+    keep: {},
+    armed: 0
+  };
+
+  ARCS = [
+    { label: 'Katie', role: 'PROTAGONIST', color: '#0C7C6C' },
+    { label: 'The wolf', role: 'AGAINST HER', color: '#6D28D9' },
+    { label: 'The woodcutter', role: 'HERO', color: '#B4741A' },
+    { label: 'Our draft', role: 'CLASS', color: '#9FB3AD' }
+  ];
+
+  componentDidMount() {
+    const stages = ['Model','Together','Over-to-you','Review'];
+    const lineOpts = ['Plain','Wide','Handwriting guides'];
+    let s = stages.indexOf(this.props.startStage);
+    if (s < 0) s = 0;
+    let l = lineOpts.indexOf(this.props.lineStyle);
+    if (l < 0) l = 1;
+    this.setState({
+      tray: this.CLASS.map((n, i) => ({ name: n, st: i === 4 || i === 11 ? 1 : 0 })),
+      stage: s, help: this.STAGE_HELP[s], cover: this.STAGE_HELP[s] >= 2, lines: l
+    });
+  }
+
+  HELP = ['Everything','Most','A little','None'];
+  STAGE_HELP = [0, 1, 3, 3];
+
+  setStage = (i) => this.setState({ stage: i, help: this.STAGE_HELP[i], cover: this.STAGE_HELP[i] >= 2 });
+  setHelp = (h) => this.setState({ help: h, cover: h >= 2 });
+  toggleCover = () => this.setState(s => ({ cover: !s.cover }));
+  peek = () => this.setState(s => ({ cover: false, peeks: Math.max(0, s.peeks - 1) }));
+  toggleSupport = () => this.setState(s => ({ support: !s.support }));
+  cycleGroup = () => this.setState(s => ({ group: (s.group + 1) % 3 }));
+  toggleStar = () => this.setState(s => ({ star: !s.star }));
+
+  addWord = () => {
+    const t = (this.state.draft || '').trim();
+    if (!t) return;
+    this.setState(s => ({
+      words: s.words.concat([{ w: t, tag: s.star ? 'bank' : 'new', band: s.band, s: s.score, by: this.NAMES[s.by] }]),
+      draft: '', star: false
+    }));
+  };
+
+  bumpWord = (i) => this.setState(s => {
+    const words = s.words.slice();
+    words[i] = Object.assign({}, words[i], { s: words[i].s >= 5 ? 1 : words[i].s + 1 });
+    return { words };
+  });
+
+  cycleTray = (i) => this.setState(s => {
+    const tray = s.tray.slice();
+    tray[i] = { name: tray[i].name, st: (tray[i].st + 1) % 3 };
+    return { tray };
+  });
+
+  toggleKeep = (w) => this.setState(s => {
+    const keep = Object.assign({}, s.keep);
+    keep[w] = !keep[w];
+    return { keep };
+  });
+
+  pips(n) {
+    const out = [];
+    for (let i = 1; i <= 5; i++) out.push({ on: n >= i, off: n < i });
+    return out;
+  }
+
+  renderVals() {
+    const st = this.state;
+    const stage = st.stage;
+    const groups = ['Whole class','EAL group','SEN group'];
+    const groupNotes = ['', 'Mrs Patel · 5 children · Stage 2 English', 'Mr Okoye · 4 children · reading age 6'];
+    const showPic = st.support || st.group > 0;
+
+    const bandsDef = [
+      { key: 0, isLift: true, isLevel: false, isFall: false },
+      { key: 1, isLift: false, isLevel: true, isFall: false },
+      { key: 2, isLift: false, isLevel: false, isFall: true }
+    ];
+    const bands = bandsDef.map(b => {
+      const words = st.words.map((w, i) => ({ w, i })).filter(x => x.w.band === b.key).map(x => ({
+        plain: true,
+        word: x.w.w,
+        pips: this.pips(x.w.s),
+        isHFW: x.w.tag === 'HFW', isBank: x.w.tag === 'bank', isPack: x.w.tag === 'pack',
+        isE: x.w.tag === 'E', isS: x.w.tag === 'S',
+        hasBy: !!x.w.by, by: x.w.by || '',
+        hasPic: showPic && x.w.tag !== 'S',
+        tap: () => this.bumpWord(x.i)
+      }));
+      return Object.assign({}, b, { words, count: words.length + ' words' });
+    });
+
+    const critFull = [
+      'Say who, where and when','One word that shows how she feels','An -ed opener','Full stops in the right places','Joined, readable print'
+    ];
+    const critMid = ['Who, where, when','A feeling word','Full stops'];
+    const critTwo = ['A feeling word','Full stops'];
+    let criteria, criteriaTitle;
+    if (st.help <= 0) { criteria = critFull.map(t => ({ text: t, small: true, big: false })); criteriaTitle = 'What makes it good'; }
+    else if (st.help === 1) { criteria = critMid.map(t => ({ text: t, small: true, big: false })); criteriaTitle = 'Still holding on to'; }
+    else { criteria = critTwo.map(t => ({ text: t, small: false, big: true })); criteriaTitle = 'Two things only'; }
+
+    const newWords = st.words.filter(w => w.by);
+    const flagged = (st.tray || []).filter(t => t.st === 1);
+    const done = (st.tray || []).filter(t => t.st === 2);
+
+    return {
+      clockLabel: '10:42 · Literacy',
+      sectionName: stage === 0 ? 'Opening' : 'Build-up',
+      isModel: stage === 0, isTogether: stage === 1, isSolo: stage === 2,
+      isReview: stage === 3, notReview: stage !== 3,
+      stageCount: stage === 3 ? 'After the lesson' : 'Stage ' + (stage + 1) + ' of 3',
+      stagePills: [
+        { label: 'Model', sub: 'I do', active: stage === 0, idle: stage !== 0, tap: () => this.setStage(0) },
+        { label: 'Together', sub: 'We do', active: stage === 1, idle: stage !== 1, tap: () => this.setStage(1) },
+        { label: 'Over-to-you', sub: 'You do', active: stage === 2, idle: stage !== 2, tap: () => this.setStage(2) }
+      ],
+      goReview: () => this.setStage(3),
+      helpNotches: this.HELP.map((h, i) => ({ label: h, on: st.help === i, off: st.help !== i, tap: () => this.setHelp(i) })),
+      groupLabel: groups[st.group], isGroup: st.group > 0, groupNote: groupNotes[st.group],
+      cycleGroup: this.cycleGroup,
+      supportOn: st.support, supportOff: !st.support, toggleSupport: this.toggleSupport,
+      covered: st.cover, uncovered: !st.cover, toggleCover: this.toggleCover, peek: this.peek,
+      peekLine: st.peeks + ' peeks left this lesson · after that, ask a partner then ask me',
+      criteria, criteriaTitle,
+      caughtLine: newWords.length ? newWords.length + ' caught this lesson' : 'nothing caught yet',
+      bands,
+      draft: st.draft, onDraft: (e) => this.setState({ draft: e.target.value }),
+      nameChips: this.NAMES.map((n, i) => ({ name: n, on: st.by === i, off: st.by !== i, tap: () => this.setState({ by: i }) })),
+      byLabel: this.NAMES[st.by] + "'s",
+      scoreBtns: [1,2,3,4,5].map(n => ({ n, on: st.score === n, off: st.score !== n, tap: () => this.setState({ score: n }) })),
+      bandBtns: [
+        { glyph: '↑', title: 'For the lifts', on: st.band === 0, off: st.band !== 0, tap: () => this.setState({ band: 0 }) },
+        { glyph: '–', title: 'For the level', on: st.band === 1, off: st.band !== 1, tap: () => this.setState({ band: 1 }) },
+        { glyph: '↓', title: 'For the falls', on: st.band === 2, off: st.band !== 2, tap: () => this.setState({ band: 2 }) }
+      ],
+      toggleStar: this.toggleStar, addWord: this.addWord,
+      tray: (st.tray || []).map((t, i) => ({
+        name: t.name.split(' ')[0],
+        initials: t.name.split(' ').map(p => p[0]).join(''),
+        isWriting: t.st === 0, isHand: t.st === 1, isDone: t.st === 2,
+        tap: () => this.cycleTray(i)
+      })),
+      countWriting: (st.tray || []).filter(t => t.st === 0).length,
+      countHand: flagged.length,
+      countDone: done.length,
+      flaggedNames: flagged.map(t => ({ name: t.name.split(' ')[0] })),
+      hasFlagged: flagged.length > 0,
+      keepList: newWords.map(w => ({
+        word: w.w, by: w.by,
+        kept: !!st.keep[w.w], parked: !st.keep[w.w],
+        tap: () => this.toggleKeep(w.w)
+      })),
+      hasKeep: newWords.length > 0,
+      noKeep: newWords.length === 0,
+      railOn: this.props.showTeacherRail !== false,
+      lines: st.lines,
+      linePlain: st.lines === 0, lineWide: st.lines === 1, lineGuide: st.lines === 2,
+      lineBtns: ['Plain','Wide','Handwriting'].map((l, i) => ({ label: l, on: st.lines === i, off: st.lines !== i, tap: () => this.setState({ lines: i }) })),
+      showStems: st.support || st.group > 0 || st.help <= 1,
+      arcs: this.ARCS.map((a, i) => ({
+        label: a.label, role: a.role, color: a.color,
+        on: st.armed === i, off: st.armed !== i,
+        tap: () => this.setState({ armed: i })
+      })),
+      armedLabel: this.ARCS[st.armed].label,
+      opKatie: st.armed === 0 ? 1 : 0.22,
+      opWolf: st.armed === 1 ? 1 : 0.22,
+      opWood: st.armed === 2 ? 1 : 0.22,
+      opDraft: st.armed === 3 ? 1 : 0.35
+    };
+  }
+}
+</script>
+</body>
+</html>

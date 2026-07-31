@@ -756,8 +756,16 @@
     const only = opts && Array.isArray(opts.only) && opts.only.length
       ? opts.only.filter((i) => i >= 0 && i < docs.length) : null;
     const wantContact = !!(opts && opts.contact) && docs.length > 1;
+    // The PICKER was never hardcoded — BUDGETS has always been offered in full.
+    // What was missing is any way for a caller to open the dialog already on the
+    // budget its own entry point means: "Print…" on a bar means one sheet each,
+    // "Print for the wall…" means eight. Unrecognised values fall back to 4 the
+    // same way plan() does, and the choice is NOT remembered anywhere, so a
+    // teacher who printed a wall poster once does not print eight by accident
+    // next week.
     const state = {
-      budget: wantContact ? 1 : 4, paper: 'A4', assembly: 'butt', guides: true,
+      budget: wantContact ? 1 : (BUDGETS.includes(opts && opts.budget) ? opts.budget : 4),
+      paper: 'A4', assembly: 'butt', guides: true,
       contact: wantContact,
       sel: new Set(only || [startAt]),
     };
