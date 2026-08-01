@@ -4847,3 +4847,31 @@ external requests on the landing) and live at heutalab.github.io/sagestage-app.
 Remaining with Glenn: register sagestage.app, the same Hover DNS dance, the
 MailerLite account (signup line ships commented), and the first GitHub Release
 for the download button to point at.
+
+## 2026-08-01 (night) — the list opens, and three checkers cry wolf
+
+The mailing list went live: soft capture on both sagestage.app pages, linking out to a
+MailerLite hosted form (a link, never an embed, so the site still makes zero third-party
+requests and the download stays one click with no email asked for). Provider chosen on
+cost honesty — free to 250 subscribers, and the runbook's rules stand: release news and
+staffroom nudges, nothing else, quiet over holidays.
+
+The evening's real lesson was about trusting robots. THREE separate DNS checkers reported
+failure against records that were provably correct: MailerLite's SPF check (its expected
+string and the published record were byte-identical — compared programmatically, not by
+eye), Tuta's MX check (which their own developers have logged as inconsistent because it
+"fetches from different name servers each time"), and MailerLite's earlier verification
+pass. Every one was a caching or parsing artefact. The domain's TXT records rotate order
+per query, and a naive parser reading only the first record would miss the SPF entirely —
+which is likely the mechanism.
+
+Glenn settled the mail question by simply emailing hello@sagestage.co.uk and getting a
+reply. A delivery test beats any checker. The address lives in his existing €3 Tuta plan
+(3 custom domains included), so the professional sender identity cost nothing — after
+declining Hover's $30 mailbox and MailerLite's $9/month.
+
+One methodological correction worth keeping: this machine's network intercepts port-53
+DNS, so every local `dig` was answered from an interceptor cache — proven when a root
+server returned recursive answers, which root servers never do. Conclusions happened to
+be right, but the method wasn't sound. Verify DNS over DoH instead:
+curl -sS -H 'accept: application/dns-json' 'https://dns.google/resolve?name=…&type=MX'
