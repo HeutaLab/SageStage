@@ -9429,6 +9429,7 @@
   window.addEventListener('keydown', (e) => {
     if (sketchKeyHook && sketchKeyHook(e)) return;
     if (e.key === 'Escape') {
+      if (helping) { exitWhatsThis(); return; }
       if (dashEl && !modal) { closeDashboard(); return; }
       // the shades sit above the dock, so without this the only exits were
       // re-finding the tool in More or dragging all four tabs home — the
@@ -9466,7 +9467,7 @@
     if (!def) return;
 
     const body = el('div', { class: 'widget-body' });
-    const widgetEl = el('div', { class: 'widget', style: `left:${w.x}px;top:${w.y}px;width:${w.w}px;height:${w.h}px;z-index:${w.z};` });
+    const widgetEl = el('div', { class: 'widget', 'data-help': w.type, style: `left:${w.x}px;top:${w.y}px;width:${w.w}px;height:${w.h}px;z-index:${w.z};` });
 
     // A widget that lays itself out to the width it has been given needs to
     // hear about the resize. ResizeObserver is the obvious answer and is fine
@@ -10072,7 +10073,7 @@
     if (!starBtn) {
       starBtn = el('button', {
         class: 'star-pill', title: 'Give the class a star',
-        'aria-label': 'Give the class a star',
+        'aria-label': 'Give the class a star', 'data-help': 'starPill',
         onclick: () => {
           rewardsDayTick(); // a kiosk tab crossing Monday rolls the week before this star lands
           state.rewards.stars++;
@@ -10746,7 +10747,7 @@
     dashEl.innerHTML = '';
     applyDashBg();
     const tab = (id, icon, label) => el('button', {
-      class: 'dash-tab' + (dashTab === id ? ' active' : ''),
+      class: 'dash-tab' + (dashTab === id ? ' active' : ''), 'data-help': 'dash:' + id,
       onclick: () => { dashTab = id; renderDashboard(); },
     }, iconEl(icon), label);
     const hour = new Date().getHours();
@@ -10757,7 +10758,7 @@
     // top row: brand + reading font + tabs + close
     const fontIdx = READING_FONTS.findIndex(([id]) => id === state.readingFont);
     const fontBtn = el('button', {
-      class: 'dash-font-btn',
+      class: 'dash-font-btn', 'data-help': 'aaPill',
       title: 'Reading font: ' + READING_FONTS[Math.max(fontIdx, 0)][1] + ' — tap to change',
       onclick: () => {
         state.readingFont = READING_FONTS[(fontIdx + 1) % READING_FONTS.length][0];
@@ -10766,12 +10767,21 @@
         renderDashboard();
       },
     }, 'Aa');
+    // the ? from every window: the dashboard covers the topbar, so it carries
+    // its own — same sheet, same hover card (docs/help-system-design.md §1)
+    const dashHelp = el('button', {
+      class: 'dash-font-btn dash-help', 'data-help': 'helpBtn',
+      title: 'Help — what you’re looking at, and where your data lives',
+      onclick: () => openHelp(),
+    }, iconEl('help'));
+    wireHelpHover(dashHelp);
     page.append(el('div', { class: 'dash-topbar' },
       el('div', { class: 'dash-brand' },
         el('span', { class: 'dash-brand-tile' }, '🌿'),
         el('span', { class: 'dash-brand-name' }, 'Sage Stage'),
         el('span', { class: 'dash-tag' }, '100% local'),
-        fontBtn),
+        fontBtn,
+        dashHelp),
       el('div', { class: 'dash-tabs' },
         tab('decks', 'screens', 'Screen decks'),
         tab('templates', 'copy', 'Templates'),
@@ -10955,15 +10965,15 @@
     sortSel.value = dashSort;
     sortSel.addEventListener('change', () => { dashSort = sortSel.value; paintBody(); });
     let headLead;
-    const pill = (icon, label, onclick) => el('button', { class: 'dash-pill', onclick },
+    const pill = (icon, label, onclick, helpKey) => el('button', { class: 'dash-pill', 'data-help': helpKey || '', onclick },
       el('span', { class: 'dash-pill-ic' }, iconEl(icon)), label);
     if (dashTab === 'decks') {
       headLead = el('div', { class: 'dash-actions' },
-        el('button', { class: 'dash-primary', onclick: () => closeDashboard() },
+        el('button', { class: 'dash-primary', 'data-help': 'dash:start', onclick: () => closeDashboard() },
           'Start teaching', iconEl('chevr')),
-        pill('plus', 'New deck', () => newDeck()),
-        pill('copy', 'From a template', () => { dashTab = 'templates'; renderDashboard(); }));
-      if (window.SagePptxImport) headLead.append(pill('screens', 'Import PowerPoint', () => SagePptxImport.openDialog()));
+        pill('plus', 'New deck', () => newDeck(), 'dash:newdeck'),
+        pill('copy', 'From a template', () => { dashTab = 'templates'; renderDashboard(); }, 'dash:template'));
+      if (window.SagePptxImport) headLead.append(pill('screens', 'Import PowerPoint', () => SagePptxImport.openDialog(), 'dash:importppt'));
     } else {
       // the register arrives as a column of names, so the front page opens the
       // same editor the widgets do rather than asking for one name at a time
@@ -11379,12 +11389,12 @@
     for (const t of TOOLS) {
       if (!state.pinned.includes(t.id)) continue;
       // title + aria-label so the name survives compact mode's hidden labels
-      toolbar.append(el('button', { class: 'tool', style: '--acc:' + t.accent, title: t.label, 'aria-label': t.label, onclick: () => t.run() },
+      toolbar.append(el('button', { class: 'tool', style: '--acc:' + t.accent, title: t.label, 'aria-label': t.label, 'data-help': t.id, onclick: () => t.run() },
         el('span', { class: 'glyph' }, iconEl(t.glyph)),
         el('span', { class: 'label' }, t.label)));
     }
     // permanent category tabs — Maths and Games keep growing, so they get their own panels
-    const catTab = (cat, glyph, accent, label) => el('button', { class: 'tool', style: '--acc:' + accent, title: label, 'aria-label': label, onclick: () => toggleMorePanel(cat) },
+    const catTab = (cat, glyph, accent, label) => el('button', { class: 'tool', style: '--acc:' + accent, title: label, 'aria-label': label, 'data-help': 'dock:' + cat, onclick: () => toggleMorePanel(cat) },
       el('span', { class: 'glyph' }, iconEl(glyph)),
       el('span', { class: 'label' }, label));
     toolbar.append(...[
@@ -11398,9 +11408,9 @@
       el('span', { class: 'dock-sep' }),
       el('button', {
         class: 'dock-annotate' + (drawLayer.classList.contains('active') ? ' active' : ''),
-        title: 'Annotate the screen', onclick: () => toggleDraw(),
+        title: 'Annotate the screen', 'data-help': 'dock:annotate', onclick: () => toggleDraw(),
       }, iconEl('scribble')),
-      el('button', { class: 'dock-hide', title: 'Hide bar (B)', onclick: () => setDock('mini') }, iconEl('shrink')),
+      el('button', { class: 'dock-hide', title: 'Hide bar (B)', 'data-help': 'dock:hide', onclick: () => setDock('mini') }, iconEl('shrink')),
     );
     applyDock();
   }
@@ -11465,6 +11475,7 @@
     if (!miniDock) return;
     const drawOn = drawLayer.classList.contains('active');
     miniDock.innerHTML = '';
+    miniDock.dataset.help = 'minidock';
     miniDock.append(
       el('button', { class: 'mini-btn' + (drawOn ? ' active' : ''), title: 'Annotate', onclick: () => { if (!drawOn) toggleDraw(); } }, iconEl('scribble')),
       el('button', { class: 'mini-btn' + (drawOn ? '' : ' active'), title: 'Select', onclick: () => { if (drawOn) toggleDraw(); } }, iconEl('pointer')),
@@ -11499,7 +11510,7 @@
     for (const t of inCat) {
       const pinned = state.pinned.includes(t.id);
       grid.append(el('div', {
-        class: 'tool-cell', role: 'button', tabindex: '0', style: '--acc:' + t.accent,
+        class: 'tool-cell', role: 'button', tabindex: '0', style: '--acc:' + t.accent, 'data-help': t.id,
         onclick: () => { closeMorePanel(); t.run(); },
         // role=button promises the keyboard what only a real button gives free
         onkeydown: (e) => {
@@ -12096,6 +12107,127 @@
   // TRUE of this build rather than reassuring in general: every claim below is
   // checkable in this file, and the compliance answers are worded so a teacher
   // can paste them into a DPIA conversation without us having to be in the room.
+  //
+  // Design: docs/help-system-design.md. Three opt-in layers, nothing always-on:
+  // hover the ? for an instant card about the current view; click it for the
+  // sheet; "What's this?" arms a pointing mode where hovering or TAPPING any
+  // part shows its synopsis. The board is touch — every path works by tap.
+
+  // The registry: one table (help/widgets-data.js) feeds the app AND the help
+  // site, so the words can never drift apart. Keyed by data-help attribute
+  // value; widget frames carry their type, dock tools their tool id.
+  const HELP = {};
+  if (window.SAGE_HELP) {
+    for (const w of SAGE_HELP.widgets) HELP[w.id] = [w.name, w.blurb];
+    for (const [k, v] of Object.entries(SAGE_HELP.chrome)) HELP[k] = v;
+  }
+  const helpEntryFor = (target) => {
+    const keyed = target.closest && target.closest('[data-help]');
+    if (keyed && HELP[keyed.dataset.help]) return { el: keyed, entry: HELP[keyed.dataset.help] };
+    // coverage degrades to something true, never to silence
+    const titled = target.closest && target.closest('[title]');
+    if (titled && titled.title) return { el: titled, entry: ['', titled.title] };
+    return null;
+  };
+
+  // ---- the hover card: summoned by pointing at the ? itself, never else
+  let hoverCard = null, hoverTimer = null;
+  function hideHoverCard() {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+    if (hoverCard) { hoverCard.remove(); hoverCard = null; }
+  }
+  function showHoverCard(anchor) {
+    if (helping || document.querySelector('.modal-backdrop')) return;
+    hideHoverCard();
+    const sc = !dashEl && screen();
+    const n = sc && sc.widgets ? sc.widgets.length : 0;
+    const where = dashEl ? 'Your decks' : 'A teaching screen — ' + n + (n === 1 ? ' widget' : ' widgets');
+    const line = dashEl
+      ? 'One deck per class; Start teaching puts a screen on the board. Templates, class lists and the wallpaper live in the tabs.'
+      : 'The dock adds widgets; drag to move, corner to resize, ⋮ on a frame for the rest. Everything saves itself.';
+    hoverCard = el('div', { class: 'help-hover' },
+      el('b', {}, where),
+      el('span', {}, line),
+      el('i', {}, 'Click for help & your data answers · “What’s this?” points at any tool'));
+    document.body.append(hoverCard);
+    const r = anchor.getBoundingClientRect();
+    hoverCard.style.top = r.bottom + 8 + 'px';
+    hoverCard.style.right = Math.max(10, window.innerWidth - r.right) + 'px';
+  }
+  function wireHelpHover(btn) {
+    btn.addEventListener('mouseenter', () => {
+      clearTimeout(hoverTimer);
+      hoverTimer = setTimeout(() => showHoverCard(btn), 80);
+    });
+    btn.addEventListener('mouseleave', hideHoverCard);
+    btn.addEventListener('focus', () => showHoverCard(btn));
+    btn.addEventListener('blur', hideHoverCard);
+    btn.addEventListener('pointerdown', hideHoverCard);
+  }
+
+  // ---- "What's this?": the pointing mode
+  let helping = false;
+  let helpPill = null, helpCard = null;
+  function exitWhatsThis() {
+    if (!helping) return;
+    helping = false;
+    document.body.classList.remove('helping');
+    if (helpPill) { helpPill.remove(); helpPill = null; }
+    if (helpCard) { helpCard.remove(); helpCard = null; }
+  }
+  function placeHelpCard(near) {
+    const r = near.getBoundingClientRect();
+    const cw = helpCard.offsetWidth, ch = helpCard.offsetHeight;
+    let x = Math.min(Math.max(10, r.left), window.innerWidth - cw - 10);
+    let y = r.bottom + 10;
+    if (y + ch > window.innerHeight - 10) y = Math.max(10, r.top - ch - 10);
+    helpCard.style.left = x + 'px';
+    helpCard.style.top = y + 'px';
+  }
+  function showWhatsThis(target) {
+    const hit = helpEntryFor(target);
+    if (!hit) { if (helpCard) helpCard.style.display = 'none'; return; }
+    if (!helpCard) { helpCard = el('div', { class: 'help-card' }); document.body.append(helpCard); }
+    helpCard.style.display = '';
+    helpCard.innerHTML = '';
+    if (hit.entry[0]) helpCard.append(el('b', {}, hit.entry[0]));
+    helpCard.append(el('span', {}, hit.entry[1]));
+    placeHelpCard(hit.el);
+  }
+  function enterWhatsThis() {
+    if (helping) return;
+    hideHoverCard();
+    helping = true;
+    document.body.classList.add('helping');
+    helpPill = el('div', { class: 'help-pill' },
+      el('span', {}, 'Tap anything to see what it does'),
+      el('button', { class: 'btn small' }, 'Done'));
+    document.body.append(helpPill);
+  }
+  // The shield: while armed, nothing the teacher points at may ACT — most
+  // widgets act on pointerdown, so click-only interception would let a tap
+  // drag a rekenrek or, worse, press a danger button. Capture phase, all three.
+  for (const type of ['pointerdown', 'pointerup', 'click']) {
+    document.addEventListener(type, (e) => {
+      if (!helping) return;
+      // the two sanctioned exits keep working: the pill and any ? button
+      if (e.target.closest && (e.target.closest('.help-pill') || e.target.closest('[data-help="helpBtn"]'))) {
+        if (type === 'click') exitWhatsThis();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      if (type === 'pointerdown') showWhatsThis(e.target);   // tap pins — the board path
+    }, { capture: true });
+  }
+  document.addEventListener('pointermove', (e) => {
+    if (!helping || e.pointerType !== 'mouse') return;
+    if (e.target.closest && (e.target.closest('.help-card') || e.target.closest('.help-pill'))) return;
+    showWhatsThis(e.target);                                  // hover tracks — the laptop path
+  }, { capture: true, passive: true });
   function openHelp() {
     const h4 = (t) => el('h4', {}, t);
     const p = (t) => el('p', { class: 'hint', style: 'margin:4px 0 10px;' }, t);
@@ -12106,7 +12238,21 @@
       d.append(el('summary', {}, q), ...answers.map((a) => p(a)));
       return d;
     };
-    openModal('Help', (body) => {
+    openModal('Help', (body, finish) => {
+      // ---- the two doors out of the sheet: point at things, or the full guide
+      body.append(el('div', { class: 'row', style: 'flex-wrap:wrap;gap:8px;' },
+        el('button', {
+          class: 'btn', onclick: () => { finish(); enterWhatsThis(); },
+        }, '？ What’s this? — point at anything'),
+        el('button', {
+          class: 'btn ghost',
+          onclick: () => {
+            const url = 'https://sagestage.co.uk/';
+            if (window.SagePlatform) SagePlatform.openExternal(url);
+            else window.open(url, '_blank', 'noopener');
+          },
+        }, '📖 Open the full guide'),
+      ));
       // ---- what you're looking at: this branch is the "notices" part — it
       // reads the app's actual state rather than describing the app in general
       if (dashEl) {
@@ -12162,7 +12308,8 @@
             + 'pick one (they load from Unsplash), template sources you add yourself (they load '
             + 'from your school’s address), and anything you put in the Video or Embed widgets '
             + '(YouTube or the website loads on your screen, as it would in any browser). Your '
-            + 'class data rides on none of them.'),
+            + 'class data rides on none of them. The full guide opens in your browser — a normal '
+            + 'web page visit, and only when you click it.'),
         faq('Children’s names?',
           'Class lists stay on this device and reach no one. Printed sheets are designed to '
             + 'carry no child’s name, so a sheet in a book bag discloses nothing about another '
@@ -12671,6 +12818,7 @@
     drawTools.innerHTML = '';
     const toolBtn = (id, icon, title) => el('button', {
       class: 'dt-btn' + (ink.tool === id ? ' active' : ''), title,
+      'data-help': 'draw:' + (id === 'highlighter' ? 'marker' : id),
       onclick: () => setInkTool(id),
     }, iconEl(icon));
 
@@ -12708,7 +12856,7 @@
       window.addEventListener('pointerup', up);
     });
     const shapeBtn = el('button', {
-      class: 'dt-btn' + (['line', 'arrow', 'rect', 'ellipse'].includes(ink.tool) ? ' active' : ''), title: 'Shapes & lines (L)',
+      class: 'dt-btn' + (['line', 'arrow', 'rect', 'ellipse'].includes(ink.tool) ? ' active' : ''), title: 'Shapes & lines (L)', 'data-help': 'draw:shapes',
       onclick: () => {
         // only OUR pop toggles closed; a different pop (geometry's) is in the
         // way, not a reason to show nothing — swallowing the first click here
@@ -12728,7 +12876,7 @@
 
     const geoActive = !!geo;
     const geoBtn = el('button', {
-      class: 'dt-btn' + (geoActive ? ' active' : ''), title: 'Geometry tools — ruler, protractor, set square',
+      class: 'dt-btn' + (geoActive ? ' active' : ''), title: 'Geometry tools — ruler, protractor, set square', 'data-help': 'draw:geometry',
       onclick: () => {
         // same courtesy in the other direction: close whatever is open, but
         // only skip opening if the open pop was our own
@@ -12793,10 +12941,10 @@
       el('span', { class: 'dt-sep' }),
       sizes,
       el('span', { class: 'dt-sep' }),
-      el('button', { class: 'dt-btn', title: 'Undo (⌘Z)', onclick: () => undoInk() }, iconEl('undo')),
-      el('button', { class: 'dt-btn', title: 'Redo (⌘⇧Z)', onclick: () => redoInk() }, iconEl('redo')),
+      el('button', { class: 'dt-btn', title: 'Undo (⌘Z)', 'data-help': 'draw:undo', onclick: () => undoInk() }, iconEl('undo')),
+      el('button', { class: 'dt-btn', title: 'Redo (⌘⇧Z)', 'data-help': 'draw:redo', onclick: () => redoInk() }, iconEl('redo')),
       el('button', {
-        class: 'dt-btn', title: 'Clear all ink on this screen',
+        class: 'dt-btn', title: 'Clear all ink on this screen', 'data-help': 'draw:clear',
         onclick: () => {
           const arr = screenInk(screen());
           const doClear = () => { arr.length = 0; deselect(); inkChanged(); };
@@ -13655,6 +13803,7 @@
   if ($('#helpBtn')) {
     $('#helpBtn').replaceChildren(iconEl('help'));
     $('#helpBtn').addEventListener('click', () => openHelp());
+    wireHelpHover($('#helpBtn'));
   }
   $('#fullscreenBtn').replaceChildren(iconEl('expand'));
   $('#prevScreen').replaceChildren(iconEl('chevl'));

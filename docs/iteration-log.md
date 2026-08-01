@@ -4785,3 +4785,37 @@ edge and left a dead gap in front of the nav. Stage 3 now centres the bar in the
 nav actually leaves free, measured from the live rect, and the cliff is a slope: balanced
 at 1280, naturally left-pinned by 960, untouched when wide. Checklist updated; bundle
 rebuilt with it.
+
+## 2026-08-01 (later) — the ? grows hands, and the help finds two homes
+
+Glenn's brief, almost verbatim: instant synopsis of what any part does, from any
+window, without being annoying — confident users outgrow busy help; support is
+paramount; onboarding tours are future. Brainstormed to a spec
+(docs/help-system-design.md), one decision at a time. The decisions that shaped it:
+the classroom board is TOUCH, so hover can never be the only door — everything works
+by tap; and help has two cadences, so what's true-of-this-build lives in the app and
+what changes weekly lives on the web.
+
+Built, all opt-in: the dashboard finally gets its own ? (the overlay had been
+covering the topbar's — "from any window" was false on the most newcomer-facing
+view); hovering any ? shows an instant card naming where you are; and "What's
+this?" arms a pointing mode — tap anything, see what it does, with a capture-phase
+shield on pointerdown/up/click so nothing pointed at ever ACTS. The proof test is
+pointing at Erase all local data and nothing happening. The words live in ONE table
+(help/widgets-data.js) that feeds both the app's registry and the help site's widget
+page — two hand-kept copies of the same sentences would be the copy-dist mistake
+wearing a new hat.
+
+The domain estate, decided at a Hover checkout: sagestage.co.uk is help (bought
+for the audience that types it — UK schools trust boring), sagestage.app is the
+future taster — the live in-browser demo plus workshop resources, its own spec to
+come, with the licensing tiers (free ≈ one full class: 33-pupil cap, 2 lists)
+routed to a licensing-design revision, and the mailing list decided as SOFT capture:
+download free, signup optional — the "nothing collected" story stays whole.
+
+The site itself: three pages, one nav — Widgets (all 54 on one page, filter in the
+browser, an anchor per widget), FAQ, and Your data ending in a paste-ready DPIA
+note. Published by a GitHub Action that ships help/ and nothing else (Pages serves
+only / or /docs natively, and /docs is internal design papers). Glenn's console
+holds the last two steps: Pages source → GitHub Actions, custom domain →
+sagestage.co.uk, plus four A records and a www CNAME at Hover.

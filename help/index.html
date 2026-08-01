@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sage Stage help — every widget, explained</title>
+  <meta name="description" content="What every Sage Stage widget does, in one page — with classroom moves. No accounts, no tracking, everything stays on your machine." />
+  <link rel="stylesheet" href="site.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a class="brand" href="./">🌿 Sage Stage <span>help</span></a>
+      <nav>
+        <a class="here" href="./">Widgets</a>
+        <a href="faq.html">FAQ</a>
+        <a href="data.html">Your data</a>
+      </nav>
+      <a class="get" href="https://sagestage.app">Get Sage Stage ↗</a>
+    </header>
+
+    <h1>Every widget, one page</h1>
+    <p class="sub">Grouped the way the app's dock groups them. Type to filter, or link a colleague straight to one — every widget has its own address.</p>
+
+    <div class="whatsnew"><b>New:</b> the ? button now lives on every window — hover it for an instant note on where you are, or use “What's this?” to tap any tool and see what it does.</div>
+
+    <input id="filter" type="search" placeholder="rekenrek, timer, word bank…" aria-label="Filter widgets" />
+    <p class="hint">Everything stays on this page — filtering happens in your browser, nothing is sent anywhere.</p>
+
+    <div id="entries"></div>
+
+    <footer>Sage Stage keeps everything on your machine — <a href="data.html">the straight answers</a> · <a href="https://sagestage.app">sagestage.app</a> is the place to try it.</footer>
+  </div>
+
+  <script src="widgets-data.js"></script>
+  <script>
+    (function () {
+      var box = document.getElementById('entries');
+      var cats = {};
+      SAGE_HELP.categories.forEach(function (c) {
+        var sec = document.createElement('section');
+        sec.innerHTML = '<h2 class="cat">' + c[1] + '</h2>';
+        sec.dataset.cat = c[0];
+        box.appendChild(sec);
+        cats[c[0]] = sec;
+      });
+      SAGE_HELP.widgets.forEach(function (w) {
+        var d = document.createElement('article');
+        d.className = 'entry';
+        d.id = w.id;
+        d.innerHTML = '<h3><a href="#' + w.id + '">' + w.name + '</a><span class="anchor">#' + w.id + '</span></h3>'
+          + '<p>' + w.blurb + '</p>'
+          + (w.inclass ? '<p class="inclass"><b>In class:</b> ' + w.inclass + '</p>' : '');
+        (cats[w.cat] || box).appendChild(d);
+      });
+      document.getElementById('filter').addEventListener('input', function () {
+        var q = this.value.trim().toLowerCase();
+        document.querySelectorAll('.entry').forEach(function (e) {
+          e.style.display = !q || e.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+        });
+        document.querySelectorAll('section[data-cat]').forEach(function (s) {
+          var any = [].some.call(s.querySelectorAll('.entry'), function (e) { return e.style.display !== 'none'; });
+          s.style.display = any ? '' : 'none';
+        });
+      });
+      if (location.hash) {
+        var t = document.getElementById(location.hash.slice(1));
+        if (t) t.scrollIntoView();
+      }
+    }());
+  </script>
+</body>
+</html>

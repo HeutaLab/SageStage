@@ -1,0 +1,38 @@
+# Publishes help/ — and only help/ — as the GitHub Pages site.
+# The repo root is the app; the site is the help pages. Pages can natively
+# serve only / or /docs, and /docs here holds internal design documents that
+# don't belong at sagestage.co.uk — hence this workflow instead.
+#
+# One-time setup in the repo settings (Glenn): Settings → Pages →
+# Source: "GitHub Actions", then Custom domain: sagestage.co.uk (the CNAME
+# below must match). DNS at Hover: apex A records 185.199.108.153 / .109.153 /
+# .110.153 / .111.153 and a www CNAME to heutalab.github.io.
+name: help-site
+on:
+  push:
+    branches: [main]
+    paths: ['help/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add custom-domain CNAME
+        run: echo 'sagestage.co.uk' > help/CNAME
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: help
+      - id: deployment
+        uses: actions/deploy-pages@v4
