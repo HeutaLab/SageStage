@@ -36,8 +36,11 @@ Three surfaces, one small static site (its own repo — see §3):
 
 - **`/` — the landing.** What Sage Stage is, in Glenn's register: real classrooms,
   everything stays on the machine, made by a teacher. Primary button **Try it now**
-  → `/try/`. Beside it: **Download for desktop** (§4) and the optional signup line.
-  Footer links: the help site, HeutaLab, the workshop page.
+  → `/try/` (the tour). The three "what a lesson looks like" cards are DOORS: each
+  deep-links `try/?deck=…` and builds that themed deck (§2). Beside the CTA:
+  **Download for desktop** (§4) and the optional signup line. Header and footer
+  link the help site, **heutalab.com** (the teaching-resources home carrying the
+  old Edtechlounge material), and the workshop page.
 - **`/try/` — the taster.** The full app, browser build, demo-flagged (§2).
 - **`/workshop/` — October's shelf.** Skeleton now: title, one paragraph on "The
   Human in the Middle", and a "resources appear here after the session" note. Filled
@@ -55,7 +58,7 @@ App.js gains three small **guarded** touches, inert everywhere the flag is absen
 |---|---|
 | topbar tag | ".tag" reads **"Taster — work stays in this browser"** instead of "100% local"; the dashboard's tag matches |
 | storage pressure | the data panel's headroom hint (and the storage-full shed warning) gain one line: *"The desktop app keeps decks in a real file in Documents, with daily backups and no browser limit — it's on the front page."* Shown only where the existing warnings already show — the medium's limit IS the prompt |
-| first run | instead of the starter clock, seed the **showcase deck**: screen 1 "Maths in your hands" (rekenrek, base 10, part–whole, teaching clock), screen 2 "English on the board" (story map with a few beats and bank words, word bank), screen 3 "The everyday" (timer, name picker with a sample list of first names, traffic light, agenda). Positions hand-placed; the deck is a template JSON inside demo.js, so reshaping the pitch never touches the app repo |
+| seeding | four seeds in demo.js: the three-screen **tour** (no URL param) and three themed decks the landing cards deep-link — `try/?deck=maths` ("Maths in your hands", 2 screens), `?deck=english` ("English on the board": story map + word bank, then modelled writing + sentence builder), `?deck=everyday` ("Classroom management": the running-classroom screen, then noise/rewards/groups). Fresh browser: the chosen deck is the first state and boot lands on its screen 1. Returning browser: the app **adds the requested deck if missing and opens it** — existing work is never overwritten (added 2026-08-01 after Glenn's review). Widgets build from their own `defaults()` at boot |
 
 Export everything → import on desktop already works; the landing page says so
 ("nothing you make here is hostage — export it, bring it to the real app").
