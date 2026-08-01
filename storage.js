@@ -576,12 +576,54 @@
           title: 'Sage Stage — screen',
           width: 1280,
           height: 800,
+          // same as the main window in tauri.conf.json: wry's OS-level drop
+          // interception would otherwise eat the .pptx / register drop route
+          dragDropEnabled: false,
         });
         win.once('tauri://error', (e) => console.error('window create failed', e));
       },
       openExternal(url) {
         // The system browser, not a webview with no chrome and no way back.
         try { T.opener.openUrl(url); } catch (e) { /* nothing sensible to fall back to */ }
+      },
+      // The ⛶ button. document.requestFullscreen() rejects in this webview
+      // (wry never turns WKPreferences.elementFullscreenEnabled on), so the
+      // desktop answer is the WINDOW going fullscreen — which is also the one
+      // that behaves like a mac app: its own Space, swipe to leave.
+      async toggleFullscreen() {
+        const win = T.window.getCurrentWindow();
+        const now = await win.isFullscreen();
+        await win.setFullscreen(!now);
+        return !now;
+      },
+      // Blob-anchor downloads do nothing in WKWebView, so every "export"
+      // (PDF, PNG, ZIP, word-bank set…) funnels through the native save panel
+      // instead. Returns 'saved' | 'cancelled' — a caller must only claim
+      // success on 'saved'; the old paths toasted "downloading" over a no-op.
+      async saveBlob(defaultName, blob, filterName) {
+        const ext = (defaultName.match(/\.([a-z0-9]+)$/i) || [])[1];
+        try {
+          const p = await T.dialog.save({
+            defaultPath: defaultName,
+            filters: ext ? [{ name: filterName || ext.toUpperCase(), extensions: [ext] }] : undefined,
+          });
+          if (!p) return 'cancelled';
+          const buf = new Uint8Array(await blob.arrayBuffer());
+          await T.fs.writeFile(p, buf);
+          return 'saved';
+        } catch (e) {
+          console.error('saveBlob failed', e);
+          return 'cancelled';
+        }
+      },
+      // window.print() is a no-op in this webview (wry implements no
+      // printFrame delegate); the webview plugin's own print command drives
+      // the real NSPrintOperation, and @media print CSS applies to it.
+      async printPage() {
+        try { await T.webviewWindow.getCurrentWebviewWindow().print(); return true; }
+        catch (e) { /* older API surface */ }
+        try { await T.core.invoke('plugin:webview|print'); return true; }
+        catch (e) { console.error('print failed', e); return false; }
       },
     };
   }

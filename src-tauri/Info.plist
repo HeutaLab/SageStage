@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged into the app bundle's Info.plist by tauri-build. Without these two
+     keys, macOS KILLS the process the moment the Webcam widget or the Noise
+     meter calls getUserMedia — TCC treats an unexplained capture request as a
+     violation, not a question. The strings are what the teacher reads in the
+     system prompt, so they answer the question a teacher would actually ask. -->
+<plist version="1.0">
+<dict>
+  <key>NSCameraUsageDescription</key>
+  <string>The Webcam widget shows this camera on your classroom screen (a visualiser, for example). The video stays on this computer and is never recorded or sent anywhere.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>The Noise meter widget listens to how loud the classroom is to show the level on screen. Nothing is recorded, kept, or sent anywhere.</string>
+</dict>
+</plist>

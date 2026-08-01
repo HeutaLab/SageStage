@@ -1729,7 +1729,16 @@
             paintPop();
             toast('Saved — “' + n + '” is on the paper panel from now on');
           };
-          if (typeof open !== 'function') { commitName(window.prompt('Name this paper', 'Y2 story page')); return; }
+          if (typeof open !== 'function') {
+            // same fallback rule as renamePage: the app dialog first — the
+            // desktop webview's window.prompt shows nothing and returns null
+            if (typeof D.promptDialog === 'function') {
+              D.promptDialog('Name this paper', 'Y2 story page', (v) => commitName(v), { label: 'Save' });
+              return;
+            }
+            commitName(window.prompt('Name this paper', 'Y2 story page'));
+            return;
+          }
           open('Save this paper', (bodyEl, finish) => {
             const inp = el('input', { type: 'text', class: 'text-input', maxlength: '24', placeholder: 'Y2 story page' });
             const go = () => { commitName(inp.value); finish(); };
@@ -2187,6 +2196,14 @@
         function renamePage(pg) {
           const open = D.openModal;
           if (typeof open !== 'function') {
+            // window.prompt is a no-op in the desktop webview; the app's own
+            // dialog is the fallback that actually appears
+            if (typeof D.promptDialog === 'function') {
+              D.promptDialog('Name this page', pg.name || '', (v) => {
+                pg.name = v.trim().slice(0, 28); save(); paintAll();
+              }, { label: 'Name' });
+              return;
+            }
             const v = window.prompt('Name this page', pg.name || '');
             if (v != null) { pg.name = v.trim().slice(0, 28); save(); paintAll(); }
             return;

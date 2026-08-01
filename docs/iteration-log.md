@@ -4699,3 +4699,89 @@ what flush actually does.
 recording is granted but accessibility is not, so the native window can be read and not
 clicked. What is verified is that the app boots, writes its file, and that the browser build
 is untouched.
+
+---
+
+## 2026-07-31 — the click assessment, and the desktop build stops pretending
+
+Glenn asked, before the assessment-suite work opens: a full click assessment of the
+Tauri desktop version — does every clickable thing do what it says — a checklist of
+errors, the fixes, and a ? button that answers what-am-I-looking-at, gives longer-form
+support, and holds the data-compliance FAQ a school will actually ask.
+
+The assessment ran three ways at once: five parallel read-throughs of every module,
+briefed with what wry 0.55's WKWebView genuinely cannot do (from its source, not from
+folklore); a desktop-mode harness (`.tauri-mock.js` + `.desktop-mock.html`, dot-prefixed
+and unshipped, in `.sm-mock.html`'s tradition) so the browser could drive the REAL file
+backend — all 50 widgets spawned, all 51 frame menus, the erase flow, the second-window
+flow; and the real binary booted against the dev server to prove the file seam on real
+disk. Full findings with statuses: docs/click-assessment-2026-07-31.md.
+
+The headline was not one bug but a class of them: **the desktop webview swallows whole
+API families silently.** prompt() returns null with no dialog — so every rename and
+create flow was a button that did nothing. window.print() is a no-op — every print
+button. Blob-anchor downloads do nothing — every export, several of them TOASTING
+SUCCESS over the nothing. Element fullscreen rejects — the ⛶ button. target="_blank"
+is inert — every stored rich-text link. And the bundle itself shipped without vendor/
+(copy-dist derives from index.html, which never mentions the lazy-loaded libraries or
+the woff2 files), so the built app had every export 404 and the Soft Daylight
+typefaces falling back to system fonts — doubly dead, because font-src lacked 'self'.
+
+The shape of the fix is one seam, not twenty patches: SagePlatform grew saveBlob
+(native panel + binary write), printPage (the webview plugin's real NSPrintOperation),
+toggleFullscreen (the window, not the element), and a delegated external-anchor
+handler; promptDialog joined confirmDialog as the app's own input dialog and all
+eighteen native-prompt call sites converted. CSP, Info.plist (camera/mic usage
+strings — without them TCC kills the app the moment the Webcam widget or Noise meter
+asks), dragDropEnabled:false (both windows), and copy-dist now shipping vendor/
+complete the desktop story. Every false-success toast now only claims what happened.
+
+The sweep also caught real all-builds bugs, the newest first: yesterday's story map
+orphaned its live board the moment ⚙ opened (smNorm reassigns every collection; the
+board's closures kept writing to the dead ones — the file's own setArc comment names
+the hazard, and the fix is its rule applied to the board, via refreshAllOf because the
+settings api.refresh re-enters settings and stack-overflows — found the hard way).
+An empty word bank hid the capture bar, orphaning the widget's headline loop. Base 10's
+exchange chip was dead above hundreds under a guard that predates the big charts.
+Memory pairs could wedge permanently on a reload inside the unflip window. Spin
+intervals outlived the name picker and dice. A hidden window made the PDF exporter
+build [0,0]-format pages — the guard deckThumb already carried, missing from the one
+other place that needed it.
+
+The ? button shipped with the audit rather than after it, because its compliance
+answers had to be TRUE first: the draft claimed Google Fonts is fetched from the
+internet, and the audit proved the opposite — the typefaces ship inside the app, and
+the CSP now says so. Structure: a contextual "you're looking at" notice read from live
+state, The basics as the longer-form support, and the school questions as folded
+<details> — where does data live (the real file path, read from the live backend),
+what leaves the device (the honest list: wallpapers if chosen, template sources you
+add, embedded web content — chosen, named, none carrying class data), names, camera
+and microphone, the one-line DPIA note, and the moving-machine/erase answer.
+
+**Still needing a person:** a fresh `tauri build` (CSP/Info.plist/vendor fixes only
+reach the bundle), one print to real paper, and a minute each on the custom-colour
+swatches and shade double-click on the actual classroom board.
+
+## 2026-08-01 — the release build, and two things only a person finds
+
+`tauri build` ran clean and the bundle proved the desktop fixes where they actually live:
+the camera/mic strings in the bundle's Info.plist, the repaired CSP embedded in the binary,
+vendor/ shipping (64 files where 17 went before), and the Soft Daylight typefaces rendering
+in the packaged app — the exact build where the old font-src would have quietly swapped
+them for system fonts. Boot-read of the real Documents file, clean quit through the flush
+handshake, mtime untouched.
+
+Then Glenn clicked New deck and nothing happened — because he was in YESTERDAY'S app.
+Spotlight had indexed both bundles under one name, and target/debug/bundle still held the
+pre-fix binary; his morning session and his relaunch both landed there. The stale debug
+bundle is deleted, the release app is the one Sage Stage on disk, and the standing advice
+is to keep the canonical copy in /Applications. A build artifact that answers Spotlight is
+a distribution channel whether you meant it or not.
+
+His second catch was real in every build: "the toolbar shifts left except on full screen."
+fitDock's stage 3 was a cliff — centring reserves the nav pill's width on BOTH sides, so a
+compact dock 13px over the centred budget at the default 1280 window leapt to the left
+edge and left a dead gap in front of the nav. Stage 3 now centres the bar in the span the
+nav actually leaves free, measured from the live rect, and the cliff is a slope: balanced
+at 1280, naturally left-pinned by 960, untouched when wide. Checklist updated; bundle
+rebuilt with it.

@@ -816,9 +816,17 @@
   function gtSavePack(w) {
     const g = w.props.genre;
     if (!g) return;
+    const name = gtSlug(g.name) + '.genre.json';
     const blob = new Blob([JSON.stringify(gtPackOf(g), null, 2)], { type: 'application/json' });
+    // desktop webview: a blob anchor is a silent no-op, the native panel isn't
+    if (window.SagePlatform && SagePlatform.saveBlob) {
+      SagePlatform.saveBlob(name, blob, 'Genre pack').then((r) => {
+        if (r === 'saved') D.toast('Pack saved');
+      });
+      return;
+    }
     const url = URL.createObjectURL(blob);
-    const a = D.el('a', { href: url, download: gtSlug(g.name) + '.genre.json' });
+    const a = D.el('a', { href: url, download: name });
     document.body.append(a);
     a.click();
     a.remove();
@@ -828,8 +836,10 @@
   function gtOpenPack(w, api) {
     const p = w.props;
     const fileIn = D.el('input', {
-      type: 'file', style: 'display:none;', accept: '.json,.genre,application/json',
+      type: 'file', style: 'display:none;', accept: '.json,.genre,application/json', class: 'gt-pack-in',
     });
+    // a cancelled picker never fires change, so sweep any earlier stray first
+    document.querySelectorAll('.gt-pack-in').forEach((n) => n.remove());
     fileIn.addEventListener('change', () => {
       const f = (fileIn.files || [])[0];
       fileIn.value = '';
@@ -875,6 +885,10 @@
       };
       fr.readAsText(f);
     });
+    // in the document before the click, like every sibling picker — WebKit is
+    // within its rights to ignore a click on a detached input
+    fileIn.addEventListener('change', () => fileIn.remove(), { once: true });
+    document.body.append(fileIn);
     fileIn.click();
   }
 
@@ -2045,7 +2059,21 @@
            of the widget runs on. It renders at the head of the map and the
            boxing-up faces and never on the graph. */
         function bankEl() {
-          if (!p.words.length) return null;   // an empty bank is ABSENT, never an empty frame
+          // An empty bank stays ABSENT — no empty mood frames — but the
+          // capture bar must survive it: "a word they just offered" is how the
+          // FIRST word arrives, and hiding the bar with the bank left a
+          // shapeless arc (or a bank emptied in settings) with no on-board way
+          // in at all. A locked empty bank renders nothing, as before.
+          if (!p.words.length) {
+            if (locked()) return null;
+            const only = el('div', { class: 'sm-bank' });
+            only.append(el('div', { class: 'sm-bankhead' },
+              el('span', { class: 'sm-banktitle' }, 'Words for this')));
+            only.append(captureEl());
+            only.append(el('div', { class: 'sm-banknote' },
+              'Nothing in the bank yet — capture the first word the moment a hand offers it.'));
+            return only;
+          }
           const box = el('div', { class: 'sm-bank' });
           const head = el('div', { class: 'sm-bankhead' });
           head.append(el('span', { class: 'sm-banktitle' }, 'Words for this'));
@@ -2779,6 +2807,14 @@
         // ---------------------------------------------------------- graph face
         function graphFace() {
           faceEl.append(legendEl());
+          // every line off (possible only through imported props — the legend
+          // and settings both refuse to kill the last one) leaves a grid with
+          // no dots, no data-beat targets and no way in: say so instead
+          if (!smVisible(p).length) {
+            faceEl.append(el('div', { class: 'sm-empty' },
+              'No line is on air — tap a legend chip above to switch one on.'));
+            return;
+          }
           const holder = el('div', { class: 'sm-graphhold' });
           const g = smGraphMarkup(p, { compact: false, ghosts: true, cover: p.coverGraph });
           if (!g.svg) {
@@ -2899,6 +2935,17 @@
       settings(box, w, api) {
         const p = w.props;
         smNorm(p);
+        // smNorm REASSIGNS every collection (p.beats, p.words, p.moments,
+        // p.strokes, p.tracks) — but the mounted board's closures still hold
+        // the old objects, so anything written there after the gear opened
+        // (a beat note mid-panel, a word tap without a render between) landed
+        // on orphans and vanished at the next render while the UI said saved.
+        // The same staleness rule setArc documents below, applied to the board:
+        // remount it so every closure re-captures the normalised objects.
+        // NOT api.refresh() — inside settings() that rebuilds the panel, which
+        // re-enters settings(), which is a stack overflow. refreshAllOf
+        // remounts the BOARD alone and leaves the panel out of the loop.
+        api.refreshAllOf('storymap')();
         const redraw = () => { save(); api.refresh(); };
 
         /* THE STALENESS GUARD IS MANDATORY HERE, and it is mandatory BECAUSE the

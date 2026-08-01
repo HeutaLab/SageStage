@@ -45,7 +45,16 @@ for f in $ASSETS; do
 done
 [ "$MISSING" -eq 0 ] || { echo "copy-dist: refusing to build a broken dist" >&2; exit 1; }
 
-# the bundled community templates are fetched at runtime by relative path
+# Directories fetched at RUNTIME by relative path — invisible to the
+# index.html parse above, which only sees load-time script/link tags:
+#   community/  — bundled templates (fetch of community/index.json)
+#   vendor/     — fonts.css pulls .woff2 via CSS url(), and export/print/pptx
+#                 lazily loadScript() jszip / jspdf / html2canvas / pptxgen.
+# Missing vendor/ shipped a desktop build where every export died as a 404 and
+# the bundled typefaces fell back to system fonts (found in the 2026-07-31
+# click assessment). If another runtime-fetched directory ever appears, it
+# must be added here — the index.html derivation cannot see it.
 [ -d community ] && cp -R community "$OUT/"
+[ -d vendor ] && { rm -rf "$OUT/vendor"; cp -R vendor "$OUT/"; }
 
 echo "copy-dist: $(find "$OUT" -type f | wc -l | tr -d ' ') files into $OUT/"

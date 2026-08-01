@@ -1134,7 +1134,7 @@
         if (!cands.length || angDist(a, cands[0].ang) > 40) return;
         e.preventDefault();
         drag = { hand: cands[0].hand, lastA: a, total: (p.h % 12) * 60 + p.m };
-        cv.setPointerCapture(e.pointerId);
+        try { cv.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone */ }
       });
       cv.addEventListener('pointermove', (e) => {
         if (!drag) return;
@@ -1169,6 +1169,10 @@
         const hideAnswer = g && g.kind === 'read' && g.state === 'open';
         digitalEl.textContent = fmtDigits(t, p.digital === '24');
         ampmEl.textContent = t.pm ? 'PM' : 'AM';
+        // live time owns AM/PM — the step buttons already disable for live,
+        // and a visibly enabled button that ignores the tap reads as broken
+        ampmEl.disabled = !!p.live;
+        ampmEl.title = p.live ? 'The live clock sets AM / PM itself' : 'Switch AM / PM';
         readout.style.display = p.digital === 'off' || hideAnswer ? 'none' : '';
         const wtxt = lang().words(t.h, t.m);
         wordsEl.textContent = wtxt || fmtDigits(t, false);
@@ -1230,7 +1234,7 @@
         checkRow('Hour hand', w.props.showHour, (v) => { w.props.showHour = v; api.refresh(); }),
         checkRow('Minute hand', w.props.showMinute, (v) => { w.props.showMinute = v; api.refresh(); }),
         checkRow('Second hand', w.props.showSecond, (v) => { w.props.showSecond = v; api.refresh(); }),
-        settingRow('Snap minutes', selectInput([['1', 'To the minute'], ['5', '5 minutes'], ['15', '15 minutes'], ['30', '30 minutes'], ['45', '45 minutes'], ['60', '1 hour']], String(w.props.snap || 1), (v) => { w.props.snap = +v; save(); })),
+        settingRow('Snap minutes', selectInput([['1', 'To the minute'], ['5', '5 minutes'], ['15', '15 minutes'], ['30', '30 minutes'], ['45', '45 minutes'], ['60', '1 hour']], String(w.props.snap || 1), (v) => { w.props.snap = +v; api.refresh(); })),
         checkRow('Quick teacher bar on the widget', w.props.quick !== false, (v) => { w.props.quick = v; api.refresh(); }),
         checkRow('Live clock (follows real time)', w.props.live, (v) => { w.props.live = v; api.refresh(); }),
         checkRow('Teaching starters (challenges)', w.props.gameOn, (v) => { w.props.gameOn = v; api.refresh(); }),
@@ -3123,7 +3127,10 @@
 
       // a ten-of-a-kind converges into one of the next place up — the exchange
       function exchange(d) {
-        if (animating || p.covered || d >= 3) return;
+        // d >= 6 is an index guard only (nothing above millions). The old
+        // `d >= 3` predated the big charts: their Th→TTh and up chips rendered
+        // and did nothing — the column checks below are the real gate.
+        if (animating || p.covered || d >= 6) return;
         if (dnCount(p.items, d) < 10) return;
         const cols = colsOf();
         if (cols.length && !cols.includes(d + 1)) return; // no column to land in on this chart
@@ -4865,7 +4872,10 @@
             title: 'Switch the line',
             onclick: () => applyPreset(id, props),
           }, label))),
-          tq(`Labels · ${p.labels}`, 'Cycle tick labels: all, ends only, none', p.labels !== 'none' && !p.blank, () => {
+          // a blank line draws no labels at all, so the cycle button would
+          // click through three states with nothing changing — hidden, like
+          // the Fractions chip when there are no fractions to swap to
+          p.blank ? null : tq(`Labels · ${p.labels}`, 'Cycle tick labels: all, ends only, none', p.labels !== 'none', () => {
             p.labels = { all: 'ends', ends: 'none', none: 'all' }[p.labels] || 'all';
             commit();
           }),
@@ -5442,8 +5452,16 @@
       const setVal = (s, v) => { if (Number.isFinite(v)) s.v = clamp(Math.round(v * 100) / 100, 0, 9999); };
       // typing a new whole keeps the other parts and moves the last one
       const setWhole = (v) => {
+        if (!Number.isFinite(v)) return;
+        // with every part deleted the whole circle is still on the mat and
+        // still editable — a typed whole then births the first part rather
+        // than dying in silence ("the last part adjusts" needs a last part)
+        if (!p.parts.length) {
+          p.parts.push({ id: uid(), v: clamp(Math.round(v * 100) / 100, 0, 9999), c: 0 });
+          return;
+        }
         const last = p.parts[p.parts.length - 1];
-        if (last && Number.isFinite(v)) setVal(last, v - (total() - last.v));
+        setVal(last, v - (total() - last.v));
       };
       // long numbers and labels shrink to stay inside their circle
       const fs = (text, d) => clamp(Math.min(Math.round(d * 0.36), Math.floor((d * 1.5) / String(text).length)), 12, 88);
@@ -6112,15 +6130,22 @@
       });
 
       const linkBtn = tbBtn(iconEl('chain'), 'Link', () => {
-        const raw = prompt('Link URL:', 'https://');
-        if (!raw || raw === 'https://') return;
-        // the sink cleans a stored href on the next mount; this stops a
-        // javascript: link being live and tappable in the meantime
-        const url = SageSanitize.url(raw);
-        if (!url) { toast('⚠️ Links need to start with https:// (or mailto:).'); return; }
-        ed.focus();
-        document.execCommand('createLink', false, url);
-        queueSave();
+        // native prompt() kept the editor's selection alive because it never
+        // touched the DOM; the dialog's input steals focus, so the selection
+        // must be carried across by hand or createLink has nothing to wrap
+        const sel = window.getSelection();
+        const range = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+        promptDialog('Link URL:', 'https://', (raw) => {
+          if (!raw || raw === 'https://') return;
+          // the sink cleans a stored href on the next mount; this stops a
+          // javascript: link being live and tappable in the meantime
+          const url = SageSanitize.url(raw);
+          if (!url) { toast('⚠️ Links need to start with https:// (or mailto:).'); return; }
+          ed.focus();
+          if (range) { sel.removeAllRanges(); sel.addRange(range); }
+          document.execCommand('createLink', false, url);
+          queueSave();
+        });
       });
 
       const toolbar = el('div', { class: 'text-toolbar' },
@@ -6221,6 +6246,7 @@
       });
 
       let rolling = false;
+      let spinTimer = null;
       pickBtn.addEventListener('click', () => {
         if (rolling) return;
         const names = (state.lists[w.props.list] || []).filter(Boolean);
@@ -6233,10 +6259,10 @@
         rolling = true;
         result.classList.add('rolling');
         let n = 0;
-        const spin = setInterval(() => {
+        spinTimer = setInterval(() => {
           result.textContent = names[Math.floor(Math.random() * names.length)];
           if (++n > 14) {
-            clearInterval(spin);
+            clearInterval(spinTimer);
             const winner = pool[Math.floor(Math.random() * pool.length)];
             if (w.props.remove) w.props.pool = pool.filter((x) => x !== winner);
             result.textContent = winner;
@@ -6247,7 +6273,9 @@
           }
         }, 70);
       });
-      return () => unfit();
+      // a spin left running when the widget closes would keep writing a winner
+      // into props the teacher just removed — stop it with the mount
+      return () => { unfit(); clearInterval(spinTimer); };
     },
     settings(box, w, api) {
       box.append(
@@ -6354,14 +6382,15 @@
         total.style.display = w.props.showTotal && w.props.count > 1 ? '' : 'none';
         total.textContent = 'Total: ' + w.props.values.reduce((a, b) => a + b, 0);
       };
+      let rollTimer = null;
       function roll() {
         if (rolling) return;
         rolling = true;
         let n = 0;
-        const iv = setInterval(() => {
+        rollTimer = setInterval(() => {
           [...row.children].forEach((d) => setDie(d, 1 + Math.floor(Math.random() * 6)));
           if (++n > 9) {
-            clearInterval(iv);
+            clearInterval(rollTimer);
             w.props.values = [...row.children].map((d) => +d.dataset.value);
             paintTotal();
             rolling = false;
@@ -6373,7 +6402,10 @@
       ro.observe(row);
       paint();
       this._paint = paint;
-      return () => ro.disconnect();
+      // clearing the roll matters as much as the observer: a die closed
+      // mid-roll kept writing to detached nodes and then save()d a widget
+      // the teacher had already removed
+      return () => { ro.disconnect(); clearInterval(rollTimer); };
     },
     settings(box, w, api) {
       box.append(
@@ -7479,6 +7511,11 @@
         w.props.moves = 0;
       };
       if (!Array.isArray(w.props.cards) || w.props.cards.length !== w.props.pairs.length * 2 || w.props.pairKey !== key) resetCards();
+      // A reload or remount inside the 850ms unflip window used to strand two
+      // non-matching cards open forever (the timer that would close them died
+      // with the old mount, and choose() then never saw exactly two open).
+      // A fresh mount simply forgets the half-flip.
+      for (const c of w.props.cards) if (c.open && !c.matched) c.open = false;
       const wrap = el('div', { class: 'memory-game' });
       body.append(wrap);
       let locked = false;
@@ -7933,6 +7970,9 @@
   WIDGETS.sketch = {
     title: 'Draw pad', icon: 'sketchpad', accent: '#fbcfe8', w: 440, h: 330,
     defaults: () => ({ strokes: [], pattern: 'blank', color: '#0f172a', size: 4, tool: 'pen', shape: 'line', alpha: 0.4, locked: false }),
+    // the widget the closing-work comment was written about finally says so —
+    // without this it leant on the 400-char JSON fallback alone
+    hasWork: (w) => Array.isArray(w.props.strokes) && w.props.strokes.length > 0,
     mount(body, w) {
       if (!w.props.shape) w.props.shape = SKETCH_SHAPE_IDS.includes(w.props.tool) ? w.props.tool : 'line';
       if (!w.props.alpha) w.props.alpha = 0.4;
@@ -8315,35 +8355,104 @@
         toast('Pad copied to a new screen (next slide)');
       };
       const saveTemplate = () => {
-        const name = prompt('Template name:', 'My pad');
-        if (!name) return;
-        if (!Array.isArray(state.padTemplates)) state.padTemplates = [];
-        state.padTemplates.push({
-          name: name.trim().slice(0, 40) || 'Pad',
-          pattern: w.props.pattern,
-          strokes: JSON.parse(JSON.stringify(w.props.strokes)),
-        });
-        save();
-        toast('Saved — find it under Change paper');
+        promptDialog('Template name:', 'My pad', (name) => {
+          if (!name.trim()) return;
+          if (!Array.isArray(state.padTemplates)) state.padTemplates = [];
+          state.padTemplates.push({
+            name: name.trim().slice(0, 40) || 'Pad',
+            pattern: w.props.pattern,
+            strokes: JSON.parse(JSON.stringify(w.props.strokes)),
+          });
+          save();
+          toast('Saved — find it under Change paper');
+        }, { label: 'Save' });
       };
-      const renderImage = () => {
+      // The paper is normally a CSS background on `wrap`, so a naive canvas
+      // export shipped the ink on bare white — a handwriting guide without its
+      // lines is not the sheet the class saw. Painted here in canvas terms,
+      // matching SKETCH_PAPERS stop-for-stop (the SVG papers draw themselves).
+      const paintPaper = async (c, iw, ih) => {
+        const key = w.props.pattern;
+        const p = SKETCH_PAPERS[key] || SKETCH_PAPERS.blank;
+        const svg = (p.css || '').match(/url\("(data:image\/svg\+xml,[^"]+)"\)/);
+        if (svg) {
+          await new Promise((res) => {
+            const img = new Image();
+            img.onload = () => {
+              let dw = iw, dh = ih, dx = 0, dy = 0;
+              if (p.size === 'contain') {
+                const k = Math.min(iw / img.width, ih / img.height);
+                dw = img.width * k; dh = img.height * k;
+                dx = (iw - dw) / 2; dy = (ih - dh) / 2;
+              } else if (/px/.test(p.size || '')) {           // '100% 72px'
+                dh = parseFloat(p.size.split(' ')[1]);
+                dy = (ih - dh) / 2;
+              }
+              c.drawImage(img, dx, dy, dw, dh);
+              res();
+            };
+            img.onerror = () => res();                        // paper missing beats no export
+            img.src = svg[1];
+          });
+          return;
+        }
+        const hlines = (offsets, cycle, color) => {
+          c.fillStyle = color;
+          for (let y = 0; y < ih; y += cycle) for (const o of offsets) c.fillRect(0, y + o, iw, 1);
+        };
+        const vlines = (gap, color) => {
+          c.fillStyle = color;
+          for (let x = 0; x < iw; x += gap) c.fillRect(x, 0, 1, ih);
+        };
+        const diag = (deg, gap, color) => {
+          // one stripe family of a repeating-linear-gradient(deg): lines
+          // perpendicular to the gradient axis, `gap` apart along it
+          c.save();
+          c.translate(iw / 2, ih / 2);
+          c.rotate((deg * Math.PI) / 180);
+          c.fillStyle = color;
+          const R = Math.hypot(iw, ih) / 2 + gap;
+          for (let y = -R; y < R; y += gap) c.fillRect(-R, y, R * 2, 1);
+          c.restore();
+        };
+        if (key === 'ruled') hlines([27], 28, 'rgba(37,99,235,0.28)');
+        else if (key === 'writing') { hlines([0, 36], 58, 'rgba(37,99,235,0.5)'); hlines([18], 58, 'rgba(220,38,38,0.45)'); }
+        else if (key === 'grid') { hlines([0], 24, 'rgba(37,99,235,0.14)'); vlines(24, 'rgba(37,99,235,0.14)'); }
+        else if (key === 'dots') {
+          c.fillStyle = 'rgba(37,99,235,0.4)';
+          for (let y = 12; y < ih; y += 24) for (let x = 12; x < iw; x += 24) {
+            c.beginPath(); c.arc(x, y, 1.5, 0, Math.PI * 2); c.fill();
+          }
+        } else if (key === 'iso') { hlines([0], 22, PAPER_SOFT); diag(60, 22, PAPER_SOFT); diag(120, 22, PAPER_SOFT); }
+        else if (key === 'coord') {
+          hlines([0], 24, PAPER_SOFT); vlines(24, PAPER_SOFT);
+          c.fillStyle = 'rgba(51,65,85,0.55)';
+          c.fillRect(0, ih / 2 - 1, iw, 2); c.fillRect(iw / 2 - 1, 0, 2, ih);
+        } else if (key === 'music') hlines([20, 30, 40, 50, 60], 92, '#94a3b8');
+      };
+      const renderImage = async () => {
         const iw = Math.max(1, wrap.clientWidth), ih = Math.max(1, wrap.clientHeight);
-        const inkCv = document.createElement('canvas');
-        inkCv.width = iw * 2; inkCv.height = ih * 2;
-        const ic = inkCv.getContext('2d');
-        ic.scale(2, 2);
-        for (const s of w.props.strokes) paintStroke(ic, s);
         const out = document.createElement('canvas');
-        out.width = inkCv.width; out.height = inkCv.height;
+        out.width = iw * 2; out.height = ih * 2;
         const oc = out.getContext('2d');
         oc.fillStyle = '#ffffff';
         oc.fillRect(0, 0, out.width, out.height);
-        oc.drawImage(inkCv, 0, 0);
+        oc.scale(2, 2);
+        await paintPaper(oc, iw, ih);
+        for (const s of w.props.strokes) paintStroke(oc, s);
         return out;
       };
       const exportPNG = () => {
-        renderImage().toBlob(async (b) => {
+        renderImage().then((cv) => cv.toBlob(async (b) => {
           const name = 'draw-pad-' + new Date().toISOString().slice(0, 10) + '.png';
+          // Desktop first: blob anchors do nothing in the webview, and the old
+          // path toasted "downloading" over that nothing. The native panel
+          // both works and shows where the file went.
+          if (window.SagePlatform && SagePlatform.saveBlob) {
+            const r = await SagePlatform.saveBlob(name, b, 'PNG image');
+            if (r === 'saved') toast('🖼 Saved');
+            return;
+          }
           // the native save dialog shows exactly where the file is going
           if (window.showSaveFilePicker) {
             try {
@@ -8365,17 +8474,17 @@
           a.click();
           setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
           toast('🖼 “' + name + '” is downloading to your Downloads folder');
-        });
+        }));
       };
       const copyPNG = () => {
-        renderImage().toBlob(async (b) => {
+        renderImage().then((cv) => cv.toBlob(async (b) => {
           try {
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]);
             toast('🖼 Image copied to the clipboard — paste it into any document (⌘V)');
           } catch (err) {
-            toast('Clipboard blocked by the browser — use Export as PNG instead');
+            toast('Clipboard blocked — use Export as PNG instead');
           }
-        });
+        }));
       };
       const openPaperPop = () => openPop('paper', (p) => {
         p.classList.add('sketch-paper-pop');
@@ -8638,7 +8747,10 @@
         e.stopPropagation();
         activatePad();
         if (w.props.locked) return;
-        cv.setPointerCapture(e.pointerId);
+        // same belt-and-braces as modelwrite and the annotation layer: a touch
+        // pointer can be gone again before the handler runs, and capture is an
+        // optimisation here, not a requirement
+        try { cv.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone */ }
         closePop();
         if (editor) { commitEditor(); return; }
         const [x, y] = pos(e);
@@ -8966,10 +9078,12 @@
     // (the panel flashes on every checkbox) and loses the scroll position
     if (force && settingsPanel && settingsFor === w.id) {
       const old = settingsPanel.querySelector('.spanel-body');
-      const keep = old.scrollTop;
-      old.replaceWith(body);
-      body.scrollTop = keep;
-      return;
+      if (old) {
+        const keep = old.scrollTop;
+        old.replaceWith(body);
+        body.scrollTop = keep;
+        return;
+      }
     }
     closeSettingsPanel();
     settingsFor = w.id;
@@ -9014,6 +9128,9 @@
 
   function addWidget(type) {
     const def = WIDGETS[type];
+    // a template or import can name a widget this build doesn't have — say so
+    // rather than throw halfway through applying it
+    if (!def) { toast('⚠️ This build doesn’t have a “' + type + '” widget — skipped it.'); return null; }
     const scr = screen();
     const n = scr.widgets.length;
     const w = {
@@ -9246,7 +9363,7 @@
     if (!inst) return;
     bringFront(w);
     const ov = el('div', { class: 'spotlight-overlay', style: 'z-index:' + (w.z - 1) + ';' },
-      el('div', { class: 'spotlight-hint' }, 'Click anywhere to end the spotlight'));
+      el('div', { class: 'spotlight-hint' }, 'Click outside the widget to end the spotlight'));
     ov.addEventListener('pointerdown', () => ov.remove());
     stage.append(ov);
   }
@@ -9313,6 +9430,10 @@
     if (sketchKeyHook && sketchKeyHook(e)) return;
     if (e.key === 'Escape') {
       if (dashEl && !modal) { closeDashboard(); return; }
+      // the shades sit above the dock, so without this the only exits were
+      // re-finding the tool in More or dragging all four tabs home — the
+      // spotlight's Esc parity was always the intent
+      if (shadesEl) { toggleShades(); return; }
       closeSettingsPanel(); closeWidgetMenu(); closeDockPanels(); return;
     }
     if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
@@ -9611,6 +9732,8 @@
     // with a degenerate aspect ratio or NaN widget positions
     const sw = window.innerWidth || 1280, sh = window.innerHeight || 720;
     thumb.style.aspectRatio = sw + ' / ' + sh;
+    // an imported deck can arrive with zero screens; a plain card beats a throw
+    if (!s) { thumb.style.background = '#eef2f1'; return thumb; }
     const bg = s.background;
     if (bg.type === 'image') {
       thumb.style.background = '#fff';
@@ -9656,10 +9779,10 @@
     const s = ss[i];
     deckMenu = el('div', { class: 'deck-menu', 'data-idx': i },
       item('text', 'Rename', () => {
-        const name = prompt('Screen name:', s.name || '');
-        if (name === null) return;
-        s.name = name.trim();
-        save(); renderDeck(); renderScreen();
+        promptDialog('Screen name:', s.name || '', (name) => {
+          s.name = name.trim();
+          save(); renderDeck(); renderScreen();
+        }, { label: 'Rename' });
       }),
       item('copy', 'Duplicate', () => {
         const copy = JSON.parse(JSON.stringify(s));
@@ -9670,20 +9793,23 @@
         save();
         setCurrent(i + 1);
       }),
-      item('tofront', 'Move up', () => {
+      // at the ends these render disabled instead of silently doing nothing —
+      // the deck-up/deck-down classes never had CSS, so "enabled but inert"
+      // was all a teacher ever saw on screen 1
+      Object.assign(item('tofront', 'Move up', () => {
         if (i === 0) return;
         const cur = screen().id;
         [ss[i - 1], ss[i]] = [ss[i], ss[i - 1]];
         if (!viewId) viewDeck().current = ss.findIndex((x) => x.id === cur);
         save(); renderScreen();
-      }, 'deck-up'),
-      item('toback', 'Move down', () => {
+      }, 'deck-up'), { disabled: i === 0 }),
+      Object.assign(item('toback', 'Move down', () => {
         if (i === ss.length - 1) return;
         const cur = screen().id;
         [ss[i], ss[i + 1]] = [ss[i + 1], ss[i]];
         if (!viewId) viewDeck().current = ss.findIndex((x) => x.id === cur);
         save(); renderScreen();
-      }, 'deck-down'),
+      }, 'deck-down'), { disabled: i === ss.length - 1 }),
       el('a', {
         class: 'deck-menu-item', target: '_blank',
         href: location.href.split('#')[0] + '#s=' + s.id,
@@ -10141,12 +10267,12 @@
   }
 
   function newDeck() {
-    const name = prompt('Name for the new deck (e.g. "Year 4R — Math"):', '');
-    if (name === null) return;
-    const d = blankDeck(name.trim() || 'New deck');
-    state.decks.push(d);
-    save();
-    openDeck(d.id);
+    promptDialog('Name for the new deck:', '', (name) => {
+      const d = blankDeck(name.trim() || 'New deck');
+      state.decks.push(d);
+      save();
+      openDeck(d.id);
+    }, { label: 'Create', placeholder: 'e.g. "Year 4R — Math"' });
   }
 
   // a parsed PowerPoint (pptx-import.js) arrives as ready-made screen objects;
@@ -10187,7 +10313,8 @@
     }, iconEl(icon), label);
     dashMenu = el('div', { class: 'deck-menu', 'data-deck': deck.id, onclick: (e) => e.stopPropagation() },
       item('expand', 'Open', () => openDeck(deck.id)),
-      el('a', {
+      // a zero-screen deck (possible via import) has no screen to pin a tab to
+      !deck.screens.length ? null : el('a', {
         class: 'deck-menu-item', target: '_blank',
         href: location.href.split('#')[0] + '#s=' + deck.screens[clamp(deck.current, 0, deck.screens.length - 1)].id,
         onclick: (e) => {
@@ -10199,10 +10326,10 @@
         },
       }, iconEl('screens'), 'Open in new tab'),
       item('text', 'Rename', () => {
-        const name = prompt('Deck name:', deck.name || '');
-        if (name === null) return;
-        deck.name = name.trim() || 'New deck';
-        save(); paintBrand(); renderDashboard();
+        promptDialog('Deck name:', deck.name || '', (name) => {
+          deck.name = name.trim() || 'New deck';
+          save(); paintBrand(); renderDashboard();
+        }, { label: 'Rename' });
       }),
       item('copy', 'Duplicate', () => {
         const copy = JSON.parse(JSON.stringify(deck));
@@ -10224,7 +10351,16 @@
           ? navigator.clipboard.writeText(json) : Promise.reject();
         copyPromise
           .then(() => toast('Template JSON copied — share the file or add it to your school bank'))
-          .catch(() => { prompt('Copy this template JSON:', json); });
+          .catch(() => {
+            // no native prompt on the desktop, and a one-line input can't hold
+            // a whole template anyway — a selectable textarea does the job
+            openModal('Copy this template JSON', (body) => {
+              const ta = el('textarea', { class: 'text-input', readonly: '', style: 'width:100%;height:220px;box-sizing:border-box;font-family:monospace;font-size:12px;' });
+              ta.value = json;
+              body.append(el('p', {}, 'Select it all (⌘A) and copy (⌘C):'), ta);
+              ta.focus(); ta.select();
+            });
+          });
       }),
       window.SagePptxImport ? item('screens', 'Import slides…', () => SagePptxImport.openDialog(null, deck.id)) : null,
       window.SageExport ? item('save', 'Export deck…', () => {
@@ -10247,10 +10383,10 @@
         });
       }),
       item('text', 'Set subject…', () => {
-        const s = prompt('Subject tag (e.g. "Math", "Period 3"):', deck.subject || '');
-        if (s === null) return;
-        deck.subject = s.trim();
-        save(); renderDashboard();
+        promptDialog('Subject tag:', deck.subject || '', (s) => {
+          deck.subject = s.trim();
+          save(); renderDashboard();
+        }, { label: 'Set', placeholder: 'e.g. "Math", "Period 3"' });
       }),
       item('groups', 'Set year group…', () => {
         openModal('Year group for "' + (deck.name || 'deck') + '"', (body, finish) => {
@@ -10333,8 +10469,15 @@
       grid.append(card);
     }
     if (!decks.length) {
-      grid.append(el('button', { class: 'dash-card dash-new', onclick: () => newDeck() },
-        el('span', { class: 'deck-add-plus' }, iconEl('plus')), 'New deck'));
+      // an empty SEARCH answers "nothing matched", not "make a new deck" —
+      // the tile only belongs where there genuinely are no decks yet
+      if (dashQuery.trim()) {
+        grid.append(el('div', { class: 'hint', style: 'padding:18px 6px;' },
+          'No deck matches “' + dashQuery.trim() + '”.'));
+      } else {
+        grid.append(el('button', { class: 'dash-card dash-new', onclick: () => newDeck() },
+          el('span', { class: 'deck-add-plus' }, iconEl('plus')), 'New deck'));
+      }
     }
   }
 
@@ -10354,7 +10497,7 @@
           },
         }, '×')));
       }
-      const addInput = el('input', { class: 'name-add', placeholder: '＋ Add name…' });
+      const addInput = el('input', { class: 'name-add', placeholder: '＋ Add name…', 'data-list-add': name });
       // a single-line input flattens a pasted register into one very long name,
       // which is what sent a teacher looking for the import button in the first
       // place — so a paste with any shape to it goes through the same reader the
@@ -10374,8 +10517,18 @@
         if (e.key !== 'Enter') return;
         const v = addInput.value.trim();
         if (!v) return;
+        // mirror the paste route's manners: repeats are dropped, not doubled
+        if (state.lists[name].some((x) => x.toLowerCase() === v.toLowerCase())) {
+          toast('“' + v + '” is already on this list.');
+          addInput.value = '';
+          return;
+        }
         state.lists[name].push(v);
         save(); renderDashboard();
+        // renderDashboard rebuilt the card, and with it this input — without a
+        // refocus a 30-child register means clicking the field 30 times
+        const again = document.querySelector('[data-list-add="' + CSS.escape(name) + '"]');
+        if (again) again.focus();
       });
       const kebab = el('button', {
         class: 'deck-kebab list-kebab', title: 'Class list options',
@@ -10390,7 +10543,9 @@
           dashMenu = el('div', { class: 'deck-menu', 'data-list': name, onclick: (ev) => ev.stopPropagation() },
             item('list', 'Import names…', () => openListManager(renderDashboard, name)),
             item('text', 'Rename', () => {
-              if (renameListTo(name, prompt('Class list name:', name))) renderDashboard();
+              promptDialog('Class list name:', name, (v) => {
+                if (renameListTo(name, v)) renderDashboard();
+              }, { label: 'Rename' });
             }),
             item('trash', 'Delete list', () => {
               confirmDialog(`Delete list "${name}"?`, () => {
@@ -10414,7 +10569,9 @@
     }
     grid.append(el('button', {
       class: 'dash-card dash-new', onclick: () => {
-        if (createList(prompt('New class list name (e.g. "Year 4R"):'))) renderDashboard();
+        promptDialog('New class list name:', '', (v) => {
+          if (createList(v)) renderDashboard();
+        }, { label: 'Create', placeholder: 'e.g. "Year 4R"' });
       },
     }, el('span', { class: 'deck-add-plus' }, iconEl('plus')), 'New list'));
   }
@@ -10573,10 +10730,11 @@
       el('button', {
         class: 'btn ghost',
         onclick: () => {
-          const url = prompt('Address of a template folder (e.g. your school\'s GitHub Pages URL):');
-          if (!url || !url.trim()) return;
-          state.templateSources.push(url.trim());
-          save(); renderDashboard();
+          promptDialog('Address of a template folder:', '', (url) => {
+            if (!url.trim()) return;
+            state.templateSources.push(url.trim());
+            save(); renderDashboard();
+          }, { label: 'Add', placeholder: 'e.g. your school’s GitHub Pages URL' });
         },
       }, '＋ Add a school source…')));
     filterCards();
@@ -10815,8 +10973,10 @@
           if (Object.keys(state.lists).length) { openListManager(renderDashboard); return; }
           // nothing to paste into yet: name the class first, or the textarea
           // would quietly swallow everything typed into it
-          const key = createList(prompt('New class list name (e.g. "Year 4R"):'));
-          if (key) openListManager(renderDashboard, key);
+          promptDialog('New class list name:', '', (v) => {
+            const key = createList(v);
+            if (key) openListManager(renderDashboard, key);
+          }, { label: 'Create', placeholder: 'e.g. "Year 4R"' });
         }));
     }
     page.append(el('div', { class: 'dash-section-head' },
@@ -11280,8 +11440,20 @@
     const tb = $('#toolbar');
     if (tb.classList.contains('hidden')) return;
     tb.classList.remove('compact', 'dock-left');
+    tb.style.removeProperty('--dock-left');
     if (tb.scrollWidth > tb.clientWidth + 1) tb.classList.add('compact');
-    if (tb.scrollWidth > tb.clientWidth + 1) tb.classList.add('dock-left');
+    if (tb.scrollWidth > tb.clientWidth + 1) {
+      tb.classList.add('dock-left');
+      // Stage 3 means CENTRED couldn't clear the nav pill — but hard-left was
+      // a cliff (13px over budget jumped 100+px and left a dead gap by the
+      // nav). Centre the bar in the span that IS free: from the 16px margin
+      // to 12px shy of the nav's real left edge, measured, not assumed.
+      const nav = $('#screenNav');
+      const navLeft = nav ? nav.getBoundingClientRect().left : window.innerWidth;
+      const free = Math.max(0, navLeft - 12 - 16);
+      const w = Math.min(tb.scrollWidth, free);
+      tb.style.setProperty('--dock-left', Math.round(16 + Math.max(0, (free - w) / 2)) + 'px');
+    }
   }
   let fitDockTimer = null;
   window.addEventListener('resize', () => {
@@ -11326,7 +11498,14 @@
       .sort((a, b) => a.label.localeCompare(b.label, 'en', { numeric: true, sensitivity: 'base' }));
     for (const t of inCat) {
       const pinned = state.pinned.includes(t.id);
-      grid.append(el('div', { class: 'tool-cell', role: 'button', tabindex: '0', style: '--acc:' + t.accent, onclick: () => { closeMorePanel(); t.run(); } },
+      grid.append(el('div', {
+        class: 'tool-cell', role: 'button', tabindex: '0', style: '--acc:' + t.accent,
+        onclick: () => { closeMorePanel(); t.run(); },
+        // role=button promises the keyboard what only a real button gives free
+        onkeydown: (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); closeMorePanel(); t.run(); }
+        },
+      },
         el('span', { class: 'glyph' }, iconEl(t.glyph)),
         el('span', { class: 'label' }, t.label),
         el('button', {
@@ -11415,7 +11594,10 @@
     closePanels();
     const body = buildBgPicker(
       () => screen().background,
-      (bg) => { screen().background = bg; save(); applyBackground(); },
+      (bg) => {
+        screen().background = bg; save(); applyBackground();
+        if (deckPanel) renderDeck();   // the sidebar thumbnail paints this backdrop
+      },
     );
     bgPanel = el('aside', { class: 'bg-drawer' },
       el('div', { class: 'bg-drawer-head' },
@@ -11495,6 +11677,42 @@
     document.body.append(backdrop);
   }
 
+  // window.prompt's replacement, in confirmDialog's mould. It exists because
+  // the desktop webview has NO native prompt — wry implements none of the
+  // WKUIDelegate JS-dialog methods, so prompt() returns null instantly and a
+  // "Rename" that leans on it is a button that does nothing. Same story in
+  // fullscreen/kiosk browsers, which is why confirmDialog already existed.
+  // onSubmit(value) fires only on OK/Enter — never with null; cancel is Esc,
+  // the backdrop, or the Cancel button, and simply closes.
+  function promptDialog(message, initial, onSubmit, opts) {
+    const { label = 'OK', placeholder = '', hint = null } = opts || {};
+    const backdrop = el('div', {
+      class: 'modal-backdrop',
+      onclick: (e) => { if (e.target === backdrop) close(); },
+    });
+    const close = () => backdrop.remove();
+    const input = el('input', {
+      class: 'text-input', type: 'text', value: initial == null ? '' : String(initial), placeholder,
+      style: 'width:100%;box-sizing:border-box;',
+      onkeydown: (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        else if (e.key === 'Escape') { e.stopPropagation(); close(); }
+      },
+    });
+    const submit = () => { const v = input.value; close(); onSubmit(v); };
+    backdrop.append(el('div', { class: 'modal confirm-modal' },
+      el('div', { class: 'modal-body' },
+        el('p', {}, message),
+        input,
+        hint ? el('div', { class: 'hint' }, hint) : null,
+        el('div', { class: 'row', style: 'justify-content:flex-end;flex-wrap:wrap;' },
+          el('button', { class: 'btn ghost', onclick: () => close() }, 'Cancel'),
+          el('button', { class: 'btn', onclick: () => submit() }, label)))));
+    document.body.append(backdrop);
+    input.focus();
+    input.select();
+  }
+
   // ------------------------------------------------- snapshots: the way back
   // The list a teacher reaches for on Thursday when Tuesday has gone. Grouped
   // by the thing the copy is OF, newest first, because "my Year 2 writing" is
@@ -11552,6 +11770,9 @@
 
   function restoreSnapshot(rec, finish) {
     SageSnapshots.get(rec.id).then((full) => {
+      return handleSnapshot(full);
+    }).catch(() => toast('That copy could not be read — the snapshot store didn’t answer.'));
+    function handleSnapshot(full) {
       if (!full || !full.w) { toast('That copy could not be read.'); return; }
       const when = snapWhen(full.at);
       if (full.kind === 'deck') {
@@ -11608,7 +11829,7 @@
         save(); renderScreen(); if (finish) finish();
         toast('Put back — ' + full.title + ' as it was ' + when);
       }, { label: 'Put it back', danger: false });
-    });
+    }
   }
   // findWidgetById only looks at the deck this tab is viewing; a snapshot can
   // be of a widget on any deck, so this one searches everywhere.
@@ -11649,10 +11870,13 @@
      editor opens on that list with the names in it, the count above them and
      Undo paste beside it. Guessing silently would be the version to avoid. */
   function dropNameFile(file) {
-    let target = deckDefaultList();
+    const target = deckDefaultList();
     if (!target) {
-      target = createList(prompt('Which class is this? (e.g. "Year 4R")'));
-      if (!target) return;
+      promptDialog('Which class is this?', '', (v) => {
+        const made = createList(v);
+        if (made) openListManager(() => { if (dashEl) renderDashboard(); }, made, file);
+      }, { label: 'Create', placeholder: 'e.g. "Year 4R"' });
+      return;
     }
     openListManager(() => { if (dashEl) renderDashboard(); }, target, file);
   }
@@ -11785,10 +12009,12 @@
         side.append(el('button', {
           style: 'color:var(--accent);',
           onclick: () => {
-            const key = createList(prompt('New class list name (e.g. "Year 4R"):'));
-            if (!key) return;
-            current = key;
-            paintSide(); paintArea();
+            promptDialog('New class list name:', '', (v) => {
+              const key = createList(v);
+              if (!key) return;
+              current = key;
+              paintSide(); paintArea();
+            }, { label: 'Create', placeholder: 'e.g. "Year 4R"' });
           },
         }, '＋ New list'));
       };
@@ -11810,10 +12036,12 @@
             el('button', {
               class: 'btn warn small',
               onclick: () => {
-                const key = renameListTo(current, prompt('Rename class list:', current));
-                if (!key) return;
-                current = key;
-                paintSide(); paintArea();
+                promptDialog('Rename class list:', current, (v) => {
+                  const key = renameListTo(current, v);
+                  if (!key) return;
+                  current = key;
+                  paintSide(); paintArea();
+                }, { label: 'Rename' });
               },
             }, 'Rename'),
             el('button', {
@@ -11859,6 +12087,104 @@
       );
     }).catch(() => { /* the sentence above is still true */ });
     return box;
+  }
+
+  // ---------------------------------------------------------------- help (?)
+  // One button that answers three questions a teacher actually has: what am I
+  // looking at, how does this thing work, and — the one a school will put in
+  // writing — where does the children's data go. The answers are written to be
+  // TRUE of this build rather than reassuring in general: every claim below is
+  // checkable in this file, and the compliance answers are worded so a teacher
+  // can paste them into a DPIA conversation without us having to be in the room.
+  function openHelp() {
+    const h4 = (t) => el('h4', {}, t);
+    const p = (t) => el('p', { class: 'hint', style: 'margin:4px 0 10px;' }, t);
+    // the FAQ folds: a teacher glancing mid-lesson sees three headings, a
+    // deputy head writing the DPIA opens the one question they were sent to ask
+    const faq = (q, ...answers) => {
+      const d = el('details', { class: 'help-faq' });
+      d.append(el('summary', {}, q), ...answers.map((a) => p(a)));
+      return d;
+    };
+    openModal('Help', (body) => {
+      // ---- what you're looking at: this branch is the "notices" part — it
+      // reads the app's actual state rather than describing the app in general
+      if (dashEl) {
+        body.append(h4('You’re looking at: your decks'),
+          p('A deck is one class’s set of screens — most teachers keep one deck per class. '
+            + 'Open a deck and press Start teaching to put a screen on the board. The tabs along '
+            + 'the top hold your saved templates, class name lists, and the dashboard wallpaper.'));
+      } else {
+        const sc = screen();
+        const n = sc && sc.widgets ? sc.widgets.length : 0;
+        body.append(h4('You’re looking at: a teaching screen'),
+          p('This screen holds ' + n + (n === 1 ? ' widget. ' : ' widgets. ')
+            + 'The dock along the bottom adds more — clocks, timers, name pickers, maths and '
+            + 'English tools; More, Maths, English and Games hold the full shelves. Drag a widget '
+            + 'to move it, drag its corner to resize, and use the ⋮ menu on its frame for '
+            + 'duplicate, lock, spotlight and the rest. Everything saves itself as you go; '
+            + 'there is no save button to forget.'));
+      }
+
+      // ---- the basics: the longer-form support a tester actually needs
+      body.append(h4('The basics'),
+        p('Decks hold screens; the numbered pill at the bottom (“1 / 3”) switches between them, '
+          + 'and clicking it opens the whole deck as a sidebar — rename, reorder, duplicate and '
+          + 'send a screen to a second window from there. Widgets keep their exact positions — '
+          + 'children navigate the board by memory, so nothing ever rearranges itself.'),
+        p('Closed a widget by mistake? Its work is kept: open 💾 and restore it from Recently '
+          + 'closed, or from the automatic snapshots underneath. Most widgets with something '
+          + 'worth paper have Print… in the More options menu on their frame — an A4 sheet (or '
+          + 'a poster over several sheets) of what’s on the board. The squiggle at the end of '
+          + 'the dock annotates over everything; press B to fold the dock away, Esc to close '
+          + 'panels.'),
+        p('If something looks wrong, a reload almost never loses work — the app saves within a '
+          + 'second of every change.'));
+
+      // ---- data compliance, in the order schools actually ask
+      body.append(h4('Questions schools ask — straight answers'));
+      body.append(
+        faq('Where does my data live?',
+          SageStorage.kind === 'file'
+            ? 'Everything is in one file on this computer: Documents/Sage Stage/sage-stage.json. '
+              + 'The app keeps two weeks of daily backups beside it, and 💾 can show you the file. '
+              + 'Undo history and snapshots live in this app’s own local database, also on this '
+              + 'computer.'
+            : 'Everything is in this browser, on this computer. Undo history and snapshots live '
+              + 'in the browser’s own local database, also on this computer. Clearing the '
+              + 'browser’s site data erases it, so export a backup (💾) before deep-cleaning the '
+              + 'browser.'),
+        faq('Does anything leave this device?',
+          'There are no accounts, no server of ours, and no analytics — nothing about you or '
+            + 'your class is collected, and there is nothing to hack at our end because there is '
+            + 'no “our end”. Even the typefaces ship inside the app.',
+          'Three things do use the internet, all of them chosen by you: wallpaper photos if you '
+            + 'pick one (they load from Unsplash), template sources you add yourself (they load '
+            + 'from your school’s address), and anything you put in the Video or Embed widgets '
+            + '(YouTube or the website loads on your screen, as it would in any browser). Your '
+            + 'class data rides on none of them.'),
+        faq('Children’s names?',
+          'Class lists stay on this device and reach no one. Printed sheets are designed to '
+            + 'carry no child’s name, so a sheet in a book bag discloses nothing about another '
+            + 'child. School policy on names still applies to what you type — first names are '
+            + 'plenty.'),
+        faq('The camera and microphone?',
+          'The Webcam widget shows the camera live on your screen (a visualiser); the Noise '
+            + 'meter listens only to measure how loud the room is. Nothing is recorded, kept, or '
+            + 'sent anywhere — when the widget closes, the camera and microphone are released.'),
+        faq('What do I tell the DPO? (GDPR / DPIA)',
+          'Sage Stage processes nothing off this device, so your school remains the data '
+            + 'controller and no processor relationship with us exists. There is no cloud '
+            + 'storage, no account, no tracking, and no data sharing to assess. The honest DPIA '
+            + 'note is one line: “local software; personal data never leaves the '
+            + 'school-controlled device; erasure is the Erase button or deleting the file.”'),
+        faq('Backups, moving machine, erasing',
+          '💾 → Export everything makes one JSON file holding the lot — that file is your '
+            + 'backup and your removal van; import it on the new machine. Use one machine at a '
+            + 'time. 💾 → Danger zone erases everything on this device, including the snapshot '
+            + 'history — it says so before it does it, and it means it.'),
+      );
+    });
   }
 
   // ---------------------------------------------------------------- data (export / import)
@@ -12003,9 +12329,37 @@
 
   // ---------------------------------------------------------------- fullscreen
   $('#fullscreenBtn').addEventListener('click', () => {
+    // Desktop: the element-fullscreen API rejects in this webview (wry never
+    // enables it), so ⛶ drives the WINDOW — which is also the mac-native
+    // behaviour a teacher expects: its own Space, swipe or ⛶ again to leave.
+    if (window.SagePlatform && SagePlatform.toggleFullscreen) {
+      SagePlatform.toggleFullscreen().catch(() => toast('Fullscreen not available'));
+      return;
+    }
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(() => toast('Fullscreen not available'));
   });
+
+  // ------------------------------------------- external links, desktop only
+  // target="_blank" and window.open are dead in the webview, and sanitize.js
+  // stamps target="_blank" onto every stored rich-text link — so any anchor
+  // that slips through (pptx-imported slides, template content) would be a
+  // click that does nothing. One delegate sends them all to the system
+  // browser. Browser builds are untouched: middle-click and copy-link keep
+  // working there, which is why this is not done per-anchor.
+  if (window.SagePlatform) {
+    document.addEventListener('click', (e) => {
+      if (e.defaultPrevented) return;                    // a guarded anchor already handled itself
+      const a = e.target.closest && e.target.closest('a[href]');
+      if (!a) return;
+      const href = a.getAttribute('href') || '';
+      if (!/^https?:\/\//i.test(href)) return;           // in-app anchors (#s=…) stay in-app
+      if (a.closest('[contenteditable="true"]')) return; // editors place carets, same as the browser
+      e.preventDefault();
+      const url = SageSanitize.url(href);
+      if (url) SagePlatform.openExternal(url);
+    });
+  }
 
   // ---------------------------------------------------------------- drawing overlay
   // Annotations are objects: each stroke is data saved per screen (screen.ink), so
@@ -12356,9 +12710,14 @@
     const shapeBtn = el('button', {
       class: 'dt-btn' + (['line', 'arrow', 'rect', 'ellipse'].includes(ink.tool) ? ' active' : ''), title: 'Shapes & lines (L)',
       onclick: () => {
+        // only OUR pop toggles closed; a different pop (geometry's) is in the
+        // way, not a reason to show nothing — swallowing the first click here
+        // made Shapes→Geometry always take two taps
         const pop = $('.dt-pop', drawTools);
-        if (pop) { pop.remove(); return; }
-        drawTools.append(el('div', { class: 'dt-pop' },
+        const mine = pop && !pop.classList.contains('dt-pop-geo');
+        if (pop) pop.remove();
+        if (mine) return;
+        drawTools.append(el('div', { class: 'dt-pop dt-pop-shapes' },
           [['line', 'linetool', 'Line'], ['arrow', 'arrowtool', 'Arrow'], ['rect', 'recttool', 'Rectangle'], ['ellipse', 'elltool', 'Ellipse']]
             .map(([id, icon, title]) => el('button', {
               class: 'dt-btn' + (ink.tool === id ? ' active' : ''), title,
@@ -12371,8 +12730,12 @@
     const geoBtn = el('button', {
       class: 'dt-btn' + (geoActive ? ' active' : ''), title: 'Geometry tools — ruler, protractor, set square',
       onclick: () => {
+        // same courtesy in the other direction: close whatever is open, but
+        // only skip opening if the open pop was our own
         const pop = $('.dt-pop', drawTools);
-        if (pop) { pop.remove(); return; }
+        const mine = pop && pop.classList.contains('dt-pop-geo');
+        if (pop) pop.remove();
+        if (mine) return;
         const items = [
           ['ruler', 'ruler', 'Ruler'],
           ['protractor', 'protractor', 'Protractor (360°)'],
@@ -13124,7 +13487,7 @@
     const s = geoSettings();
     const body = el('div', { class: 'bg-drawer-body' });
     const toggleRow = (label, key, hint) => {
-      const sw = el('button', { class: 'geo-sw' + (s[key] ? ' on' : ''), role: 'switch' });
+      const sw = el('button', { class: 'geo-sw' + (s[key] ? ' on' : ''), role: 'switch', 'data-key': key });
       const row = el('div', { class: 'geo-row', onclick: () => { s[key] = !s[key]; sw.classList.toggle('on', s[key]); save(); renderGrid(); } },
         el('div', {}, el('div', { class: 'geo-row-label' }, label), hint ? el('div', { class: 'hint' }, hint) : null),
         sw);
@@ -13142,7 +13505,15 @@
         }, lbl)));
     const gridRange = el('input', {
       type: 'range', min: '20', max: '90', step: '5', value: String(s.grid || 40),
-      oninput: (e) => { s.grid = +e.target.value; save(); renderGrid(); },
+      oninput: (e) => {
+        s.grid = +e.target.value;
+        if (!s.snapGrid) {
+          s.snapGrid = true;
+          const sw = body.querySelector('.geo-sw[data-key="snapGrid"]');
+          if (sw) sw.classList.add('on');
+        }
+        save(); renderGrid();
+      },
     });
     body.append(
       el('div', { class: 'hint', style: 'margin-top:6px;' }, 'One finger moves the instrument · two fingers rotate & resize · drag along an edge to rule a line.'),
@@ -13151,7 +13522,11 @@
       toggleRow('Snap to board areas', 'snapEdges', 'Centre, mid-lines and edges of the screen'),
       toggleRow('Snap to grid', 'snapGrid', 'Show a grid and snap instruments to it'),
       el('h4', {}, 'Grid size'),
+      // the grid only exists while snapGrid is on — a live slider under its
+      // own heading that visibly did nothing was the bug; moving it now turns
+      // the grid on, which is the only reason anyone reaches for it
       el('div', { class: 'row' }, gridRange),
+      el('div', { class: 'hint' }, 'Moving the slider switches the grid on.'),
       el('h4', {}, 'Set square'),
       variantSeg,
     );
@@ -13249,7 +13624,7 @@
   if (window.SagePrint) SagePrint.init({ el, iconEl, openModal, toast });
   if (window.SageSnapshots) SageSnapshots.init({ toast });
   if (window.SageEnglishWord) {
-    const engDeps = { WIDGETS, el, iconEl, save, toast, uid, clamp, settingRow, checkRow, selectInput, pickImage, confirmDialog, openModal, deck: viewDeck, snapshotBefore, getPref, setPref, classNames };
+    const engDeps = { WIDGETS, el, iconEl, save, toast, uid, clamp, settingRow, checkRow, selectInput, pickImage, confirmDialog, promptDialog, openModal, deck: viewDeck, snapshotBefore, getPref, setPref, classNames };
     SageEnglishWord.init(engDeps);
     // modelled writing lives in its own file from v2 — same deps, same pattern
     if (window.SageModelWrite) SageModelWrite.init(engDeps);
@@ -13276,6 +13651,11 @@
   $('#homeBtn').replaceChildren(iconEl('screens'));
   $('#homeBtn').addEventListener('click', () => (dashEl ? closeDashboard() : openDashboard()));
   $('#dataBtn').replaceChildren(iconEl('save'));
+  // guarded because a cached index.html without the button must not break boot
+  if ($('#helpBtn')) {
+    $('#helpBtn').replaceChildren(iconEl('help'));
+    $('#helpBtn').addEventListener('click', () => openHelp());
+  }
   $('#fullscreenBtn').replaceChildren(iconEl('expand'));
   $('#prevScreen').replaceChildren(iconEl('chevl'));
   $('#nextScreen').replaceChildren(iconEl('chevr'));
@@ -13284,10 +13664,12 @@
   $('#deckBtn').prepend(iconEl('screens'));
   renderScreen();
   if (!persisted.existed) {
-    // friendly first-run starter widgets
+    // friendly first-run starter widgets. The floor matters: a window that
+    // reports zero width at this instant would park the clock at x = -320,
+    // wholly off-screen with nothing to grab (seen in the 2026-07-31 audit).
     addWidget('clock');
     const c = screen().widgets[screen().widgets.length - 1];
-    c.x = window.innerWidth - 320; c.y = 80;
+    c.x = Math.max(24, window.innerWidth - 320); c.y = 80;
     remountWidget(c);
     save();
   }

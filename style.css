@@ -229,7 +229,12 @@ input, select, textarea { font: inherit; color: inherit; }
 #toolbar.compact .tool { min-width: 44px; padding: 6px 5px; }
 #toolbar.compact { gap: 2px; padding: 8px 6px; } /* tighten the chrome, never the 44px targets */
 #toolbar.dock-left {
-  left: 16px;
+  /* fitDock sets --dock-left to CENTRE the bar in the span the nav pill leaves
+     free. A fixed left:16px here made stage 3 a cliff: a dock 13px over the
+     centred budget leapt to the window edge and left a dead gap in front of
+     the nav (Glenn, 2026-08-01, in the Tauri window — 1280 default width is
+     exactly the marginal case). */
+  left: var(--dock-left, 16px);
   transform: none;
   /* 269 = 16px left margin + the nav pill's ~241px zone + 12px breathing room */
   max-width: calc(100vw - 269px);
@@ -1463,6 +1468,14 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
 .modal-head { display: flex; align-items: center; padding: 16px 20px 10px; }
 .modal-head h3 { flex: 1; font-size: 17px; font-family: var(--font-display); }
 .modal-body { padding: 6px 20px 20px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+/* the ? modal's folded compliance answers — three headings at a glance,
+   one open question for the deputy head sent to ask it */
+.help-faq { border: 1.5px solid rgba(34, 48, 60, 0.12); border-radius: 12px; padding: 9px 14px; margin: 0; background: var(--panel-solid); }
+.help-faq summary { cursor: pointer; font-weight: 700; font-size: 14px; color: var(--ink); }
+.help-faq summary:hover { color: var(--accent); }
+.help-faq[open] { border-color: rgba(15, 118, 110, 0.35); }
+.help-faq[open] summary { margin-bottom: 4px; }
+.help-faq p:last-child { margin-bottom: 2px; }
 /* headings appended into modal bodies by callers — mirror the .panel h3/h4 pair
    so the two dialog forms agree, and stay below the 17px title */
 .modal-body h3 { font-size: 16px; font-family: var(--font-display); margin-top: 4px; }
@@ -2090,6 +2103,9 @@ body.deck-dragging { user-select: none; -webkit-user-select: none; cursor: grabb
 .deck-menu-item:hover { background: rgba(15, 118, 110, 0.08); }
 a.deck-menu-item { text-decoration: none; color: inherit; }
 .deck-menu-item.danger { color: var(--danger); }
+/* Move up on screen 1 / Move down on the last: visibly off, not silently inert */
+.deck-menu-item[disabled] { opacity: 0.35; cursor: default; }
+.deck-menu-item[disabled]:hover { background: none; }
 .deck-menu-item .ic svg { width: 17px; height: 17px; }
 .deck-add {
   border-radius: var(--radius-sm);

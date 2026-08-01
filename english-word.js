@@ -1655,10 +1655,12 @@ ${set.words.map(card).join('\n')}
         }
 
         function editTarget() {
-          const v = prompt('Target word (leave blank to remove):', p.target || '');
-          if (v === null) return;
-          p.target = v.trim().slice(0, 20);
-          commit();
+          // D.promptDialog, never window.prompt — the desktop webview has no
+          // native prompt at all (returns null without showing anything)
+          D.promptDialog('Target word (leave blank to remove):', p.target || '', (v) => {
+            p.target = v.trim().slice(0, 20);
+            commit();
+          }, { label: 'Set' });
         }
 
         function drawTarget() {
@@ -2171,7 +2173,14 @@ ${set.words.map(card).join('\n')}
         });
         const download = () => {
           const csv = wsListCsv(p.cards, wsActive(p, D.deck().yearGroup));
-          const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+          const blob = new Blob([csv], { type: 'text/csv' });
+          if (window.SagePlatform && SagePlatform.saveBlob) {
+            SagePlatform.saveBlob('word-sorter-list.csv', blob, 'CSV').then((r) => {
+              if (r === 'saved') D.toast('Saved');
+            });
+            return;
+          }
+          const url = URL.createObjectURL(blob);
           const a = el2('a', { href: url, download: 'word-sorter-list.csv' });
           document.body.append(a);
           a.click();
@@ -2512,10 +2521,10 @@ ${set.words.map(card).join('\n')}
           paint();
         }
         function editLine(c, key, label) {
-          const v = prompt(label + ':', c[key] || '');
-          if (v === null) return;   // Cancel keeps what was there
-          c[key] = wbLine(v);       // blank clears it
-          commit();
+          D.promptDialog(label + ':', c[key] || '', (v) => {
+            c[key] = wbLine(v);     // blank clears it; Cancel never reaches here
+            commit();
+          }, { label: 'Set' });
         }
         function pickCardImage(c) {
           D.pickImage((data) => {
@@ -2887,6 +2896,14 @@ ${set.words.map(card).join('\n')}
         };
 
         const saveBlob = (blob, filename) => {
+          // desktop: blob anchors are silent no-ops in the webview — the
+          // platform's native save panel is the only route that produces a file
+          if (window.SagePlatform && SagePlatform.saveBlob) {
+            SagePlatform.saveBlob(filename, blob).then((r) => {
+              if (r === 'saved') D.toast('Saved');
+            });
+            return;
+          }
           const url = URL.createObjectURL(blob);
           const a = el2('a', { href: url, download: filename });
           document.body.append(a);
@@ -2902,16 +2919,19 @@ ${set.words.map(card).join('\n')}
           // pictures. The one guard that stays is the set design's §9 nudge,
           // and only for what it was actually written to catch: a school's
           // phonics scheme wording travelling further than its licence does.
-          const name = prompt('Name this set — it travels with the file, pictures and all.\n\nSharing beyond your own school? Use your own wording rather than your phonics scheme’s.', 'Word bank set');
-          if (name === null) return;
-          const clean = String(name).replace(/\s+/g, ' ').trim().slice(0, 60) || 'Word bank set';
-          if (!window.SageZip) { D.toast('Cannot build a set file here — zip.js did not load'); return; }
-          // .zip, because the operating system has to know what this is. A
-          // bespoke extension only produced "There is no application set to
-          // open the document" — a dead end every time anyone double-clicks
-          // (Glenn, 2026-07-24). "wordbank" stays in the name so the file
-          // still says which widget it belongs to.
-          saveBlob(window.SageZip.write(wbPackFiles(p, clean)), wbSlug(clean) + '.wordbank.zip');
+          D.promptDialog('Name this set — it travels with the file, pictures and all.', 'Word bank set', (name) => {
+            const clean = String(name).replace(/\s+/g, ' ').trim().slice(0, 60) || 'Word bank set';
+            if (!window.SageZip) { D.toast('Cannot build a set file here — zip.js did not load'); return; }
+            // .zip, because the operating system has to know what this is. A
+            // bespoke extension only produced "There is no application set to
+            // open the document" — a dead end every time anyone double-clicks
+            // (Glenn, 2026-07-24). "wordbank" stays in the name so the file
+            // still says which widget it belongs to.
+            saveBlob(window.SageZip.write(wbPackFiles(p, clean)), wbSlug(clean) + '.wordbank.zip');
+          }, {
+            label: 'Save',
+            hint: 'Sharing beyond your own school? Use your own wording rather than your phonics scheme’s.',
+          });
         };
         // multiple, so the sheet and its twenty pictures can be selected in
         // one go. What a file IS beats what it is called throughout, so a
@@ -3010,7 +3030,14 @@ ${set.words.map(card).join('\n')}
                   onclick: () => {
                     box.style.display = box.style.display === 'none' ? '' : 'none';
                     if (box.style.display === '') { box.select(); }
-                    if (navigator.clipboard) navigator.clipboard.writeText(promptText).then(() => D.toast('Prompt copied — paste it into your AI and add your topic'), () => {});
+                    if (navigator.clipboard) {
+                      navigator.clipboard.writeText(promptText).then(
+                        () => D.toast('Prompt copied — paste it into your AI and add your topic'),
+                        () => D.toast('Copy blocked — the prompt is selected below, copy it with ⌘C'),
+                      );
+                    } else {
+                      D.toast('The prompt is selected below — copy it with ⌘C');
+                    }
                   },
                 }, 'Copy the AI prompt')),
               box);

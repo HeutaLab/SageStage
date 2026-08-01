@@ -98,6 +98,15 @@
   // generalized from the draw-pad's exportPNG: native save dialog when the
   // browser has one, anchor download otherwise
   async function downloadBlob(blob, name, description, mime, ext) {
+    // Desktop first. In the webview, showSaveFilePicker doesn't exist and a
+    // blob anchor does NOTHING — this function then toasted "downloading to
+    // your Downloads folder" over that nothing, which is the worst possible
+    // behaviour for an export button. The platform save panel is real.
+    if (window.SagePlatform && SagePlatform.saveBlob) {
+      const r = await SagePlatform.saveBlob(name, blob, description);
+      if (r === 'saved') { D.toast('Saved “' + name + '”'); return true; }
+      return false;
+    }
     if (window.showSaveFilePicker) {
       try {
         const handle = await window.showSaveFilePicker({
@@ -285,7 +294,10 @@
   // returns { canvas, links, notes, degraded, hasPhotoBg } — read-only against state
   async function rasterScreen(index, S, richCapture) {
     const sc = D.screens()[index];
-    const cssW = window.innerWidth, cssH = window.innerHeight;
+    // same guard deckThumb carries, for the same reason: a hidden or minimised
+    // window reports 0×0, and a 0×0 raster reaches jsPDF as format [0,0] —
+    // "Invalid argument passed to jsPDF.scale" with no page ever produced
+    const cssW = window.innerWidth || 1280, cssH = window.innerHeight || 720;
     const widgets = widgetsFor(index);
     const bg = sc.background || {};
 

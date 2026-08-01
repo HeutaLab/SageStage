@@ -708,12 +708,20 @@
     doc.setProperties({ title: title || 'Sage Stage print', creator: 'Sage Stage' });
     const name = String(title || 'sage-stage-print').replace(/[^\w\- ]+/g, '').trim()
       .replace(/\s+/g, '-') || 'print';
+    // Desktop: the anchor below is a silent no-op in the webview — and worse,
+    // the caller then toasted "PDF saved to your downloads". The native panel
+    // both saves and says where. Returns 'saved' | 'cancelled' there; the
+    // browser anchor path returns 'saved' as it always effectively did.
+    if (window.SagePlatform && SagePlatform.saveBlob) {
+      return SagePlatform.saveBlob(name + '.pdf', doc.output('blob'), 'PDF');
+    }
     const url = URL.createObjectURL(doc.output('blob'));
     const a = document.createElement('a');
     a.href = url;
     a.download = name + '.pdf';
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return 'saved';
   }
 
   // ------------------------------------------------------------- dialog (§4)
@@ -1003,9 +1011,10 @@
           const was = pdfBtn.textContent;
           pdfBtn.disabled = true;
           try {
-            await exportPdf(picked, state.guides, jobTitle || 'Sage Stage print',
+            const r = await exportPdf(picked, state.guides, jobTitle || 'Sage Stage print',
               (m) => { pdfBtn.textContent = m; });
-            D.toast('PDF saved to your downloads');
+            // a cancelled save panel is a decision, not a success to announce
+            if (r === 'saved') D.toast(window.SagePlatform ? 'PDF saved' : 'PDF saved to your downloads');
           } catch (err) {
             D.toast('Couldn’t write the PDF — use Print and choose “Save as PDF” instead.');
           } finally {
@@ -1066,7 +1075,9 @@
     return root;
   }
 
+  let printCleanupTimer = null;
   function printRoute(p, guides, title) {
+    clearTimeout(printCleanupTimer); // a fresh run owns the cleanup, not the last one's timer
     const stale = document.getElementById('sage-print-root');
     if (stale) stale.remove(); // idempotent: a cancelled run must not stack
     const root = buildPrintRoot(p, guides);
@@ -1081,6 +1092,24 @@
       document.title = prevTitle;
       window.removeEventListener('afterprint', cleanup);
     };
+
+    // Desktop: window.print() is a NO-OP in the webview (wry wires no print
+    // delegate) — the old code left sp-printing set and the title overwritten
+    // for the session, and nothing printed. The webview plugin's print command
+    // runs the real macOS/Windows print dialog, and @media print CSS applies.
+    // afterprint never fires on this path, so cleanup rides on a timer; the
+    // root and body class are invisible on screen (print-media rules only), so
+    // the only user-visible job here is putting the window title back, and the
+    // stale-root sweep above keeps repeated prints tidy regardless.
+    if (window.SagePlatform && SagePlatform.printPage) {
+      window.addEventListener('afterprint', cleanup); // harmless if it ever arrives
+      SagePlatform.printPage().then((ok) => {
+        if (!ok) D.toast('Couldn’t open the print dialog — use Save PDF instead.');
+        printCleanupTimer = setTimeout(cleanup, 120000);
+      });
+      return;
+    }
+
     window.addEventListener('afterprint', cleanup); // fires on cancel too
     window.print();
   }
