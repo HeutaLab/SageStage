@@ -380,7 +380,12 @@
   // The backend reports failure in words the teacher can act on; only this file
   // knows how to put words on the screen. Both the quota refusal and the
   // bin-was-cleared notice arrive through here.
-  SageStorage.onWriteError((msg) => toast(msg));
+  SageStorage.onWriteError((msg) => toast(
+    // taster only: the browser's storage limit is the honest sales moment
+    window.SAGE_DEMO && /storage is full/i.test(msg)
+      ? msg + ' The desktop app keeps decks in a real file with no browser limit — it’s on the front page.'
+      : msg,
+  ));
 
   // A packaged desktop app has no console anyone will open, and the one failure
   // that would silently wreck it is a Content-Security-Policy that blocks the
@@ -10779,7 +10784,7 @@
       el('div', { class: 'dash-brand' },
         el('span', { class: 'dash-brand-tile' }, '🌿'),
         el('span', { class: 'dash-brand-name' }, 'Sage Stage'),
-        el('span', { class: 'dash-tag' }, '100% local'),
+        el('span', { class: 'dash-tag' }, window.SAGE_DEMO ? 'Taster — in this browser' : '100% local'),
         fontBtn,
         dashHelp),
       el('div', { class: 'dash-tabs' },
@@ -12443,7 +12448,10 @@
         SageStorage.kind === 'file' ? dataFileHint() : el('div', { class: 'hint' },
           `Current data size: ~${usage} KB — room left: `
           + headroomReport(usage * 1024).level
-          + '. Pictures use it up fastest; snapshots are stored separately and don’t count towards this.'),
+          + '. Pictures use it up fastest; snapshots are stored separately and don’t count towards this.'
+          + (window.SAGE_DEMO
+            ? ' The desktop app keeps decks in a real file in Documents, with daily backups and no browser limit — it’s on the front page.'
+            : '')),
         SageStorage.kind !== 'file' ? null : el('button', {
           class: 'btn ghost small', style: 'align-self:start;',
           onclick: () => SageStorage.revealDataFile(),
@@ -13812,7 +13820,41 @@
   $('#delScreen').replaceChildren(iconEl('trash'));
   $('#deckBtn').prepend(iconEl('screens'));
   renderScreen();
-  if (!persisted.existed) {
+  // ------------------------------------------------ taster (sagestage.app)
+  // docs/sagestage-app-design.md §2: three guarded moves, all inert without
+  // window.SAGE_DEMO — the product never sets it; only the deployed taster's
+  // demo.js does. The seed builds widgets from each type's own defaults() so
+  // the showcase can never drift from what widgets actually expect.
+  let demoSeeded = false;
+  if (window.SAGE_DEMO) {
+    const t = document.querySelector('#topbar .tag');
+    if (t) t.textContent = 'Taster — work stays in this browser';
+    if (!persisted.existed && SAGE_DEMO.seed && Array.isArray(SAGE_DEMO.seed.screens)) {
+      const built = {
+        deckName: SAGE_DEMO.seed.deckName || 'Try Sage Stage',
+        lists: SAGE_DEMO.seed.lists && typeof SAGE_DEMO.seed.lists === 'object' ? SAGE_DEMO.seed.lists : {},
+        screens: SAGE_DEMO.seed.screens.map((s) => ({
+          id: uid(), name: s.name || '',
+          background: s.background || { type: 'color', value: '#f4f7f6' },
+          widgets: (s.widgets || []).filter((w) => WIDGETS[w.type]).map((w, i) => ({
+            id: uid(), type: w.type,
+            x: w.x || 60, y: w.y || 80,
+            w: w.w || WIDGETS[w.type].w, h: w.h || WIDGETS[w.type].h,
+            z: 10 + i,
+            props: { ...WIDGETS[w.type].defaults(), ...(w.props || {}) },
+          })),
+        })),
+      };
+      const next = normalize(built);
+      if (next) {
+        state = scrubImportedHTML(next);
+        rewardsDayTick(); applyReadingFont(); renderStarPill();
+        save(); renderScreen();
+        demoSeeded = true;   // land ON the showcase, not the dashboard
+      }
+    }
+  }
+  if (!persisted.existed && !demoSeeded) {
     // friendly first-run starter widgets. The floor matters: a window that
     // reports zero width at this instant would park the clock at x = -320,
     // wholly off-screen with nothing to grab (seen in the 2026-07-31 audit).
@@ -13825,7 +13867,7 @@
   // land on the dashboard so the teacher picks their class deck; a tab pinned
   // to one screen (#s=) is a display tab and goes straight there instead
   if (persisted.notice) toast(persisted.notice);
-  if (!viewId) openDashboard();
+  if (!viewId && !demoSeeded) openDashboard();
 })().catch((e) => {
   // Boot is async now, so a throw here is a promise rejection rather than a
   // console error with a half-drawn page behind it. A teacher at a board needs

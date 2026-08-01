@@ -4819,3 +4819,9 @@ note. Published by a GitHub Action that ships help/ and nothing else (Pages serv
 only / or /docs natively, and /docs is internal design papers). Glenn's console
 holds the last two steps: Pages source → GitHub Actions, custom domain →
 sagestage.co.uk, plus four A records and a www CNAME at Hover.
+
+Postscript, same day: sagestage.co.uk went LIVE — Pages enabled by API, the
+workflow deployed, and the one DNS stumble was instructive: Hover records on
+host `*` (wildcard) answer every subdomain except the bare domain itself; the
+apex wants `@`. Four edits later the domain resolved, the certificate issued,
+HTTPS enforced, and www + the old github.io address now 301 home.
