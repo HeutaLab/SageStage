@@ -85,11 +85,19 @@ Export everything → import on desktop already works; the landing page says so
 
 ## 4. Download and the signup
 
-- **Download** points at the app repo's **GitHub Releases**. Until Apple Developer
-  enrolment lands (the signing/notarisation decision already on Glenn's list), the
-  button says **"Download for macOS — free beta"** with the one-line right-click →
-  Open note underneath, and no pretence otherwise. When notarised builds exist the
-  page copy shortens and nothing else changes.
+- **NO PUBLIC DOWNLOAD. Corrected 2026-08-01 by Glenn, and this supersedes the
+  original §4:** the v1 draft put a "Download for macOS — free beta" button on the
+  landing page pointing at GitHub Releases. That was wrong and slipped in without
+  being argued for. **The desktop app is the paid product; the browser taster is
+  the free one.** A public download button gives away a fully working install to
+  anyone who finds the page — Glenn's words: *"this link is supposed to go to
+  people who are paying for the app, not a web-based demo… I'm not doing this for
+  free."*
+  The landing page therefore offers **Try it now** (the taster) and **Tell me when
+  the app is ready** (the list). No download link, no "free beta" framing, no
+  gatekeeper note. Distribution to testers is a private link, never a page button;
+  distribution to buyers waits on the licensing design. Do not reinstate a public
+  download CTA without an explicit decision.
 - **Signup** (soft capture): **MailerLite free tier** — £0 to 500 subscribers,
   double opt-in (the UK-GDPR consent receipts are theirs to keep), unsubscribe
   handled, CSV export means the choice is never permanent. The site links out to
