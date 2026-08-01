@@ -12309,12 +12309,14 @@
           'There are no accounts, no server of ours, and no analytics — nothing about you or '
             + 'your class is collected, and there is nothing to hack at our end because there is '
             + 'no “our end”. Even the typefaces ship inside the app.',
-          'Three things do use the internet, all of them chosen by you: wallpaper photos if you '
+          'A few things do use the internet, all of them chosen by you: wallpaper photos if you '
             + 'pick one (they load from Unsplash), template sources you add yourself (they load '
-            + 'from your school’s address), and anything you put in the Video or Embed widgets '
-            + '(YouTube or the website loads on your screen, as it would in any browser). Your '
-            + 'class data rides on none of them. The full guide opens in your browser — a normal '
-            + 'web page visit, and only when you click it.'),
+            + 'from your school’s address), anything you put in the Video or Embed widgets '
+            + '(YouTube or the website loads on your screen, as it would in any browser), and '
+            + 'photographs of euro or dollar coins if you switch the Money widget to those '
+            + 'currencies (the UK coins are drawn in the app and fetch nothing). Your class data '
+            + 'rides on none of them. The full guide opens in your browser — a normal web page '
+            + 'visit, and only when you click it.'),
         faq('Children’s names?',
           'Class lists stay on this device and reach no one. Printed sheets are designed to '
             + 'carry no child’s name, so a sheet in a book bag discloses nothing about another '
