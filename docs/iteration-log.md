@@ -4898,3 +4898,27 @@ at an empty releases page; sagestage.app still carries Hover's default MX with n
 DMARC, leaving it spoofable; and .co.uk still wants its DMARC record. Also noted: a second
 stale mailerlite-domain-verification TXT, and the SPF has grown 'a mx' mechanisms that
 authorise GitHub Pages IPs to send mail — harmless, worth trimming once DMARC reports.
+
+**Late edits, and a correction about who built this.** The signup moved off MailerLite's
+hosted page onto sagestage.app/join — our styling, the sprout, and three interest
+checkboxes (Sage Stage · the assessment suite · talks and workshops), because someone
+arriving via a forwarded Sage Stage email might actually be a head of year wanting the
+SLT dashboard, and a flat list throws that lead away. It posts to MailerLite on submit,
+so nothing third-party loads for anyone who doesn't sign up.
+
+Two corrections from Glenn, both worth recording because they change what the project
+SAYS about itself. First, the thesis: "The Human in the Middle" is about building with AI
+while ACCOUNTABILITY stays human-side — never handing a machine a decision that belongs to
+a person. My copy had the topology right and the claim soft. Second, the bio: "made by a
+UK primary teacher" was wrong twice — it fixed him in one phase and one country and
+discarded the credential that actually moves an SLT or a conference committee. He is a
+British educator who still spends time in the classroom after twenty years leading and
+redesigning educational technology in world-leading international schools, and is still
+seeking solutions for practitioners at every level. The join page uses the warmer form
+("like you, wants the best for your students") because that page is where someone decides
+to trust a person, not a product.
+
+Socials are @heutalab on Instagram, X, YouTube and TikTok — inline SVG, no badge scripts.
+DMARC is live in monitoring mode, verified on two resolvers. And assemble.sh now refuses
+to ship join/ while its form endpoint is a placeholder: a form that silently discards
+signups is exactly the failure class the click assessment spent a day removing.
