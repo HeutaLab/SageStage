@@ -4922,3 +4922,12 @@ Socials are @heutalab on Instagram, X, YouTube and TikTok — inline SVG, no bad
 DMARC is live in monitoring mode, verified on two resolvers. And assemble.sh now refuses
 to ship join/ while its form endpoint is a placeholder: a form that silently discards
 signups is exactly the failure class the click assessment spent a day removing.
+
+**The signup came home.** sagestage.app/join replaced the MailerLite-hosted page: our
+domain, our styling, and three interest checkboxes wired to real groups (Sage Stage
+updates · Assessment suite · Talks and workshops). The form posts to MailerLite only on
+submit, so the zero-third-party-request promise holds for anyone who doesn't sign up, and
+the confirmation copy promises only what is verifiable — the double opt-in email is the
+receipt, not our success message. Without JS it posts natively rather than breaking.
+assemble.sh refuses to ship the page while its endpoint is a placeholder, which is the
+copy-dist reflex applied to a form: better a 404 than a page that silently eats signups.
