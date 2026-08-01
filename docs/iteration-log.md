@@ -4825,3 +4825,25 @@ workflow deployed, and the one DNS stumble was instructive: Hover records on
 host `*` (wildcard) answer every subdomain except the bare domain itself; the
 apex wants `@`. Four edits later the domain resolved, the certificate issued,
 HTTPS enforced, and www + the old github.io address now 301 home.
+
+## 2026-08-01 (evening) — the taster takes the stage
+
+sagestage.app designed and built in one arc (docs/sagestage-app-design.md). The
+decision that shaped it came from Glenn stopping on the money question — how to
+monetise without scalping while making a name for real teacher solutions — and
+the answer is now design law: the taster is BADGED, NOT CAPPED. Its sandbox is
+the medium's own truth (browser storage, ~5MB floors, images and PowerPoints are
+what fill it), surfaced only where the app's existing warnings already speak,
+with the desktop app's real file as the honest answer. Never cap pupils: KS2
+runs to 33–34, and refusing a real child once is how scalper reputations start.
+
+The build: three guarded SAGE_DEMO hooks in app.js (tag, storage line, showcase
+seed built from each widget's own defaults()); a second repo, sagestage-app,
+holding the landing, the workshop shelf, demo.js and an assembly workflow that
+checks out the app's public main tokenlessly and deploys only on a deliberate
+click. Verified locally end to end (seed lands on "Maths in your hands", picker
+carries the demo class, the storage line appears in the data panel, zero
+external requests on the landing) and live at heutalab.github.io/sagestage-app.
+Remaining with Glenn: register sagestage.app, the same Hover DNS dance, the
+MailerLite account (signup line ships commented), and the first GitHub Release
+for the download button to point at.
