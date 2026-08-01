@@ -4875,3 +4875,26 @@ DNS, so every local `dig` was answered from an interceptor cache — proven when
 server returned recursive answers, which root servers never do. Conclusions happened to
 be right, but the method wasn't sound. Verify DNS over DoH instead:
 curl -sS -H 'accept: application/dns-json' 'https://dns.google/resolve?name=…&type=MX'
+
+**Closing audit, same night.** Four parallel checks over the whole estate — both
+websites, the live taster payload, mail/DNS, and both repos. Clean bill on the things
+that matter most: every page and all 38 links resolve, the no-third-party promise holds
+literally (zero external scripts, trackers, analytics or remote fonts on either origin —
+the fonts really are self-hosted), all four taster seeds intact with every seeded widget
+type resolving to a real definition, mail sending and receiving both correct, and both
+repos clean and in sync with no secrets.
+
+Three findings acted on immediately: the compliance copy claimed "three things use the
+internet" while the Money widget hotlinks coin photographs for euros and dollars — a
+fourth, now counted on both surfaces (UK coins are drawn in-app and fetch nothing, so
+the default case was never affected, but exhaustiveness IS the claim in DPO-facing text);
+the taster repo had its assembled site/ committed and already stale, now gitignored since
+CI builds it; and a .gitignore added there.
+
+Left for Glenn: www.sagestage.app is hard-broken (its CNAME points at the apex instead of
+heutalab.github.io, so the certificate omits the www name — and .app being HSTS-preloaded
+means browsers cannot fall back, giving an unbypassable error); the download CTA points
+at an empty releases page; sagestage.app still carries Hover's default MX with no SPF or
+DMARC, leaving it spoofable; and .co.uk still wants its DMARC record. Also noted: a second
+stale mailerlite-domain-verification TXT, and the SPF has grown 'a mx' mechanisms that
+authorise GitHub Pages IPs to send mail — harmless, worth trimming once DMARC reports.
