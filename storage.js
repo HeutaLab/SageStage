@@ -83,6 +83,12 @@
         saveTimer = setTimeout(doWrite, 250);
       },
 
+      // Is there a local edit sitting in the debounce, not yet written? The
+      // cross-tab adopt path asks, because replacing `state` with another tab's
+      // copy while this tab holds an unwritten change destroys that change
+      // silently — the teacher's last few hundred milliseconds of typing.
+      hasPending() { return !!pending; },
+
       // Force any pending write NOW. Called by the Tauri close/quit handlers and,
       // since 2026-08-02, by the browser build's own close-time flush at the foot
       // of this file. Synchronous inside — localStorage.setItem is — which is what
@@ -436,6 +442,7 @@
       write(serialize) { queue.write(serialize); },
       async flush() { await queue.flush(); },
       cancel() { queue.cancel(); },
+      hasPending() { return queue.dirty; },   // `dirty` already means pending-or-draining
 
       // Nothing to do here: this backend already keeps timestamped backups and
       // offers to recover from them (recoveryCandidates / restoreFrom), so a

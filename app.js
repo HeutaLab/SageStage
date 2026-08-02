@@ -9833,6 +9833,13 @@
 
     widgetEl.addEventListener('pointerdown', () => {
       lastActiveId = w.id;
+      // Only re-stack when this widget is not already on top. Every tap used to
+      // bump z and save() — a full JSON.stringify of the entire state, possibly
+      // megabytes of base64 imagery, on the main thread, per tap — and every one
+      // of those writes woke the other tab's adopt path and remounted its UI.
+      // Tapping inside the widget you are already working in is the commonest
+      // gesture in the app, and it was doing the most work for no change at all.
+      if (w.z === zTop) return;
       w.z = ++zTop;
       widgetEl.style.zIndex = w.z;
       save();
@@ -14072,6 +14079,20 @@
     else if ((k === 'delete' || k === 'backspace') && selected) { e.preventDefault(); removeSelected(); }
   });
 
+  // The screen this tab is displaying, as the OTHER tab would have written it —
+  // seeded from the bytes we booted with, so even the first external change is
+  // compared against something real rather than forcing one free rebuild.
+  const visibleScreenOf = (s) => {
+    try {
+      const d = (s.decks || []).find((x) => x.id === s.activeDeck) || s.decks[0];
+      if (!d || !d.screens || !d.screens.length) return '';
+      return JSON.stringify(d.screens[clamp(d.current || 0, 0, d.screens.length - 1)]);
+    } catch (e) { return 'unreadable-' + Math.random(); }  // never match → rebuild
+  };
+  let lastAdoptedVisible = (() => {
+    try { return visibleScreenOf(normalize(JSON.parse(persisted.raw))); } catch (e) { return null; }
+  })();
+
   // keep tabs in sync: adopt changes written by another tab instead of clobbering them
   SageStorage.onExternalChange((raw) => {
     // A null payload is the erase in another window, not a write to skip past.
@@ -14086,11 +14107,33 @@
     try {
       const incoming = normalize(JSON.parse(raw));
       if (!incoming) return;
+
+      // This tab is holding an edit that has not been written yet. Adopting now
+      // would replace `state` underneath it and the edit would simply cease to
+      // exist — the teacher's last few hundred milliseconds of typing, gone with
+      // no error. Let the local change win and land; its own write then reaches
+      // the other tab through this same path. Last writer wins is what
+      // localStorage gives us regardless, so this only decides WHICH tab is the
+      // last writer, and the one being typed into is the better answer.
+      if (SageStorage.hasPending && SageStorage.hasPending()) return;
+
+      // Remounting is expensive and destructive: it rebuilds every widget on the
+      // screen, taking caret, focus and any in-flight typing with it. Most
+      // cross-tab writes change nothing this tab is showing — another deck,
+      // another screen, a z-order bump — so only rebuild when the visible screen
+      // actually changed.
+      //
+      // Compare incoming against the LAST ADOPTED payload, not against the live
+      // `state`. The live state carries runtime mutations that were never
+      // written (fitToWindow adjusts geometry at mount, widgets normalise their
+      // own props), so comparing to it never matches and every write rebuilt.
+      const wasShowing = lastAdoptedVisible;
+      lastAdoptedVisible = visibleScreenOf(incoming);
       state = incoming;
       // no rewardsDayTick here — the writing tab already ticked this state,
       // and a tick's save() would echo writes back and forth between tabs
       applyReadingFont(); renderStarPill();
-      renderScreen();
+      if (lastAdoptedVisible !== wasShowing) renderScreen();
       if (dashEl) renderDashboard();
     } catch (err) { /* ignore malformed writes */ }
   });

@@ -171,12 +171,23 @@ origin, or leaks data off-device, breaks the product's headline promise.
   ([`app.js:10649`](../app.js#L10649)).
   **Fix (cheap, pre-migration):** a `pagehide`/`visibilitychange:hidden` handler
   that flushes synchronously — ~2 lines, and it de-risks the whole Phase 1 refactor.
-- [ ] 🟠 **Cross-tab adopt clobbers concurrent edits and tears down the UI on every tap.**
+- [x] 🟠 **Cross-tab adopt clobbers concurrent edits and tears down the UI on every tap.**
   [`app.js:11876`](../app.js#L11876) `state = incoming; renderScreen()` discards
   any change still inside the local 250 ms debounce (the pending timer isn't even
   cancelled). Because every widget `pointerdown` bumps `z` and calls `save()`, a
   tap on the touch-board tab forces a full remount in the teacher's tab — losing
   caret, focus, and in-flight typing.
+  **Fixed 2026-08-02**, both halves. The adopt now declines while this tab holds
+  an unwritten edit (`SageStorage.hasPending()`), so the teacher's in-flight
+  typing wins and lands rather than being replaced mid-keystroke — last-writer-
+  wins is what localStorage gives us anyway, and the tab being typed into is the
+  better last writer. And it only calls `renderScreen()` when the *visible*
+  screen actually changed, compared against the last adopted payload rather than
+  against the live state (the live state carries runtime mutations that were
+  never written — `fitToWindow` adjusts geometry at mount, widgets normalise
+  their own props — so comparing to it never matches and rebuilt every time; the
+  first attempt at this fix did exactly that and was caught in the two-tab test).
+  Still open: focus is not preserved across a rebuild that genuinely is needed.
 - [x] 🟠 **Corrupt / unrecognized stored JSON is discarded, then overwritten.**
   `load()` returns null on any parse/normalize failure and the next `save()`
   clobbers the only copy. A one-line backup to `sage-stage-v1-corrupt` before
@@ -216,10 +227,14 @@ origin, or leaks data off-device, breaks the product's headline promise.
   `crypto.getRandomValues` rather than the suggested `crypto.randomUUID`, which
   requires a secure context this app doesn't always have (`file://`, custom
   schemes). Existing ids are untouched and nothing parses id length.
-- [ ] 🟡 **`save()` runs on every widget `pointerdown`** (z-bump), doing a full
+- [x] 🟡 **`save()` runs on every widget `pointerdown`** (z-bump), doing a full
   `JSON.stringify` of possibly-megabytes of base64 imagery on the main thread per
   tap ([`app.js:8956`](../app.js#L8956)) — and thrashing other tabs via the adopt
   path. Only bump/persist `z` when it actually changes; debounce the write.
+  **Fixed 2026-08-02** — the pointerdown handler returns early when the widget is
+  already topmost, which is the commonest tap in the app. That also shrinks the
+  adopt problem above, since each skipped write is one the other tab never has to
+  react to.
 - [ ] 🟡 **localStorage ~5 MB budget has no accounting or eviction.** Money/image
   data-URLs, annotation ink (stored uncapped and at *full float precision* after
   any move/resize), pad strokes and pad-templates all share one key with only the

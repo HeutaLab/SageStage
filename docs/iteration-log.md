@@ -5599,3 +5599,57 @@ accident.
 
 Poll vote (≈28px) and name-chip-× (18×18) are the same question and have not
 been asked yet.
+
+---
+
+## 2 August 2026 — the second tab stops eating the first one's work
+
+**The dual-screen classroom is the setup this app is built for, and it was the
+one that lost work.** Every `pointerdown` on a widget bumped its z and called
+`save()` — a full `JSON.stringify` of the entire state, possibly megabytes of
+base64 imagery, on the main thread, per tap. Tapping inside the widget you are
+already working in is the commonest gesture in the app, and it was doing the
+most work for no change at all. Each of those writes then woke the other tab's
+adopt path, which did `state = incoming; renderScreen()` — rebuilding every
+widget on that screen and taking caret, focus and any in-flight typing with it.
+So a teacher typing on the laptop while a child touched the board lost their
+sentence, repeatedly, and neither surface showed an error.
+
+**Three changes, smallest first.** The pointerdown handler now returns early
+when the widget is already topmost, which removes most of the writes entirely
+and so removes most of the other tab's reasons to react. The adopt path declines
+while this tab holds an unwritten edit — `SageStorage.hasPending()`, exposed on
+both backends (the file backend already had `queue.dirty` meaning exactly this,
+so it forwards to that rather than growing a second flag). Last-writer-wins is
+what localStorage gives us regardless; this only decides *which* tab is the last
+writer, and the one being typed into is the better answer. And the rebuild is
+now conditional on the visible screen having actually changed.
+
+**The first attempt at that last one was wrong, and the two-tab test caught it.**
+Comparing the incoming payload against the live `state` seemed obvious and never
+matched: the live state carries runtime mutations that were never written —
+`fitToWindow` adjusts geometry at mount, widgets normalise their own props on
+mount — so every external write looked like a change and rebuilt anyway. The
+comparison has to be against the last *adopted* payload, seeded at boot from the
+bytes the tab started with. Obvious afterwards; invisible from reading the code.
+
+Verified with two real tabs on the same origin. A change to a deck that is not
+on screen: three tagged widget elements, all three survive, no rebuild. A widget
+removed from the screen being displayed: picked up correctly, rebuilt, count
+goes 3 → 2. And a local edit left sitting in the 250ms debounce while the other
+tab writes: the local edit survives and lands, where before it would have been
+replaced mid-keystroke.
+
+**A note on the test itself, since it was nearly expensive.** Proving the
+clobber fix meant writing a sentinel over the real state, which duly worked and
+left the live decks as `{"LOCAL_EDIT_SURVIVED":true}`. The second tab had
+rejected the sentinel — `normalize` returns null on it — so its in-memory copy
+was intact and a forced save wrote all four decks back, including the widget an
+earlier test had removed. Recovered in full, but the lesson is that a two-tab
+test needs its backup taken in the *other* tab, not the one being written to.
+
+Still open in P1: `normalize()` only shallow-validates, the localStorage budget
+has no accounting, and the annotation eraser grows storage instead of shrinking
+it. Also still open, and worth saying plainly: focus is not preserved across a
+rebuild that genuinely is needed — this work makes the needless rebuilds stop,
+it does not make the necessary ones painless.
