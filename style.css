@@ -384,17 +384,36 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .widget-title .ic { color: var(--ink); }
 .widget-title .ic svg { width: 15px; height: 15px; }
-.wbtn .ic svg { width: 13.5px; height: 13.5px; }
+.wbtn .ic svg { width: 24px; height: 24px; }
+/* 24x24 at 0.55 opacity was a child-sized target drawn faint — and Close is one
+   of the two things a child actually presses. Now the full 44px touch target,
+   as REAL buttons rather than 24px buttons with invisible 44px hit areas: three
+   of these sit side by side, so padded targets would have overlapped and put
+   Close under a finger aiming at Settings. The header is flex with no fixed
+   height, so it grows with them. Resting opacity lifted too — small AND faint
+   was the complaint, and half of it was the faintness.
+
+   The narrowest widget in the app is 150px (traffic light), where three 44px
+   buttons plus padding do not fit. They are deliberately left shrinkable: the
+   title has flex:1 and collapses first, then the buttons shrink together to
+   about 35px — still half again the old size, and never an overflow. Full size
+   from 280px up, which is every other widget. (Glenn's call, 2026-08-02.) */
 .widget-header .wbtn {
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 15px;
   color: var(--ink-soft);
-  opacity: 0.55;
+  opacity: 0.75;
 }
+/* The header's 6px gap is right between the TITLE and the buttons, and wrong
+   between the buttons themselves: at 44px each with a 24px glyph, the padding
+   inside them already supplies the visual separation, and the extra gap pushed
+   the three icons visibly apart. Cancel it between buttons only — they now sit
+   edge to edge, so the targets are adjacent but never overlapping. */
+.widget-header .wbtn + .wbtn { margin-left: -6px; }
 .widget:hover .wbtn { opacity: 1; }
 .widget-header .wbtn:hover { background: var(--accent-soft); color: var(--ink); }
 .widget-header .wbtn.close:hover { background: #fee2e2; color: var(--danger); }
