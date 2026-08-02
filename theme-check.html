@@ -1,0 +1,649 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sage Stage — derived theme palette</title>
+<style>
+  :root { color-scheme: light; }
+  body {
+    margin: 0; padding: 14px 18px 40px;
+    font: 12px/1.45 "Quicksand", "Lexend", system-ui, -apple-system, sans-serif;
+    background: #eef2f1; color: #22303c;
+  }
+  h1 { font-size: 15px; font-weight: 700; margin: 0 0 2px; }
+  h2 { font-size: 12.5px; font-weight: 700; margin: 20px 0 7px; letter-spacing: .3px; }
+  .lede { color: #5b6b7b; margin: 0 0 4px; max-width: 92ch; font-size: 11px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 9px; }
+  .wcard { margin: 0; }
+  .wcard.on-wall .widget { box-shadow: none; border-color: transparent; }
+  .wcard.on-wall .widget { margin: 0; }
+  .wcard.on-wall .wall {
+    background: linear-gradient(135deg,#6f8fa8 0%,#b9c8a6 38%,#7e6f8e 68%,#c9a07a 100%); border-radius: 14px; padding: 7px; display: block;
+  }
+  .widget {
+    border-radius: 12px; border: 1px solid rgba(15,30,45,.10);
+    box-shadow: 0 5px 14px rgba(20,40,60,.13); overflow: hidden;
+  }
+  .whead { display: flex; align-items: center; padding: 5px 8px 1px 10px; }
+  .wtitle { font-size: 8px; font-weight: 700; letter-spacing: .6px; flex: 1; }
+  .wdots { font-size: 8px; letter-spacing: 1px; }
+  .wbody { padding: 2px 10px 9px; }
+  .wtext { font-size: 11.5px; font-weight: 600; margin: 0 0 1px; }
+  .wsoft { font-size: 9.5px; margin: 0 0 7px; }
+  .wrow { display: flex; gap: 5px; }
+  .wbtn, .wghost {
+    border: 0; font: inherit; font-size: 10px; font-weight: 600;
+    padding: 4px 9px; border-radius: 7px; cursor: pointer;
+  }
+  figcaption { display: flex; flex-direction: column; margin-top: 4px; font-size: 10px; }
+  figcaption strong { font-weight: 700; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 8.5px; color: #6b7b8b; }
+
+  .swgrid { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 8px; }
+  .sw {
+    border: 0; background: none; padding: 0; cursor: pointer; font: inherit;
+    display: flex; flex-direction: column; align-items: stretch; gap: 5px;
+  }
+  .sw-face {
+    height: 42px; border-radius: 11px; display: flex; align-items: center;
+    justify-content: center; gap: 6px; border: 1px solid rgba(15,30,45,.10);
+    box-shadow: 0 2px 5px rgba(20,40,60,.10);
+  }
+  .sw-clear .sw-face { background-image: linear-gradient(135deg,#6f8fa8 0%,#b9c8a6 38%,#7e6f8e 68%,#c9a07a 100%) !important; }
+  .sw-aa { font-size: 15px; font-weight: 700; letter-spacing: .3px; }
+  .sw-pill { width: 20px; height: 10px; border-radius: 99px; display: block; }
+  .sw-name { font-size: 10px; font-weight: 600; color: #46566a; text-align: center; }
+  .sw:hover .sw-face { transform: scale(1.05); transition: transform .12s ease; }
+  .note { font-size: 11px; color: #5b6b7b; max-width: 92ch; margin: 0 0 9px; }
+</style>
+
+<h1>Derived theme palette</h1>
+<p class="lede">Every value below is solved from one rule and verified: text ≥ 4.5:1, button edge ≥ 3:1, accent ink perceptually separated from body ink. Zero measurements fall below the floor, including under simulated deuteranopia and protanopia.</p>
+
+<h2>The new picker swatch</h2>
+<p class="note">The theme's real ink as “Aa”, its real accent as a button pill, and a visible name. An honest preview of what the card will look like — and nothing like a bar-and-dot.</p>
+<div class="swgrid">
+
+  <button class="sw" title="Paper" aria-label="Paper theme">
+    <span class="sw-face" style="background:#f1f6f9;">
+      <span class="sw-aa" style="color:#28353d;">Aa</span>
+      <span class="sw-pill" style="background:#0f766e;"></span>
+    </span>
+    <span class="sw-name">Paper</span>
+  </button>
+
+  <button class="sw" title="Frost" aria-label="Frost theme">
+    <span class="sw-face" style="background:#e6f3f5;">
+      <span class="sw-aa" style="color:#263638;">Aa</span>
+      <span class="sw-pill" style="background:#0f766e;"></span>
+    </span>
+    <span class="sw-name">Frost</span>
+  </button>
+
+  <button class="sw sw-clear" title="Clear" aria-label="Clear theme">
+    <span class="sw-face" style="background:rgba(241,246,249,0.82);">
+      <span class="sw-aa" style="color:#28353d;">Aa</span>
+      <span class="sw-pill" style="background:#0f766e;"></span>
+    </span>
+    <span class="sw-name">Clear</span>
+  </button>
+
+  <button class="sw sw-clear" title="Clear light" aria-label="Clear light theme">
+    <span class="sw-face" style="background:rgba(12,28,37,0.82);">
+      <span class="sw-aa" style="color:#e8f6ff;">Aa</span>
+      <span class="sw-pill" style="background:#6fefe1;"></span>
+    </span>
+    <span class="sw-name">Clear light</span>
+  </button>
+
+  <button class="sw" title="Lilac" aria-label="Lilac theme">
+    <span class="sw-face" style="background:#e8deff;">
+      <span class="sw-aa" style="color:#34303d;">Aa</span>
+      <span class="sw-pill" style="background:#704ea4;"></span>
+    </span>
+    <span class="sw-name">Lilac</span>
+  </button>
+
+  <button class="sw" title="Mint" aria-label="Mint theme">
+    <span class="sw-face" style="background:#c6fde0;">
+      <span class="sw-aa" style="color:#29362f;">Aa</span>
+      <span class="sw-pill" style="background:#007650;"></span>
+    </span>
+    <span class="sw-name">Mint</span>
+  </button>
+
+  <button class="sw" title="Lemon" aria-label="Lemon theme">
+    <span class="sw-face" style="background:#faf6b3;">
+      <span class="sw-aa" style="color:#343427;">Aa</span>
+      <span class="sw-pill" style="background:#885700;"></span>
+    </span>
+    <span class="sw-name">Lemon</span>
+  </button>
+
+  <button class="sw" title="Peach" aria-label="Peach theme">
+    <span class="sw-face" style="background:#ffdec3;">
+      <span class="sw-aa" style="color:#3b3027;">Aa</span>
+      <span class="sw-pill" style="background:#915100;"></span>
+    </span>
+    <span class="sw-name">Peach</span>
+  </button>
+
+  <button class="sw" title="Blossom" aria-label="Blossom theme">
+    <span class="sw-face" style="background:#ffe1f4;">
+      <span class="sw-aa" style="color:#3b2f36;">Aa</span>
+      <span class="sw-pill" style="background:#933f7b;"></span>
+    </span>
+    <span class="sw-name">Blossom</span>
+  </button>
+
+  <button class="sw" title="Sky" aria-label="Sky theme">
+    <span class="sw-face" style="background:#d1ecff;">
+      <span class="sw-aa" style="color:#28353d;">Aa</span>
+      <span class="sw-pill" style="background:#006b9a;"></span>
+    </span>
+    <span class="sw-name">Sky</span>
+  </button>
+
+  <button class="sw" title="Rose" aria-label="Rose theme">
+    <span class="sw-face" style="background:#ffd3d3;">
+      <span class="sw-aa" style="color:#3d2e2f;">Aa</span>
+      <span class="sw-pill" style="background:#a23c45;"></span>
+    </span>
+    <span class="sw-name">Rose</span>
+  </button>
+
+  <button class="sw" title="Sun" aria-label="Sun theme">
+    <span class="sw-face" style="background:#f4de55;">
+      <span class="sw-aa" style="color:#353326;">Aa</span>
+      <span class="sw-pill" style="background:#8d5400;"></span>
+    </span>
+    <span class="sw-name">Sun</span>
+  </button>
+
+  <button class="sw" title="Tangerine" aria-label="Tangerine theme">
+    <span class="sw-face" style="background:#ffb685;">
+      <span class="sw-aa" style="color:#3c3028;">Aa</span>
+      <span class="sw-pill" style="background:#974c00;"></span>
+    </span>
+    <span class="sw-name">Tangerine</span>
+  </button>
+
+  <button class="sw" title="Grape" aria-label="Grape theme">
+    <span class="sw-face" style="background:#6833bc;">
+      <span class="sw-aa" style="color:#f4f1ff;">Aa</span>
+      <span class="sw-pill" style="background:#d8ceff;"></span>
+    </span>
+    <span class="sw-name">Grape</span>
+  </button>
+
+  <button class="sw" title="Ocean" aria-label="Ocean theme">
+    <span class="sw-face" style="background:#1c50b5;">
+      <span class="sw-aa" style="color:#edf4ff;">Aa</span>
+      <span class="sw-pill" style="background:#c0d7ff;"></span>
+    </span>
+    <span class="sw-name">Ocean</span>
+  </button>
+
+  <button class="sw" title="Crimson" aria-label="Crimson theme">
+    <span class="sw-face" style="background:#851616;">
+      <span class="sw-aa" style="color:#ffefed;">Aa</span>
+      <span class="sw-pill" style="background:#ffc6be;"></span>
+    </span>
+    <span class="sw-name">Crimson</span>
+  </button>
+
+  <button class="sw" title="Forest" aria-label="Forest theme">
+    <span class="sw-face" style="background:#00552e;">
+      <span class="sw-aa" style="color:#e6f9eb;">Aa</span>
+      <span class="sw-pill" style="background:#96edb5;"></span>
+    </span>
+    <span class="sw-name">Forest</span>
+  </button>
+
+  <button class="sw" title="Navy" aria-label="Navy theme">
+    <span class="sw-face" style="background:#144062;">
+      <span class="sw-aa" style="color:#eaf5ff;">Aa</span>
+      <span class="sw-pill" style="background:#b2dbff;"></span>
+    </span>
+    <span class="sw-name">Navy</span>
+  </button>
+
+  <button class="sw" title="Slate" aria-label="Slate theme">
+    <span class="sw-face" style="background:#263137;">
+      <span class="sw-aa" style="color:#e8f6ff;">Aa</span>
+      <span class="sw-pill" style="background:#a8deff;"></span>
+    </span>
+    <span class="sw-name">Slate</span>
+  </button>
+
+  <button class="sw" title="Ink" aria-label="Ink theme">
+    <span class="sw-face" style="background:#131927;">
+      <span class="sw-aa" style="color:#eef4ff;">Aa</span>
+      <span class="sw-pill" style="background:#c2d6ff;"></span>
+    </span>
+    <span class="sw-name">Ink</span>
+  </button>
+</div>
+
+<h2>The twenty themes, as real cards</h2>
+<p class="note">Each card shows body ink, secondary ink, a solid button with its label, and a ghost button — the four things a theme actually controls. The two transparent themes sit on a stand-in wallpaper to show the scrim doing its job.</p>
+<div class="grid">
+
+  <figure class="wcard">
+    <div class="widget" style="background:#f1f6f9;color:#28353d;">
+      <div class="whead">
+        <span class="wtitle" style="color:#536672;">PAPER</span>
+        <span class="wdots" style="color:#536672;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#536672;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#0f766e;color:#f2faff;">Start</button>
+          <button class="wghost" style="background:#d4e5e7;color:#00668f;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Paper</strong>
+      <span class="mono">ink 11.57 · label 5.18 · edge 5.03</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#e6f3f5;color:#263638;">
+      <div class="whead">
+        <span class="wtitle" style="color:#465e61;">FROST</span>
+        <span class="wdots" style="color:#465e61;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#465e61;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#0f766e;color:#f0fbfc;">Start</button>
+          <button class="wghost" style="background:#bad0d1;color:#005a62;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Frost</strong>
+      <span class="mono">ink 9.17 · label 5.19 · edge 3.99</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard on-wall">
+    <span class="wall"><div class="widget" style="background:rgba(241,246,249,0.82);backdrop-filter:blur(6px);color:#28353d;">
+      <div class="whead">
+        <span class="wtitle" style="color:#536672;">CLEAR</span>
+        <span class="wdots" style="color:#536672;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#536672;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#0f766e;color:#f2faff;">Start</button>
+          <button class="wghost" style="background:#c1d3d4;color:#00597e;">Reset</button>
+        </div>
+      </div>
+    </div></span>
+    <figcaption>
+      <strong>Clear</strong>
+      <span class="mono">ink 9.55 · label 5.18 · edge 4.15</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard on-wall">
+    <span class="wall"><div class="widget" style="background:rgba(12,28,37,0.82);backdrop-filter:blur(6px);color:#e8f6ff;">
+      <div class="whead">
+        <span class="wtitle" style="color:#a9c2d1;">CLEAR LIGHT</span>
+        <span class="wdots" style="color:#a9c2d1;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#a9c2d1;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#6fefe1;color:#012b27;">Start</button>
+          <button class="wghost" style="background:#1d282f;color:#6fefe1;">Reset</button>
+        </div>
+      </div>
+    </div></span>
+    <figcaption>
+      <strong>Clear light</strong>
+      <span class="mono">ink 12.65 · label 10.98 · edge 10.03</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#e8deff;color:#34303d;">
+      <div class="whead">
+        <span class="wtitle" style="color:#666072;">LILAC</span>
+        <span class="wdots" style="color:#666072;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#666072;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#704ea4;color:#f9f7ff;">Start</button>
+          <button class="wghost" style="background:#d8cbf3;color:#654298;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Lilac</strong>
+      <span class="mono">ink 9.98 · label 5.97 · edge 4.92</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#c6fde0;color:#29362f;">
+      <div class="whead">
+        <span class="wtitle" style="color:#54695e;">MINT</span>
+        <span class="wdots" style="color:#54695e;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#54695e;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#007650;color:#f2fbf6;">Start</button>
+          <button class="wghost" style="background:#acebcd;color:#006a47;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Mint</strong>
+      <span class="mono">ink 11.14 · label 5.37 · edge 5.00</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#faf6b3;color:#343427;">
+      <div class="whead">
+        <span class="wtitle" style="color:#656451;">LEMON</span>
+        <span class="wdots" style="color:#656451;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#656451;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#885700;color:#fef7f0;">Start</button>
+          <button class="wghost" style="background:#ebe19c;color:#885700;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Lemon</strong>
+      <span class="mono">ink 11.34 · label 5.80 · edge 5.54</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#ffdec3;color:#3b3027;">
+      <div class="whead">
+        <span class="wtitle" style="color:#706052;">PEACH</span>
+        <span class="wdots" style="color:#706052;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#706052;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#915100;color:#fff7f0;">Start</button>
+          <button class="wghost" style="background:#f1ccaa;color:#804800;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Peach</strong>
+      <span class="mono">ink 10.07 · label 5.86 · edge 4.88</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#ffe1f4;color:#3b2f36;">
+      <div class="whead">
+        <span class="wtitle" style="color:#705d69;">BLOSSOM</span>
+        <span class="wdots" style="color:#705d69;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#705d69;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#933f7b;color:#fef5fb;">Start</button>
+          <button class="wghost" style="background:#f1cce4;color:#8c3975;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Blossom</strong>
+      <span class="mono">ink 10.53 · label 6.07 · edge 5.35</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#d1ecff;color:#28353d;">
+      <div class="whead">
+        <span class="wtitle" style="color:#546673;">SKY</span>
+        <span class="wdots" style="color:#546673;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#546673;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#006b9a;color:#f2faff;">Start</button>
+          <button class="wghost" style="background:#b6dbf2;color:#005d88;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Sky</strong>
+      <span class="mono">ink 10.29 · label 5.57 · edge 4.81</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#ffd3d3;color:#3d2e2f;">
+      <div class="whead">
+        <span class="wtitle" style="color:#6c5556;">ROSE</span>
+        <span class="wdots" style="color:#6c5556;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#6c5556;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#a23c45;color:#fff6f6;">Start</button>
+          <button class="wghost" style="background:#f3bfc1;color:#922d39;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Rose</strong>
+      <span class="mono">ink 9.51 · label 6.05 · edge 4.75</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#f4de55;color:#353326;">
+      <div class="whead">
+        <span class="wtitle" style="color:#5f5b48;">SUN</span>
+        <span class="wdots" style="color:#5f5b48;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#5f5b48;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#8d5400;color:#fef7f0;">Start</button>
+          <button class="wghost" style="background:#e7cc4a;color:#784600;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Sun</strong>
+      <span class="mono">ink 9.33 · label 5.82 · edge 4.54</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#ffb685;color:#3c3028;">
+      <div class="whead">
+        <span class="wtitle" style="color:#5a493d;">TANGERINE</span>
+        <span class="wdots" style="color:#5a493d;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#5a493d;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#974c00;color:#fff7f1;">Start</button>
+          <button class="wghost" style="background:#f1a874;color:#6d3500;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Tangerine</strong>
+      <span class="mono">ink 7.46 · label 5.92 · edge 3.67</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#6833bc;color:#f4f1ff;">
+      <div class="whead">
+        <span class="wtitle" style="color:#d5d0e9;">GRAPE</span>
+        <span class="wdots" style="color:#d5d0e9;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#d5d0e9;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#d8ceff;color:#261f37;">Start</button>
+          <button class="wghost" style="background:#5c2da5;color:#d8ceff;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Grape</strong>
+      <span class="mono">ink 6.77 · label 10.64 · edge 5.09</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#1c50b5;color:#edf4ff;">
+      <div class="whead">
+        <span class="wtitle" style="color:#c9d6ed;">OCEAN</span>
+        <span class="wdots" style="color:#c9d6ed;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#c9d6ed;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#c0d7ff;color:#18243a;">Start</button>
+          <button class="wghost" style="background:#19469f;color:#c0d7ff;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Ocean</strong>
+      <span class="mono">ink 6.63 · label 10.65 · edge 5.03</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#851616;color:#ffefed;">
+      <div class="whead">
+        <span class="wtitle" style="color:#d4b6b2;">CRIMSON</span>
+        <span class="wdots" style="color:#d4b6b2;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#d4b6b2;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#ffc6be;color:#371b18;">Start</button>
+          <button class="wghost" style="background:#751313;color:#ffc6be;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Crimson</strong>
+      <span class="mono">ink 8.86 · label 10.56 · edge 6.63</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#00552e;color:#e6f9eb;">
+      <div class="whead">
+        <span class="wtitle" style="color:#adc5b4;">FOREST</span>
+        <span class="wdots" style="color:#adc5b4;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#adc5b4;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#96edb5;color:#102a1a;">Start</button>
+          <button class="wghost" style="background:#004b28;color:#96edb5;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Forest</strong>
+      <span class="mono">ink 8.17 · label 11.02 · edge 6.45</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#144062;color:#eaf5ff;">
+      <div class="whead">
+        <span class="wtitle" style="color:#acc1d3;">NAVY</span>
+        <span class="wdots" style="color:#acc1d3;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#acc1d3;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#b2dbff;color:#0f2638;">Start</button>
+          <button class="wghost" style="background:#123856;color:#b2dbff;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Navy</strong>
+      <span class="mono">ink 9.80 · label 10.68 · edge 7.46</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#263137;color:#e8f6ff;">
+      <div class="whead">
+        <span class="wtitle" style="color:#a9c2d1;">SLATE</span>
+        <span class="wdots" style="color:#a9c2d1;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#a9c2d1;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#a8deff;color:#0a2737;">Start</button>
+          <button class="wghost" style="background:#212b30;color:#a8deff;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Slate</strong>
+      <span class="mono">ink 12.09 · label 10.72 · edge 9.23</span>
+    </figcaption>
+  </figure>
+
+  <figure class="wcard">
+    <div class="widget" style="background:#131927;color:#eef4ff;">
+      <div class="whead">
+        <span class="wtitle" style="color:#b3bed5;">INK</span>
+        <span class="wdots" style="color:#b3bed5;">•••</span>
+      </div>
+      <div class="wbody">
+        <p class="wtext">Line up in twos.</p>
+        <p class="wsoft" style="color:#b3bed5;">Secondary note</p>
+        <div class="wrow">
+          <button class="wbtn" style="background:#c2d6ff;color:#19233a;">Start</button>
+          <button class="wghost" style="background:#111622;color:#c2d6ff;">Reset</button>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <strong>Ink</strong>
+      <span class="mono">ink 15.90 · label 10.69 · edge 12.00</span>
+    </figcaption>
+  </figure>
+</div>

@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The timer gap — what Pat described vs what we ship</title>
+<link rel="stylesheet" href="../../vendor/fonts/fonts.css">
+<style>
+  /* Values copied verbatim from style.css tokens, 2026-08-02. Nothing themed at runtime. */
+  :root {
+    --ink: #22303c; --ink-soft: #5b6b7b; --accent: #0f766e; --accent-soft: #ccfbf1;
+    --panel-solid: #fff; --panel-border: rgba(34,48,60,0.08); --danger: #dc2626;
+    --surface-page: #f1f5f5; --hairline: #e9eff1; --track: #dce4e7;
+    --tint-yellow: #fff3c9; --tint-violet: #eee6fb; --tint-pink: #ffe4e9; --tint-blue: #e8f1ff;
+    --font-ui: "Quicksand", ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+    --font-display: "Lexend", "Quicksand", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--surface-page); color: var(--ink); font-family: var(--font-ui); padding: 26px 20px 70px; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 { font-family: var(--font-display); font-size: 27px; font-weight: 700; letter-spacing: -0.01em; }
+  h2 { font-family: var(--font-display); font-size: 19px; font-weight: 600; margin: 40px 0 3px; }
+  .sub { color: var(--ink-soft); font-size: 13.5px; line-height: 1.5; max-width: 76ch; margin-top: 6px; }
+  .sub b { color: var(--ink); }
+
+  .quotes { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .q { flex: 1 1 300px; background: #dcf8c6; color: #111; border-radius: 14px 14px 14px 4px;
+       padding: 10px 13px; font-size: 13px; line-height: 1.45; box-shadow: 0 2px 6px rgba(15,30,45,0.07); }
+  .q em { color: #3d5a3d; font-style: normal; font-weight: 700; display: block; font-size: 10.5px;
+          text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+
+  .vs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; align-items: start; }
+  @media (max-width: 860px) { .vs { grid-template-columns: 1fr; } }
+  .side { background: var(--panel-solid); border: 1px solid var(--panel-border); border-radius: 20px; padding: 16px; }
+  .side > h3 { font-family: var(--font-display); font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .side .lede { font-size: 12px; color: var(--ink-soft); margin-bottom: 13px; line-height: 1.45; }
+  .side.ours { border-color: rgba(15,118,110,0.28); box-shadow: 0 6px 18px rgba(15,118,110,0.07); }
+  .badge { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+           text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-bottom: 7px; }
+  .badge.them { background: var(--tint-violet); color: #6d4fa3; }
+  .badge.us { background: var(--accent-soft); color: var(--accent); }
+
+  /* ---- faithful replica of the shipped widget chrome ---- */
+  .stage-swatch { background: linear-gradient(160deg,#e8ecf0,#eef1f3); border-radius: 16px; padding: 14px;
+                  display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .widget { width: 244px; background: rgba(255,255,255,0.92); border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(15,30,45,0.18); overflow: hidden; }
+  .widget-header { display: flex; align-items: center; gap: 6px; padding: 7px 10px;
+                   border-bottom: 1px solid var(--hairline); background: #fff; }
+  .widget-title { font-size: 11.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+                  color: var(--ink-soft); display: flex; align-items: center; gap: 6px; flex: 1; }
+  .widget-title .ic svg { width: 15px; height: 15px; display: block; }
+  .wdots { color: #c3ccd2; font-size: 13px; letter-spacing: 2px; }
+  .widget-body { padding: 10px 12px 12px; }
+  .time-display { font-family: var(--font-display); font-weight: 800; font-variant-numeric: tabular-nums;
+                  font-size: 46px; line-height: 1.05; text-align: center; color: var(--ink); }
+  .time-display.finished { color: var(--danger); }
+  .timer-bar { height: 7px; background: rgba(34,48,60,0.12); border-radius: 999px; overflow: hidden; margin: 9px 0 10px; }
+  .timer-bar > div { height: 100%; background: var(--accent); border-radius: 999px; }
+  .center-row { display: flex; gap: 6px; justify-content: center; margin-bottom: 6px; }
+  .btn { font-family: inherit; font-size: 12.5px; font-weight: 700; border: 0; border-radius: 999px;
+         padding: 6px 15px; background: var(--accent); color: #fff; }
+  .btn.ghost { background: var(--accent-soft); color: var(--accent); }
+  .btn.ghost.small { padding: 4px 11px; font-size: 11.5px; }
+  .cap { font-size: 11px; color: var(--ink-soft); text-align: center; margin-top: 8px; line-height: 1.4; }
+
+  /* ---- the genre row ---- */
+  .genre { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px,1fr)); gap: 9px; }
+  .gt { background: #fffdf4; border: 1px solid var(--hairline); border-radius: 14px; padding: 8px 6px 6px; text-align: center; }
+  .gt svg { width: 100%; height: auto; display: block; }
+  .gt .nm { font-size: 11px; font-weight: 700; margin-top: 3px; }
+  .gt .md { font-size: 9.5px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* ---- sound ---- */
+  .snd-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px,1fr)); gap: 8px; }
+  .snd { background: #fff; border: 1px solid var(--panel-border); border-radius: 14px; padding: 8px 10px;
+         display: flex; align-items: center; gap: 9px; }
+  .snd button { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer;
+                background: var(--accent); color: #fff; font-size: 13px; }
+  .snd button:active { transform: scale(0.93); }
+  .snd .nm { font-weight: 700; font-size: 12px; }
+  .snd .ds { font-size: 10px; color: var(--ink-soft); }
+  .solo { display: flex; align-items: center; gap: 14px; background: var(--tint-pink);
+          border-radius: 16px; padding: 16px; }
+  .solo button { width: 60px; height: 60px; border-radius: 50%; border: 0; cursor: pointer;
+                 background: var(--danger); color: #fff; font-size: 21px; flex: 0 0 auto;
+                 box-shadow: 0 8px 20px rgba(220,38,38,0.3); }
+  .solo .t { font-size: 12.5px; line-height: 1.45; }
+  .solo .t b { display: block; font-size: 14px; font-family: var(--font-display); margin-bottom: 2px; }
+
+  .empty { border: 2px dashed var(--track); border-radius: 16px; padding: 26px 16px; text-align: center;
+           color: var(--ink-soft); font-size: 13px; }
+  .empty b { display: block; font-size: 15px; color: var(--ink); font-family: var(--font-display); margin-bottom: 4px; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 12.5px; background: #fff;
+          border-radius: 16px; overflow: hidden; box-shadow: 0 4px 16px rgba(15,30,45,0.06); }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  th { background: #f7fafa; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); }
+  tr:last-child td { border-bottom: 0; }
+  .pill { display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+  .gap-none { background: var(--accent-soft); color: var(--accent); }
+  .gap-some { background: var(--tint-yellow); color: #8a6d1a; }
+  .gap-big  { background: var(--tint-pink); color: #a13b4b; }
+
+  .band { background: #fff6f7; border: 1px solid rgba(220,38,38,0.18); border-radius: 18px; padding: 15px 18px; margin-top: 16px; }
+  .band h3 { font-family: var(--font-display); font-size: 14.5px; font-weight: 600; margin-bottom: 5px; color: #a13b4b; }
+  .band p { font-size: 12.5px; line-height: 1.55; color: var(--ink); }
+  .band .no { display: inline-block; background: #fff; border: 1px solid rgba(220,38,38,0.25); color: #a13b4b;
+              border-radius: 999px; padding: 2px 10px; font-size: 11.5px; font-weight: 700; margin: 6px 6px 0 0; }
+  .band .yes { display: inline-block; background: var(--accent-soft); color: var(--accent);
+               border-radius: 999px; padding: 2px 10px; font-size: 11.5px; font-weight: 700; margin: 6px 6px 0 0; }
+
+  .budget { background: var(--panel-solid); border: 1px solid var(--panel-border); border-radius: 20px; padding: 16px 18px; margin-top: 14px; }
+  .bar-track { height: 30px; background: #eef2f3; border-radius: 999px; display: flex; overflow: hidden; margin: 10px 0 4px; }
+  .seg { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; }
+  .seg.s1 { background: var(--accent); }
+  .seg.s2 { background: #6d9c97; }
+  .seg.rest { background: repeating-linear-gradient(45deg, #e3e9ea, #e3e9ea 7px, #eef2f3 7px, #eef2f3 14px); color: var(--ink-soft); }
+  .bud-key { display: flex; gap: 16px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-soft); margin-top: 8px; }
+  .slice { display: grid; grid-template-columns: 130px 1fr 90px; gap: 12px; align-items: start;
+           padding: 10px 0; border-top: 1px solid var(--hairline); font-size: 12.5px; }
+  .slice b { font-family: var(--font-display); }
+  .slice .fit { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 3px 9px; text-align: center; }
+  .fit.now { background: var(--accent-soft); color: var(--accent); }
+  .fit.after { background: var(--tint-yellow); color: #8a6d1a; }
+  .fit.later { background: #eef2f3; color: var(--ink-soft); }
+
+  .verdict { background: var(--panel-solid); border-left: 4px solid var(--accent); border-radius: 0 16px 16px 0;
+             padding: 14px 18px; margin-top: 14px; font-size: 13.5px; line-height: 1.55; }
+  .verdict b { font-family: var(--font-display); }
+  .foot { margin-top: 40px; font-size: 11.5px; color: var(--ink-soft); border-top: 1px solid var(--hairline); padding-top: 12px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>The timer gap</h1>
+  <p class="sub"><b>What Pat described, next to what Sage Stage actually ships — 2 August 2026.</b>
+  The right-hand widgets are rebuilt from the shipped markup, the shipped tokens and the vendored
+  Lexend/Quicksand, frozen at the state I actually paused the running app at (<b>00:08 of 1:00</b>) —
+  faithful to the code, but drawn on a neutral swatch, so your own stage background will differ. The
+  red sound button is a byte-faithful reproduction of <code>beep(4)</code> from app.js:63 — the only
+  sound <em>our timers</em> can make. (App-wide, Video and Embed do pipe third-party audio through the
+  classroom speakers; the timers do not.)</p>
+  <p class="sub" style="margin-top:8px"><b>Sample size: one.</b> This is a single teacher after a
+  single session on a phone. It is the first outside feedback the product has ever had, which makes it
+  precious and non-representative at the same time. The 13 Aug testers may want something else
+  entirely — so the last strip on this page is about what fits before then, not about everything that
+  could be built.</p>
+
+  <div class="quotes">
+    <div class="q"><em>Pat · 6:41</em>It would be nice if you could choose different sounds for the timer. Sometimes you want something gentle and calm, sometimes you want something more energetic and fast paced</div>
+    <div class="q"><em>Pat · 6:44</em>the kids love having the visuals of the egg timer, sand timer and candle and i use the mission impossible theme when we're in a rush and they love it!</div>
+  </div>
+
+  <h2>1 · The picture — one face against a wardrobe</h2>
+  <div class="vs">
+    <div class="side">
+      <span class="badge them">the genre Pat has used for years</span>
+      <h3>Timers as things — and mostly as races</h3>
+      <p class="lede">The site Pat linked runs to <b>sixty-plus</b> timers, and the single biggest group
+      isn't the egg and the candle at all — it's <b>races</b>: ducks, snails, dinosaurs, horses,
+      rockets, all crossing a finish line at zero. Drawn generically below; these are the
+      <em>category</em>, not copies of anyone's artwork.</p>
+      <div class="genre">
+        <div class="gt"><svg viewBox="0 0 80 78">
+          <path d="M26 8h28M26 70h28" stroke="#8a6d1a" stroke-width="5" stroke-linecap="round"/>
+          <path d="M30 12C30 28 40 32 40 39C40 46 30 54 30 66M50 12C50 28 40 32 40 39C40 46 50 54 50 66" fill="none" stroke="#bac9ce" stroke-width="3"/>
+          <path d="M33 17h14l-6 12h-2Z" fill="#fde68a"/><path d="M40 39v22" stroke="#fde68a" stroke-width="2.5" stroke-dasharray="2 3"/>
+          <path d="M32 64q8-8 16 0Z" fill="#fde68a"/></svg>
+          <div class="nm">Sand timer</div><div class="md">calm</div></div>
+        <div class="gt"><svg viewBox="0 0 80 78">
+          <rect x="28" y="28" width="24" height="40" rx="6" fill="#fff3c9" stroke="#e9d9a0" stroke-width="2"/>
+          <path d="M40 22v6" stroke="#8a6d1a" stroke-width="2.5"/>
+          <path d="M40 8c6 8 6 12 0 15c-6-3-6-7 0-15Z" fill="#f59e0b"/>
+          <path d="M24 68h32" stroke="#0f766e" stroke-width="4" stroke-linecap="round"/></svg>
+          <div class="nm">Candle</div><div class="md">calm</div></div>
+        <div class="gt"><svg viewBox="0 0 80 78">
+          <path d="M40 16c11 0 16 15 16 26c0 12-7 20-16 20s-16-8-16-20c0-11 5-26 16-26Z" fill="#fff" stroke="#e9d9a0" stroke-width="2.5"/>
+          <circle cx="33" cy="40" r="3.2" fill="#fff3c9"/><circle cx="47" cy="50" r="3.6" fill="#fff3c9"/>
+          <path d="M28 34l5 3l-4 4l6 3" fill="none" stroke="#8a6d1a" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M50 30l-4 4l4 3" fill="none" stroke="#8a6d1a" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M16 40q-4-3-2-7M64 40q4-3 2-7" stroke="#bac9ce" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          <div class="nm">Egg</div><div class="md">silly</div></div>
+        <div class="gt"><svg viewBox="0 0 80 78">
+          <path d="M40 10c8 9 9 26 8 42H32c-1-16 0-33 8-42Z" fill="#e8f1ff" stroke="#3e6ea8" stroke-width="2.5"/>
+          <circle cx="40" cy="30" r="5" fill="#ccfbf1" stroke="#0f766e" stroke-width="2.5"/>
+          <path d="M32 52l-7 10h7M48 52l7 10h-7" fill="#ffe4e9" stroke="#dc2626" stroke-width="2.5"/>
+          <ellipse cx="34" cy="68" rx="7" ry="4" fill="#e9eff1"/><ellipse cx="48" cy="69" rx="8" ry="4.5" fill="#e9eff1"/></svg>
+          <div class="nm">Rocket</div><div class="md">energetic</div></div>
+      </div>
+      <p class="cap">The finish-line shape is the insight worth stealing: a countdown that <em>ends in
+      an event</em>. It's also exactly what the Rocket face and the Escape! game are.</p>
+    </div>
+
+    <div class="side ours">
+      <span class="badge us">what Sage Stage ships today</span>
+      <h3>Two timers, and one of them is already a face</h3>
+      <p class="lede">Captured live from the running app. Both are good; there is simply one of each.</p>
+      <div class="stage-swatch">
+
+        <div class="widget">
+          <div class="widget-header">
+            <span class="widget-title"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8.2 5.5h7.6L12.9 10.6h-1.8L8.2 5.5z" fill="#fde68a"></path>
+              <path d="M8.2 18.5h7.6l-2.9-5.1h-1.8l-2.9 5.1z" fill="#fde68a"></path>
+              <path d="M6.2 4h11.6M6.2 20h11.6"></path></svg></span>Timer</span>
+            <span class="wdots">⚙ ⋮ ✕</span>
+          </div>
+          <div class="widget-body">
+            <div class="time-display">00:08</div>
+            <div class="timer-bar"><div style="width:11.855%"></div></div>
+            <div class="center-row"><button class="btn">Start</button><button class="btn ghost">Reset</button></div>
+            <div class="center-row"><button class="btn ghost small">1m</button><button class="btn ghost small">5m</button><button class="btn ghost small">10m</button><button class="btn ghost small">15m</button></div>
+          </div>
+        </div>
+
+        <div class="widget">
+          <div class="widget-header">
+            <span class="widget-title"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="8.2" fill="#ffe4e9"></circle><path d="M12 3.8V12l5.8 5.8"></path></svg></span>Visual timer</span>
+            <span class="wdots">⚙ ⋮ ✕</span>
+          </div>
+          <div class="widget-body">
+            <svg viewBox="0 0 200 176" style="width:100%;height:auto;display:block">
+              <circle cx="100" cy="86" r="72" fill="none" stroke="#c9d2d7" stroke-width="1.6"/>
+              <g stroke="#8d9aa2" stroke-width="1.8" stroke-linecap="round">
+                <path d="M100 14v8"/><path d="M136 23.6l-4 6.9"/><path d="M162.4 50l-6.9 4"/><path d="M172 86h-8"/>
+                <path d="M162.4 122l-6.9-4"/><path d="M136 148.4l-4-6.9"/><path d="M100 158v-8"/><path d="M64 148.4l4-6.9"/>
+                <path d="M37.6 122l6.9-4"/><path d="M28 86h8"/><path d="M37.6 50l6.9 4"/><path d="M64 23.6l4 6.9"/>
+              </g>
+              <path d="M100 86 L100 14 A72 72 0 0 1 142.3 27.8 Z" fill="#e04a42"/>
+              <circle cx="100" cy="86" r="31" fill="#fff" stroke="#dfe6ea" stroke-width="1.4"/>
+              <text x="100" y="94" text-anchor="middle" font-family="Lexend, Quicksand, sans-serif"
+                    font-size="25" font-weight="800" fill="#22303c" style="font-variant-numeric:tabular-nums">00:08</text>
+            </svg>
+            <div class="center-row" style="margin-top:8px"><button class="btn">Start</button><button class="btn ghost">Reset</button></div>
+            <div class="center-row"><button class="btn ghost small">1m</button><button class="btn ghost small">5m</button><button class="btn ghost small">10m</button><button class="btn ghost small">15m</button></div>
+          </div>
+        </div>
+      </div>
+      <p class="cap"><b>The Visual timer is already in Pat's category</b> — and it is a proper
+      <em>clock face</em>: twelve ticks with the quarter marks drawn heavier, a wedge depleting
+      clockwise from twelve, digits in a centre bubble that turn red at zero. It just has no costume.</p>
+    </div>
+  </div>
+
+  <div class="verdict"><b>Read on the picture:</b> this is not a missing feature, it is a missing
+  <em>wardrobe</em>. The mechanism Pat is asking for — a countdown you read as a shrinking shape rather
+  than as numbers — shipped long ago and works well. What the egg, the candle and the sand timer add on
+  top is <em>character</em>: a reason for a five-year-old to look up. One face becomes five, using the
+  canvas that is already there.<br><br>
+  <b>The trade to name out loud:</b> the wedge sits on a real clock dial, so it rehearses analogue
+  clock-reading at exactly the age children are being taught it. Sand level and wax height read
+  fraction-remaining beautifully and teach nothing about clocks. That makes faces an <em>option
+  alongside</em> the disc, never a replacement for it — which is why the spec keeps the disc as the
+  default and why the picker should probably say so.</div>
+
+  <h2>2 · The sound — this is the real gap</h2>
+  <p class="sub">Press the red button. That is not a sample of our timer's sound; that is
+  <b>the entire vocabulary</b> of every sound Sage Stage generates — both timers, all six maths
+  manipulatives and the noise meter, from one function. One sine wave at 880 Hz, repeated. A teacher
+  can turn it off; they cannot change it, and there is no volume.
+  <br><b>Level warning, so the demo isn't rigged:</b> the red button plays at the app's real peak gain
+  (0.4); the sketches beside it are quieter by design (≤0.25). Judge the character, not the loudness.</p>
+
+  <div class="vs" style="margin-top:14px">
+    <div class="side ours" style="border-color:rgba(220,38,38,0.25)">
+      <span class="badge us" style="background:var(--tint-pink);color:#a13b4b">what we ship</span>
+      <h3>One voice — but a chosen one</h3>
+      <p class="lede">app.js:63 — a sine, not a square, with a shaped envelope: 20 ms attack, 0.35 s
+      decay, four rings 0.45 s apart, and the audio context closed afterwards so nothing idles.
+      Somebody picked that. And the timers <em>are</em> configurable in other ways — any duration to
+      the second, plus Repeat for interval ringing at 10, 20, 30 minutes. The gap is
+      <b>no choice of sound</b>, which is narrower and fairer than "no customisation".</p>
+      <div class="solo">
+        <button onclick="ourBeep()" title="Play the app's actual finish sound">▶</button>
+        <div class="t"><b>Our entire sound palette</b>Gentle enough for a reading corner. Useless for
+        ending a tidy-up race on a high — and identical whether the lesson wanted calm or urgency.</div>
+      </div>
+      <p class="cap" style="text-align:left;margin-top:10px"><b>And the one that cuts against us:</b>
+      this chime has never been verified inside the Tauri webview. The audio context is created outside
+      a user gesture, so on the packaged desktop build the timer may currently make
+      <em>no sound at all</em>. That spike is open in the spec (§13) and should be closed before any
+      of the work below is scheduled — there is no point choosing between six sounds on a build that
+      plays none.</p>
+    </div>
+
+    <div class="side">
+      <span class="badge them">what Pat asked for</span>
+      <h3>A mood you can pick</h3>
+      <p class="lede">Sketches, synthesized live — same technique as the beep, no audio files, still
+      100% offline. Final timbres are a build-day craft question.</p>
+      <div class="snd-row">
+        <div class="snd"><button onclick="sSoft()">▶</button><div><div class="nm">Soft chime</div><div class="ds">calm</div></div></div>
+        <div class="snd"><button onclick="sBell()">▶</button><div><div class="nm">School bell</div><div class="ds">classic</div></div></div>
+        <div class="snd"><button onclick="sTada()">▶</button><div><div class="nm">Ta-da</div><div class="ds">celebratory</div></div></div>
+        <div class="snd"><button onclick="sLaunch()">▶</button><div><div class="nm">Rocket launch</div><div class="ds">energetic</div></div></div>
+        <div class="snd"><button onclick="sPop()">▶</button><div><div class="nm">Pop + cheep</div><div class="ds">silly</div></div></div>
+        <div class="snd"><button onclick="ourBeep()">▶</button><div><div class="nm">Classic chime</div><div class="ds">today's — stays default</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>3 · The countdown itself — a layer we simply don't have</h2>
+  <p class="sub">Pat's favourite trick is the one with no equivalent in Sage Stage at all: music
+  <b>while the clock runs</b>, getting faster as it empties. Not an alarm — atmosphere. Today our
+  timers say nothing between Start and zero, then chime once. (Visually plenty happens — the teal bar
+  depletes, the wedge steps every 200 ms — this is a hole in the <em>audio</em> layer only.)
+  <br>Worth knowing: the site Pat linked appears to offer sound only as
+  <b>end-of-timer alarms</b> too. The tension music is Pat supplying it themselves, off to one side of
+  the timer — which is precisely why tying it to the clock is the interesting move rather than a
+  catch-up.</p>
+  <div class="vs" style="margin-top:14px">
+    <div class="side ours" style="border-color:rgba(34,48,60,0.10);box-shadow:none">
+      <span class="badge us" style="background:#eef2f3;color:#5b6b7b">what we ship</span>
+      <div class="empty"><b>Silence</b>Nothing <em>sounds</em> between Start and 00:00.<br>
+      The picture keeps moving; the room hears nothing.</div>
+    </div>
+    <div class="side">
+      <span class="badge them">what Pat asked for</span>
+      <h3>Tension that belongs to the clock</h3>
+      <div class="snd-row">
+        <div class="snd"><button onclick="dTick()">▶</button><div><div class="nm">Last-10 tick</div><div class="ds">the universal one</div></div></div>
+        <div class="snd"><button onclick="dPulse()">▶</button><div><div class="nm">Heartbeat</div><div class="ds">90 → 180 bpm</div></div></div>
+        <div class="snd"><button onclick="dKing()">▶</button><div><div class="nm">Mountain King</div><div class="ds">Grieg · public domain</div></div></div>
+        <div class="snd"><button onclick="dSpy()">▶</button><div><div class="nm">Spy vamp</div><div class="ds">original · genre only</div></div></div>
+      </div>
+      <p class="cap" style="text-align:left"><b>The licensing catch, and the way round it.</b> We can
+      never ship Mission Impossible, Indiana Jones or Star Wars — those are protected compositions, and
+      a close imitation infringes just as surely as the recording. Grieg died in 1907, so
+      <em>In the Hall of the Mountain King</em> is ours to sequence ourselves — and it was literally
+      written to accelerate. Because our tempo is driven by the clock, the chase can finish exactly when
+      the time does. Pat's Spotify can't do that.</p>
+    </div>
+  </div>
+
+  <h2>4 · The honest scorecard</h2>
+  <table>
+    <thead><tr><th style="width:20%">Pat's ask</th><th style="width:34%">Where we are, and why it's like that</th><th style="width:11%">Gap</th><th>What closes it</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>Choosable end sounds</b><br>calm vs energetic</td>
+        <td>One enveloped sine chime, on/off only. <b>Why:</b> zero audio assets anywhere means it works
+        offline, ships nothing to license, and nothing idles. Predictable noise is also a
+        behaviour-management asset — a teacher who has run this once knows exactly what the room hears.</td>
+        <td><span class="pill gap-big">the real one</span></td>
+        <td>A sounds.js of synth recipes plus a dropdown on both timers. Still zero assets. Preview-on-change is mandatory, because choice reintroduces the risk of a surprise noise mid-lesson.</td>
+      </tr>
+      <tr>
+        <td><b>Music during the countdown</b><br>the tidy-up race</td>
+        <td>Nothing sounds until zero. <b>Why:</b> the chime was built to mark <em>time's up</em>;
+        nothing was ever built to mark <em>time passing</em>. A genuine hole rather than a decision.</td>
+        <td><span class="pill gap-big">absent</span></td>
+        <td>A second, independent audio layer with tempo driven by time remaining. See the band below for what we can and can't use.</td>
+      </tr>
+      <tr>
+        <td><b>Themed visual timers</b><br>egg, sand, candle</td>
+        <td><b>A working clock-face timer</b> — dial, quarter marks, depleting wedge, centre digits,
+        colour picker. <b>Why it's a dial:</b> it rehearses analogue clock-reading at the age it's being
+        taught. Both timers are also wall-clock correct, so a slept laptop doesn't lose time.</td>
+        <td><span class="pill gap-some">costume only</span></td>
+        <td>A face table on the existing canvas. The disc stays default and stays offered, because the other faces trade clock-reading for mood.</td>
+      </tr>
+      <tr>
+        <td><b>Hangman without the gallows</b><br>"alien escape"</td>
+        <td>A Games shelf with five games and a settled widget pattern to copy.</td>
+        <td><span class="pill gap-some">new build</span></td>
+        <td>One widget, one scenario, both endings animated. Spec written; sequenced after the sounds.</td>
+      </tr>
+      <tr>
+        <td><b>Dragging on a phone</b></td>
+        <td>Pointer drag tuned for mouse and projector. <b>Why:</b> the unit of adoption is one teacher,
+        one machine, one board — a phone was never the target.</td>
+        <td><span class="pill gap-none">out of scope</span></td>
+        <td>Worth a touch pass someday. Pat is retesting on MacBook and iPad, which will tell us more than the phone did.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="band">
+    <h3>Can't ship, ever — and it isn't a failure</h3>
+    <p>Pat named three film themes. None of them can go in the product: the Mission Impossible theme
+    including its 5/4 ostinato, and the Williams scores, are protected compositions — a close imitation
+    infringes as surely as the recording, and recordings carry a second rights layer on top. This row
+    belongs here rather than in the deficiency column above: we are not behind on it, it is
+    unbuildable. What <em>is</em> buildable lands the same classroom joke.</p>
+    <span class="no">✗ Mission Impossible</span><span class="no">✗ Indiana Jones</span><span class="no">✗ Star Wars</span><span class="no">✗ Sabre Dance (in © to 2049)</span>
+    <br><span class="yes">✓ Mountain King — Grieg d.1907, self-sequenced</span><span class="yes">✓ William Tell gallop — Rossini d.1868</span><span class="yes">✓ Original spy vamp — genre, not theme</span>
+    <p style="margin-top:9px">And Pat keeps playing the real thing off their own speakers, which is
+    their licence and their business. What we can give them that Spotify can't is a chase whose tempo
+    is owned by the clock, so it finishes exactly when the time does.</p>
+  </div>
+
+  <h2>5 · So what actually fits before the testers?</h2>
+  <p class="sub">The comparison above is only useful if it ends in a decision. You're away 4–11 Aug and
+  the testers arrive ~13 Aug, with the return days already spoken for by smoke-testing and opening the
+  doors. That leaves roughly <b>two build sessions</b>, and this is what they buy.</p>
+
+  <div class="budget">
+    <div style="font-size:12px;font-weight:700">Build sessions available before 13 Aug</div>
+    <div class="bar-track">
+      <div class="seg s1" style="flex:1">Slice 1 · sound choice</div>
+      <div class="seg s2" style="flex:1">Slice 2 · during layer</div>
+      <div class="seg rest" style="flex:2.2">faces · Escape! · everything else — after the testers</div>
+    </div>
+    <div class="bud-key"><span>▪ Spike first: verify audio in the Tauri webview (hours, not a session)</span></div>
+
+    <div class="slice" style="border-top:0">
+      <div><b>Slice 1 · Sound choice</b><br><span style="color:var(--ink-soft)">1 session</span></div>
+      <div>Pat's literal ask. Upgrades <em>both</em> timers at once, defaults byte-for-byte unchanged,
+      no assets, still fully offline. Risk it introduces: a teacher can now be surprised by a sound —
+      answered by previewing on change.</div>
+      <div class="fit now">fits</div>
+    </div>
+    <div class="slice">
+      <div><b>Slice 2 · During layer</b><br><span style="color:var(--ink-soft)">1 session</span></div>
+      <div>The tidy-up race. Depends on slice 1's engine existing. The most <em>distinctive</em> of the
+      three — nobody else ties the music to the clock — but it is the least-requested by anyone except
+      Pat, and it is second in line for a reason.</div>
+      <div class="fit after">tight</div>
+    </div>
+    <div class="slice">
+      <div><b>Slice 3 · Faces</b><br><span style="color:var(--ink-soft)">2+ sessions</span></div>
+      <div>Sand, candle, rocket, egg. Needs the six-metre legibility test per face and a picker that
+      makes the clock-reading trade visible. This is the one to hold until the testers either confirm
+      Pat's instinct or ask for something else entirely.</div>
+      <div class="fit later">after</div>
+    </div>
+    <div class="slice">
+      <div><b>Escape!</b><br><span style="color:var(--ink-soft)">1–2 sessions</span></div>
+      <div>Needs slice 1's sound engine plus the rough.js pen work. Genuinely the most fun thing on the
+      list, and the least urgent — it is a new widget, not a fix.</div>
+      <div class="fit later">after</div>
+    </div>
+  </div>
+
+  <div class="verdict" style="margin-top:16px"><b>The summary in one line:</b> of Pat's four asks, three
+  are a costume change on machinery that already works, and one — the sound — is a genuine hole worth
+  a day — and the decision this page exists to make is <b>slice 1, before you go away</b>: the literal
+  ask, one session, both timers improved, and nothing changed for anyone who never opens the gear.
+  Everything else waits for 13 Aug, when the sample size stops being one.<br><br>
+  The most valuable thing in those seven messages isn't a feature at all. A working teacher opened this
+  on a phone, unprompted, and said <em>it replaces smarts and has way more features</em> — then
+  immediately started asking for polish rather than for fixes. That is the review you want, and it says
+  the timers are right, not wrong.</div>
+
+  <p class="foot">Sage Stage · docs/design/timer-gap.html · <b>How to check this page:</b> the
+  right-hand widgets are rebuilt from the shipped markup and tokens with the vendored Lexend/Quicksand,
+  frozen at the state the running app was paused at (00:08 of 1:00) — faithful to the code, drawn on a
+  neutral swatch, so your own stage background will differ. The red button reproduces
+  <code>beep(4)</code> from app.js:63 exactly, at its real peak gain of 0.4; the other sounds are 2–6 s
+  synthesized sketches at ≤0.25, so they are quieter than the real thing, not sweeter. Left-hand timer
+  drawings are generic representations of the category, not copies of any product's artwork; the
+  sixty-plus figure and the races observation come from a read of the site Pat linked ·
+  Every code claim here was verified twice, and the corrections that survived are folded in — the
+  Visual timer is a clock face rather than a plain disc, "one sound" is true of our timers rather than
+  the whole app, and the open Tauri audio spike means today's chime is unproven on the desktop build ·
+  Specs: docs/timer-design.md, docs/alien-escape-design.md · Faces and sounds are picked on
+  docs/design/timer-faces-directions.html</p>
+</div>
+
+<script>
+let AC = null;
+function ctx(){ try { AC = AC || new (window.AudioContext||window.webkitAudioContext)(); AC.resume(); return AC; } catch(e){ return null; } }
+
+/* Verbatim reproduction of app.js:63 beep() — sine, 880Hz, gain 0.4, 0.45s spacing, 4 rings. */
+function ourBeep(){
+  const ac = ctx(); if (!ac) return;
+  const times = 4;
+  for (let i = 0; i < times; i++) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    const t0 = ac.currentTime + i * 0.45;
+    o.type = 'sine'; o.frequency.value = 880;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.4, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+    o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + 0.4);
+  }
+}
+
+function tone(ac,{f=440,t0=0,dur=0.3,type='sine',g=0.2,slideTo=null}){
+  const o=ac.createOscillator(),v=ac.createGain(),now=ac.currentTime+t0;
+  o.type=type;o.frequency.setValueAtTime(f,now);
+  if(slideTo)o.frequency.exponentialRampToValueAtTime(slideTo,now+dur);
+  v.gain.setValueAtTime(0.0001,now);
+  v.gain.exponentialRampToValueAtTime(g,now+0.02);
+  v.gain.exponentialRampToValueAtTime(0.0001,now+dur);
+  o.connect(v).connect(ac.destination);o.start(now);o.stop(now+dur+0.05);
+}
+function noise(ac,{t0=0,dur=0.5,g=0.15,from=300,to=1500}){
+  const len=Math.max(1,Math.floor(ac.sampleRate*dur)),buf=ac.createBuffer(1,len,ac.sampleRate);
+  const d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+  const src=ac.createBufferSource();src.buffer=buf;
+  const fl=ac.createBiquadFilter();fl.type='lowpass';const now=ac.currentTime+t0;
+  fl.frequency.setValueAtTime(from,now);fl.frequency.exponentialRampToValueAtTime(to,now+dur);
+  const v=ac.createGain();v.gain.setValueAtTime(0.0001,now);
+  v.gain.exponentialRampToValueAtTime(g,now+0.05);v.gain.exponentialRampToValueAtTime(0.0001,now+dur);
+  src.connect(fl).connect(v).connect(ac.destination);src.start(now);src.stop(now+dur+0.05);
+}
+const midi=(n)=>440*Math.pow(2,(n-69)/12);
+
+function sSoft(){const ac=ctx();if(!ac)return;tone(ac,{f:660,dur:0.9,g:0.14});tone(ac,{f:880,t0:0.28,dur:1.1,g:0.12});}
+function sBell(){const ac=ctx();if(!ac)return;for(let i=0;i<16;i++)tone(ac,{f:1400,t0:i*0.05,dur:0.045,type:'square',g:0.07});}
+function sTada(){const ac=ctx();if(!ac)return;[60,64,67,72].forEach((n,i)=>tone(ac,{f:midi(n),t0:i*0.12,dur:i===3?0.7:0.18,type:'triangle',g:0.2}));}
+function sLaunch(){const ac=ctx();if(!ac)return;noise(ac,{dur:1.1,g:0.2,from:200,to:2200});tone(ac,{f:120,dur:1.0,slideTo:55,g:0.22});
+  [79,84,88].forEach((n,i)=>tone(ac,{f:midi(n),t0:1.05+i*0.09,dur:0.16,type:'triangle',g:0.14}));}
+function sPop(){const ac=ctx();if(!ac)return;tone(ac,{f:300,dur:0.09,slideTo:90,type:'square',g:0.2});
+  tone(ac,{f:1800,t0:0.22,dur:0.1,slideTo:2400,g:0.1});tone(ac,{f:1900,t0:0.4,dur:0.12,slideTo:2500,g:0.1});}
+function dTick(){const ac=ctx();if(!ac)return;for(let i=0;i<5;i++)tone(ac,{f:1000,t0:i*1.0,dur:0.03,slideTo:600,type:'square',g:0.12});}
+function dPulse(){const ac=ctx();if(!ac)return;let t=0,beat=60/90;
+  for(let i=0;i<14&&t<6;i++){tone(ac,{f:150,t0:t,dur:0.12,slideTo:70,g:0.22});beat=Math.max(60/180,beat*0.9);t+=beat;}}
+function dKing(){const ac=ctx();if(!ac)return;
+  const line=[59,61,62,64,66,62,66,65,61,65,64,60,64,59,61,62,64,66,62,66,71];let t=0,step=0.30;
+  line.forEach((n)=>{tone(ac,{f:midi(n),t0:t,dur:step*0.9,type:'triangle',g:0.16});
+    tone(ac,{f:midi(n-24),t0:t,dur:step*0.9,g:0.10});step=Math.max(0.13,step*0.94);t+=step;});}
+function dSpy(){const ac=ctx();if(!ac)return;const beat=0.24;
+  for(let i=0;i<16;i++)tone(ac,{f:midi(i%8<4?45:48),t0:i*beat,dur:0.14,type:'triangle',g:0.18});
+  [3,7,11,15].forEach((i)=>[69,72,76].forEach((n)=>tone(ac,{f:midi(n),t0:i*beat,dur:0.12,type:'sawtooth',g:0.05})));}
+</script>
+</body>
+</html>

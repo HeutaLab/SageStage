@@ -4947,3 +4947,144 @@ settings, for the same reason: match the policy to what the domain actually does
 
 Verified over DoH on two resolvers, with a propagation watcher on Google's cache. The
 websites were untouched throughout — apex A records and all four pages unchanged.
+
+## 2026-08-02 — HeutaLab got its logo (almost all of it)
+
+**The brand existed; the files didn't.** heutalab.com's four bars and coral-Lab
+wordmark lived only as CSS divs in the site header — the favicon was a stock glyph
+in the wrong blues, the @heutalab socials had nothing that survives a circle crop,
+and sagestage.app ships 🌿. Today built the comp sheet at
+docs/design/heutalab-logo-directions.html: three directions drawn from the site's
+own tokens, the wordmark set in the vendored Poppins and converted to outlines with
+fontTools (no fonts to install, nothing fetched), everything judged where logos
+actually live — 16px tabs, 40px reply avatars, one-colour ink, dark cards. A: the
+bars as drawn, finally as a file. B: the bars locked into capital Eta, the Greek
+behind the name. C: the collage shapes — cobalt hill, coral sun, amber peak, lime
+smile — which in one colour become a reader over an open book.
+
+**Glenn picked from the sheet in real time.** The spark, twice: "I want this for
+the email header but it's got to have the full tagline showing", then the colour
+variant ("perhaps this"), then "or this in teal" — teal being Sage Stage's own
+#0f766e, the maker borrowing the product's accent on purpose. The masthead shipped
+three ways (colour / ink / teal; SVG masters + 600 and 1200px PNGs, paper
+background baked in because dark-mode mail clients invert transparency) and was
+sitting in the MailerLite welcome email within the hour.
+
+**What's still open is scope, and it gates the kit:** spark-everywhere (favicon,
+avatars, the heutalab.com header — the bars return to being tile art, which they
+already are on the category strip) versus spark-on-comms with a glyph doing the
+small duty. The spec is docs/heutalab-brand-design.md; the sheet stays the visual
+authority. One useful discovery while checking the swap: every page on
+heutalab.com, legacy included, references /assets/favicon.svg by absolute path, so
+the day the decision lands, one file re-favicons a hundred and sixty pages.
+
+**A lesson the sheet keeps:** var()-themed SVG symbols under <use> are not
+trustworthy — class-set custom properties silently fell back inside the shadow
+tree while inline ones applied, and the browser pane's stale screenshot tiles
+disguised each fix as a failure until an isolated 5× render told the truth. The
+sheet now bakes per-variant symbols, and the rule carried into the spec: shipped
+SVGs carry baked colours, no runtime vars.
+
+**Same day, the kit landed.** Glenn answered the scope question — everywhere — so
+the spark is now the mark, full stop. Twenty-six files in HeutaLab-Site/assets/brand/
+(favicon ladder with the lime arc dropped below 48px after honest 16px renders showed
+it as mush; 1024 avatars on paper, ink and coral with the mark at circle-safe 60%;
+X and YouTube banners; a rebuilt OG card), plus the three live swaps: heutalab.com's
+favicon and og.png replaced and its header bars traded for the inline spark — one
+file re-favicons every legacy page, since they all point at /assets/favicon.svg by
+absolute path — and "Made by ⌂ HeutaLab" footer marks on all three sagestage.co.uk
+help pages and the sagestage.app landing. Everything verified in local serves;
+nothing deployed, nothing committed — the deploys stay Glenn's deliberate acts, and
+the avatar uploads are console steps only he can do.
+
+## 2026-08-02 — First outside feedback: the timer grows moods, hangman loses the gallows
+
+**A colleague sent field notes.** A teaching mate tried Sage Stage in a phone browser
+at a friend's place and sent seven messages of the kind you frame: "a more practical
+version of classroom screen", "it replaces smarts and has way more features", "I can
+see something like this being used daily in classrooms for all lessons" — with the
+draw pad and the background images called out as the personable touches teachers
+like. The one complaint got logged too: dragging widgets on a phone is fiddly. Filed
+against the someday touch pass; the unit of adoption stays one teacher, one machine,
+one projector, and they're retesting on MacBook and iPad anyway.
+
+**Three asks became two specs.** Selectable timer sounds ("sometimes gentle and calm,
+sometimes energetic and fast paced"), tension music *during* the countdown (they play
+the Mission Impossible theme over tidy-up races), physical timer visuals (egg, sand,
+candle) — and a fully-formed hangman replacement: "I call it alien escape", eight
+stages, final error floods with colour and the animation plays. They prototyped the
+staged reveal as doodles in the Draw Pad itself, which is the best feature-request
+format going. docs/timer-design.md answers the timer: sounds go to *both* timers (the
+discovery that shaped it — the Visual timer's disc already is a face, so faces grow
+there and the digit Timer stays typographic), two independent audio layers, defaults
+frozen to yesterday, everything synthesized in a small sounds.js and nothing ever
+shipped as a recording. The licensing line is drawn in §10: Schifrin's 5/4 and the
+Williams scores are named unshippable, and the clean route to the same joke is
+genre-alike originals plus public-domain warhorses self-sequenced from the score —
+Grieg died in 1907, and Mountain King was literally composed to accelerate, so the
+chase can end exactly when the clock does. docs/alien-escape-design.md answers the
+game: Escape!, on the Games shelf, both endings are a show and nobody hangs — lose
+and the alien zips off waving; win and the UFO won't start, so it shrugs and stays
+for tea. Words typed masked (the projector sees everything) or pulled from the same
+screen's Word bank by the sentence builder's precedent. Alien ships first; the
+gorilla next; the monster softened from pointing-at-the-children to pulling faces at
+the window, pending sign-off.
+
+**Glenn picked the art live.** The direction board went up mid-session —
+docs/design/timer-faces-directions.html: five faces at two moments each, ten audible
+sound sketches, and after the steer came in ("offer the style and brainstorm with
+me") the same alien scene in three registers: teacher's pen, Soft Daylight toy, paper
+cutout. The pick: pen for Escape! via rough.js — MIT, ~9 KB, one vendored file, and
+its built-in seed makes "replays draw identically" a config option rather than a
+promise — and bespoke toy vector for the faces, no library. Kenney's CC0 packs noted
+as legitimate tracing bases; OpenMoji's ShareAlike and Freepik's redistribution
+clauses noted as the traps. Cutout parked as the brand-echo wildcard. Nothing
+committed, by instruction; still open on the sheet: which faces make slice 3, the
+Escape! name, and the monster's manners.
+
+## 2026-08-02 — The taster stops crushing its own widgets
+
+**Glenn's report was one sentence:** sagestage.app/try/ is too busy, and the
+teaching clock is compressed until the face is hidden. The measurement made it
+worse than "compressed": at the 1280×720 a visiting laptop actually gives, the
+clock's face canvas rendered at literally 0×0 — the seed gave the widget 340×270
+against a designed 470×620, the fixed bars (readout, words, quick bar, game bar)
+ate the height, and the face — the one part that IS the widget — got what was
+left, which was nothing. Every maths widget on the first screen had the same
+disease: rekenrek at 78%, part–whole and dienes near half size, four widgets
+forced onto a stage that honestly holds two, two of them hanging off the bottom
+behind the toolbar dock. The audit spread: all nine seed screens (tour plus the
+three deep-linked decks) broke the dock line somewhere. The seeds had been
+authored against a taller window and never checked at the floor.
+
+**The fix is a principle, not a shuffle: fewer, full-size, nothing clipped.**
+Every screen re-authored on a 1280×720 reference canvas (content y 72–630,
+clear of topbar, dock and pager), and no widget ships below ~85% of the size
+its own author gave it — what can't fit dignified doesn't ship on that screen;
+the tray is two taps away. The tour's first screen went from four crushed
+widgets to two whole ones: the rekenrek (the instant-touch hook) and a teaching
+clock with its game and quick bars off (`gameOn:false, quick:false` — props the
+widget already had), so the face finally fills the frame at ~390px over a
+9:05 seed ("five past nine" — first lesson of the day). The story map gets the
+English screen alone at the near-fullscreen width it was drawn for; the
+everyday screen keeps its four small tools with the agenda pulled clear of the
+dock. In the themed decks, place-value counters proved the principle by
+counterexample — at 460 wide its chip labels wrapped letter-by-letter — so the
+part–whole model (which had lost its home in the trim) took its slot beside
+Base 10: blocks build the number, the circles break it apart.
+
+**One new mechanism, twelve lines, in the only file that owns seed geometry:**
+demo.js now fits the reference canvas to the visitor's real window once, at
+seed time — positions scale per-axis so the composition keeps its margins,
+sizes by the smaller factor so no widget outgrows its controls, clamped 0.8–1.7
+and centred when the clamp bites. A 13" laptop gets the layout intact; a
+1080p classroom board gets it half again as large, beads and clock face grown
+to board scale — which is the pitch the landing page makes in words. The app
+repo is untouched: the taster's guarded seed path consumes whatever geometry
+demo.js hands it, and deploys still pull the app's main, so the fix rides
+entirely in the site repo. Verified fresh-boot at 1280×720 and 1600×1000
+across all four seeds, every screen flipped, console clean. Deployed on
+Glenn's say-so — the deliberate "Run workflow" click, run 30733134055,
+green in ~20s — and confirmed live with a fresh-boot pass on sagestage.app
+itself. The brand session's pending work (index.html, sprout.svg, its log
+entry above) stays exactly where this session found it.

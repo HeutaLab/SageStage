@@ -7,6 +7,27 @@
       "runtimeArgs": ["-c", "python3 -m http.server ${PORT:-8642}"],
       "port": 8642,
       "autoPort": true
+    },
+    {
+      "name": "heutalab-site",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "python3 -m http.server ${PORT:-8644} -d /Users/glenn/HeutaLab-Site"],
+      "port": 8644,
+      "autoPort": true
+    },
+    {
+      "name": "sagestage-app-local",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "python3 -m http.server ${PORT:-8645} -d /Users/glenn/sagestage-app"],
+      "port": 8645,
+      "autoPort": true
+    },
+    {
+      "name": "taster-site",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "python3 -m http.server ${PORT:-8646} -d /Users/glenn/sagestage-app/site"],
+      "port": 8646,
+      "autoPort": true
     }
   ]
 }

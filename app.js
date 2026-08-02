@@ -8995,61 +8995,109 @@
   // lets teachers color-code widgets per team/group; `clear` = transparent chrome,
   // `dark` = light ink (also fixes input styling on dark cards)
   const THEMES = [
-    { id: 'card', bg: 'rgba(255,255,255,0.92)', ink: '#22303c', soft: '#5b6b7b', acc: '#6366f1' },
-    { id: 'glass', bg: 'rgba(255,255,255,0.5)', ink: '#22303c', soft: '#44566a', acc: '#0f766e' },
-    { id: 'clear', bg: 'transparent', ink: '#22303c', soft: '#44566a', acc: '#0f766e', clear: true },
-    { id: 'clearlight', bg: 'transparent', ink: '#f8fafc', soft: 'rgba(248,250,252,0.75)', acc: '#c7d2fe', clear: true, dark: true },
-    { id: 'lilac', bg: '#ede9fe', ink: '#3b3663', soft: '#6d678f', acc: '#8b5cf6' },
-    { id: 'mint', bg: '#d9f7e8', ink: '#173f2e', soft: '#3f6f5b', acc: '#22c55e' },
-    { id: 'lemon', bg: '#fef3c7', ink: '#4a3b12', soft: '#7c6a33', acc: '#eab308' },
-    { id: 'peach', bg: '#ffe4cc', ink: '#54300f', soft: '#8a5f3a', acc: '#f97316' },
-    { id: 'pink', bg: '#fce7f3', ink: '#5c1f42', soft: '#8f4a6e', acc: '#ec4899' },
-    { id: 'sky', bg: '#dbeffe', ink: '#123a5c', soft: '#3f6b8f', acc: '#3b82f6' },
-    { id: 'rose', bg: '#fee2e2', ink: '#7f1d1d', soft: '#a05252', acc: '#ef4444' },
-    { id: 'sun', bg: '#fde047', ink: '#422006', soft: '#71571e', acc: '#b45309' },
-    { id: 'tangerine', bg: '#fdba74', ink: '#431407', soft: '#7c4a26', acc: '#c2410c' },
-    { id: 'grape', bg: '#7c3aed', ink: '#f5f3ff', soft: '#d8cef8', acc: '#ddd6fe', dark: true },
-    { id: 'ocean', bg: '#1d4ed8', ink: '#eff6ff', soft: '#bcd3f7', acc: '#93c5fd', dark: true },
-    { id: 'crimson', bg: '#991b1b', ink: '#fef2f2', soft: '#e7bcbc', acc: '#fca5a5', dark: true },
-    { id: 'forest', bg: '#14532d', ink: '#ecfdf5', soft: '#b3d4c0', acc: '#86efac', dark: true },
-    { id: 'navy', bg: '#1e3a5f', ink: '#e0f2fe', soft: '#a9c4d8', acc: '#38bdf8', dark: true },
-    { id: 'dark', bg: '#26323c', ink: '#f1f5f9', soft: '#aebbc7', acc: '#818cf8', dark: true },
-    { id: 'ink', bg: '#0f172a', ink: '#f8fafc', soft: '#a9b4c4', acc: '#a5b4fc', dark: true },
+    { id: 'card',       name: 'Paper',       bg: '#f1f6f9',                ink: '#28353d',  soft: '#536672',  acc: '#0f766e',  accInk: '#f2faff',  accWash: '#d4e5e7',  accSoft: '#00668f',  accDeep: '#0f766e' },
+    { id: 'glass',      name: 'Frost',       bg: 'rgba(230,243,245,0.55)', ink: '#263638',  soft: '#465e61',  acc: '#0f766e',  accInk: '#f0fbfc',  accWash: '#bad0d1',  accSoft: '#005a62',  accDeep: '#0f766e',  scrim: '#e6f3f5' },
+    { id: 'clear',      name: 'Clear',       bg: 'transparent',            ink: '#28353d',  soft: '#536672',  acc: '#0f766e',  accInk: '#f2faff',  accWash: '#c1d3d4',  accSoft: '#00597e',  accDeep: '#0f766e',  scrim: '#f1f6f9', clear: true },
+    { id: 'clearlight', name: 'Clear light', bg: 'transparent',            ink: '#e8f6ff',  soft: '#a9c2d1',  acc: '#6fefe1',  accInk: '#012b27',  accWash: '#1d282f',  accSoft: '#6fefe1',  accDeep: '#007e75',  scrim: '#0c1c25', clear: true, dark: true },
+    { id: 'lilac',      name: 'Lilac',       bg: '#e8deff',                ink: '#34303d',  soft: '#666072',  acc: '#704ea4',  accInk: '#f9f7ff',  accWash: '#d8cbf3',  accSoft: '#654298',  accDeep: '#825fb7' },
+    { id: 'mint',       name: 'Mint',        bg: '#c6fde0',                ink: '#29362f',  soft: '#54695e',  acc: '#007650',  accInk: '#f2fbf6',  accWash: '#acebcd',  accSoft: '#006a47',  accDeep: '#008158' },
+    { id: 'lemon',      name: 'Lemon',       bg: '#faf6b3',                ink: '#343427',  soft: '#656451',  acc: '#885700',  accInk: '#fef7f0',  accWash: '#ebe19c',  accSoft: '#885700',  accDeep: '#9c6500' },
+    { id: 'peach',      name: 'Peach',       bg: '#ffdec3',                ink: '#3b3027',  soft: '#706052',  acc: '#915100',  accInk: '#fff7f0',  accWash: '#f1ccaa',  accSoft: '#804800',  accDeep: '#a75f00' },
+    { id: 'pink',       name: 'Blossom',     bg: '#ffe1f4',                ink: '#3b2f36',  soft: '#705d69',  acc: '#933f7b',  accInk: '#fef5fb',  accWash: '#f1cce4',  accSoft: '#8c3975',  accDeep: '#a8528f' },
+    { id: 'sky',        name: 'Sky',         bg: '#d1ecff',                ink: '#28353d',  soft: '#546673',  acc: '#006b9a',  accInk: '#f2faff',  accWash: '#b6dbf2',  accSoft: '#005d88',  accDeep: '#0078ac' },
+    { id: 'rose',       name: 'Rose',        bg: '#ffd3d3',                ink: '#3d2e2f',  soft: '#6c5556',  acc: '#a23c45',  accInk: '#fff6f6',  accWash: '#f3bfc1',  accSoft: '#922d39',  accDeep: '#b74f57' },
+    { id: 'sun',        name: 'Sun',         bg: '#f4de55',                ink: '#353326',  soft: '#5f5b48',  acc: '#8d5400',  accInk: '#fef7f0',  accWash: '#e7cc4a',  accSoft: '#784600',  accDeep: '#a36100' },
+    { id: 'tangerine',  name: 'Tangerine',   bg: '#ffb685',                ink: '#3c3028',  soft: '#5a493d',  acc: '#974c00',  accInk: '#fff7f1',  accWash: '#f1a874',  accSoft: '#6d3500',  accDeep: '#ae5a0a' },
+    { id: 'grape',      name: 'Grape',       bg: '#6833bc',                ink: '#f4f1ff',  soft: '#d5d0e9',  acc: '#d8ceff',  accInk: '#261f37',  accWash: '#5c2da5',  accSoft: '#d8ceff',  accDeep: '#7b61ba',  dark: true },
+    { id: 'ocean',      name: 'Ocean',       bg: '#1c50b5',                ink: '#edf4ff',  soft: '#c9d6ed',  acc: '#c0d7ff',  accInk: '#18243a',  accWash: '#19469f',  accSoft: '#c0d7ff',  accDeep: '#446fc0',  dark: true },
+    { id: 'crimson',    name: 'Crimson',     bg: '#851616',                ink: '#ffefed',  soft: '#d4b6b2',  acc: '#ffc6be',  accInk: '#371b18',  accWash: '#751313',  accSoft: '#ffc6be',  accDeep: '#b75148',  dark: true },
+    { id: 'forest',     name: 'Forest',      bg: '#00552e',                ink: '#e6f9eb',  soft: '#adc5b4',  acc: '#96edb5',  accInk: '#102a1a',  accWash: '#004b28',  accSoft: '#96edb5',  accDeep: '#008149',  dark: true },
+    { id: 'navy',       name: 'Navy',        bg: '#144062',                ink: '#eaf5ff',  soft: '#acc1d3',  acc: '#b2dbff',  accInk: '#0f2638',  accWash: '#123856',  accSoft: '#b2dbff',  accDeep: '#0775b9',  dark: true },
+    { id: 'dark',       name: 'Slate',       bg: '#263137',                ink: '#e8f6ff',  soft: '#a9c2d1',  acc: '#a8deff',  accInk: '#0a2737',  accWash: '#212b30',  accSoft: '#a8deff',  accDeep: '#0078a8',  dark: true },
+    { id: 'ink',        name: 'Ink',         bg: '#131927',                ink: '#eef4ff',  soft: '#b3bed5',  acc: '#c2d6ff',  accInk: '#19233a',  accWash: '#111622',  accSoft: '#c2d6ff',  accDeep: '#4a6ec0',  dark: true },
   ];
 
-  function applyTheme(widgetEl, w) {
-    const t = THEMES.find((x) => x.id === (w.theme || 'card')) || THEMES[0];
-    widgetEl.classList.toggle('theme-clear', !!t.clear);
-    widgetEl.classList.toggle('theme-dark', !!t.dark);
-    widgetEl.style.background = t.bg;
-    widgetEl.style.setProperty('--ink', t.ink);
-    widgetEl.style.setProperty('--ink-soft', t.soft);
+  function themeOf(w) {
+    return THEMES.find((x) => x.id === ((w && w.theme) || 'card')) || THEMES[0];
   }
 
+  // Writes the theme onto an element so every control inside it inherits by
+  // cascade. Every property is set UNCONDITIONALLY: the picker re-invokes this on
+  // the live element without a remount, so a value set only for dark themes would
+  // stick after switching back to a light one.
+  function paintTheme(node, t) {
+    node.style.setProperty('--ink', t.ink);
+    node.style.setProperty('--ink-soft', t.soft);
+    node.style.setProperty('--accent', t.acc);
+    node.style.setProperty('--accent-ink', t.accInk);
+    node.style.setProperty('--accent-wash', t.accWash);
+    node.style.setProperty('--accent-soft', t.accSoft);
+    node.style.setProperty('--accent-deep', t.accDeep);
+    node.style.setProperty('--scrim', t.scrim || 'transparent');
+  }
+
+  function applyTheme(widgetEl, w) {
+    const t = themeOf(w);
+    widgetEl.classList.toggle('theme-clear', !!t.clear);
+    widgetEl.classList.toggle('theme-dark', !!t.dark);
+    // A see-through card keeps its translucent field, but its controls sit on an
+    // opaque scrim so their contrast is knowable against an unknown wallpaper.
+    widgetEl.classList.toggle('theme-scrim', !!t.scrim);
+    widgetEl.style.background = t.bg;
+    paintTheme(widgetEl, t);
+  }
+
+  // Each swatch is an honest preview of the only two things a theme controls: the
+  // theme's real ink drawn as "Aa", and its real accent drawn as a button pill.
+  // Nothing abstract to decode, and nothing resembling a bar-and-dot.
   function buildThemeGrid(w) {
-    const grid = el('div', { class: 'theme-grid' });
+    const grid = el('div', { class: 'theme-grid', role: 'radiogroup', 'aria-label': 'Colour theme' });
+    const cards = [];
     const paint = () => {
-      for (const c of grid.children) c.classList.toggle('active', (w.theme || 'card') === c.dataset.theme);
+      const cur = w.theme || 'card';
+      for (const c of cards) {
+        const on = c.dataset.theme === cur;
+        c.classList.toggle('active', on);
+        c.setAttribute('aria-checked', on ? 'true' : 'false');
+        // one tab stop for the whole group; arrows move within it
+        c.tabIndex = on ? 0 : -1;
+      }
+    };
+    const choose = (t) => {
+      w.theme = t.id;
+      save();
+      const inst = instances.get(w.id);
+      if (inst) applyTheme(inst.el, w);
+      // the open settings panel carries the widget's theme too, so it has to move with it
+      if (settingsPanel && settingsFor === w.id) paintTheme(settingsPanel, t);
+      paint();
     };
     for (const t of THEMES) {
+      const face = el('span', { class: 'tsw-face' },
+        el('span', { class: 'tsw-aa', style: 'color:' + t.ink }, 'Aa'),
+        el('span', { class: 'tsw-pill', style: 'background:' + t.acc }));
+      // a see-through theme shows the stage through its face, so it gets no fill
+      if (!t.clear) face.style.background = t.bg;
       const card = el('button', {
         class: 'theme-card' + (t.clear ? ' checker' : ''),
         'data-theme': t.id,
-        title: t.id,
-        onclick: () => {
-          w.theme = t.id;
-          save();
-          const inst = instances.get(w.id);
-          if (inst) applyTheme(inst.el, w);
-          paint();
+        role: 'radio',
+        'aria-checked': 'false',
+        'aria-label': t.name,
+        title: t.name,
+        onclick: () => choose(t),
+        onkeydown: (e) => {
+          const k = e.key;
+          if (k !== 'ArrowRight' && k !== 'ArrowLeft' && k !== 'ArrowDown' && k !== 'ArrowUp') return;
+          e.preventDefault();
+          const i = THEMES.indexOf(t);
+          const step = (k === 'ArrowRight' || k === 'ArrowDown') ? 1 : -1;
+          const next = (i + step + THEMES.length) % THEMES.length;
+          choose(THEMES[next]);
+          cards[next].focus();
         },
-      },
-        el('span', { class: 'tc-bar', style: 'background:' + t.ink }),
-        el('span', { class: 'tc-row' },
-          el('span', { class: 'tc-bar tc-short', style: 'background:' + t.acc }),
-          el('span', { class: 'tc-dot', style: 'background:' + t.ink })),
-      );
-      if (!t.clear) card.style.background = t.bg;
+      }, face, el('span', { class: 'tsw-name' }, t.name));
+      cards.push(card);
       grid.append(card);
     }
     paint();
@@ -9097,6 +9145,10 @@
         iconEl(def.icon), el('h3', {}, def.title),
         el('button', { class: 'spanel-close', title: 'Close', onclick: () => closeSettingsPanel() }, iconEl('close'))),
       body);
+    // The panel is body-parented, so it inherits nothing from the widget it
+    // configures. Stamp the theme on it or its controls stay teal while the
+    // widget behind them is rose.
+    paintTheme(settingsPanel, themeOf(w));
     document.body.append(settingsPanel);
   }
 
