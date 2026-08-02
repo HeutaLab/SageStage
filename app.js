@@ -31,6 +31,14 @@
   };
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
+  // Search that ignores accents. A register holding "José" or "Zoë" would not
+  // match a teacher typing "jose" or "zoe", which is how anyone types quickly on
+  // a board — and in an international school those names are the common case,
+  // not the exception. Decompose, drop the combining marks, lowercase.
+  const fold = (s) => String(s == null ? '' : s)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().trim();
+
   function el(tag, attrs, ...children) {
     const node = document.createElement(tag);
     if (attrs) {
@@ -477,7 +485,20 @@
   // A tab opened via "Open in new tab" carries #s=<screen id> and pins itself to
   // that screen: it ignores the shared active deck, so every tab can show a
   // different screen — even one from a different deck (screen ids are global).
-  let viewId = (location.hash.match(/s=([a-z0-9]+)/) || [])[1] || null;
+  const hashScreenId = () => (location.hash.match(/s=([a-z0-9]+)/) || [])[1] || null;
+  let viewId = hashScreenId();
+
+  // Back and Forward change the hash without reloading, and nothing listened —
+  // so a pinned `#s=` tab kept showing the old screen while the address bar said
+  // otherwise, until the teacher reloaded. Re-read the hash and re-render.
+  // Guarded against re-entry: setCurrent() assigns location.hash itself, which
+  // fires this, and re-rendering the screen we just rendered is wasted work.
+  window.addEventListener('hashchange', () => {
+    const id = hashScreenId();
+    if (id === viewId) return;
+    viewId = id;
+    renderScreen();
+  });
 
   const deckById = (id) => state.decks.find((d) => d.id === id) || null;
   const deckOfScreen = (sid) => state.decks.find((d) => d.screens.some((s) => s.id === sid)) || null;
@@ -630,7 +651,11 @@
         }
       };
       render();
-      this._rerender = render;
+      // `this` here is the shared widget-definition object in the registry, not
+      // the instance — so this assignment was never read by anything, and it
+      // pinned the last-mounted instance's closure (and therefore its DOM) in
+      // memory for the lifetime of the page. Nothing to replace it with; the
+      // remount path already re-renders.
       return () => cleanup();
     },
     settings(box, w, api) {
@@ -8646,15 +8671,26 @@
           toast('🖼 “' + name + '” is downloading to your Downloads folder');
         }));
       };
+      // WebKit — the Tauri v2 target, and Safari — ties clipboard writes to the
+      // user gesture that started them. Awaiting a blob inside `toBlob`'s
+      // callback and only THEN calling clipboard.write puts the write several
+      // turns after the click, by which point the activation is spent and it
+      // fails silently on exactly the platform being shipped to.
+      //
+      // Passing ClipboardItem a *promise* of a blob keeps the write synchronous
+      // with the gesture: the browser holds the clipboard open and waits for the
+      // promise to settle. Chromium accepts this too, so there is one path.
       const copyPNG = () => {
-        renderImage().then((cv) => cv.toBlob(async (b) => {
-          try {
-            await navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]);
-            toast('🖼 Image copied to the clipboard — paste it into any document (⌘V)');
-          } catch (err) {
-            toast('Clipboard blocked — use Export as PNG instead');
-          }
-        }));
+        try {
+          const png = renderImage().then((cv) => new Promise((res, rej) => {
+            cv.toBlob((b) => (b ? res(b) : rej(new Error('no blob'))), 'image/png');
+          }));
+          navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+            .then(() => toast('🖼 Image copied to the clipboard — paste it into any document (⌘V)'))
+            .catch(() => toast('Clipboard blocked — use Export as PNG instead'));
+        } catch (err) {
+          toast('Clipboard blocked — use Export as PNG instead');
+        }
       };
       const openPaperPop = () => openPop('paper', (p) => {
         p.classList.add('sketch-paper-pop');
@@ -10447,7 +10483,16 @@
   }
   function deleteList(name) {
     delete state.lists[name];
-    for (const d of state.decks) if (d.classList === name) d.classList = null;
+    for (const d of state.decks) {
+      if (d.classList === name) d.classList = null;
+      // renameList has always followed the reference down into widget props;
+      // this did not, so deleting a list left every name-picker and groups
+      // widget still pointing at it — a dangling `props.list` naming a register
+      // that no longer exists.
+      for (const s of d.screens) for (const w of s.widgets) {
+        if (w.props && w.props.list === name) w.props.list = null;
+      }
+    }
     save();
   }
 
@@ -10759,11 +10804,11 @@
   }
 
   function dashDeckCards(grid) {
-    const q = dashQuery.trim().toLowerCase();
+    const q = fold(dashQuery);
     let decks = state.decks.filter((d) => !q
-      || (d.name || '').toLowerCase().includes(q)
-      || (d.subject || '').toLowerCase().includes(q)
-      || (d.classList || '').toLowerCase().includes(q));
+      || fold(d.name).includes(q)
+      || fold(d.subject).includes(q)
+      || fold(d.classList).includes(q));
     const by = {
       lastUsed: (a, b) => b.lastUsed - a.lastUsed,
       createdAt: (a, b) => b.createdAt - a.createdAt,
@@ -10804,9 +10849,9 @@
   }
 
   function dashListCards(grid) {
-    const q = dashQuery.trim().toLowerCase();
+    const q = fold(dashQuery);
     for (const name of Object.keys(state.lists)) {
-      if (q && !name.toLowerCase().includes(q)) continue;
+      if (q && !fold(name).includes(q)) continue;
       const names = state.lists[name];
       const usedBy = state.decks.filter((d) => d.classList === name).map((d) => d.name || 'Untitled');
       const chipsEl = el('div', { class: 'name-chips' });

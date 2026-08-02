@@ -65,8 +65,16 @@
     mcYield().then(() => setTimeout(done, 250));
   });
 
+  // Windows refuses these names outright, with or without an extension, and has
+  // since DOS — a deck honestly called "Aux" or a screen called "Con" produced a
+  // file the teacher's own machine would not let them save. Also strip trailing
+  // dots and spaces, which Windows silently drops and which then collide.
+  const WIN_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
   function sanitizeFilename(name) {
-    return (name || '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim() || 'sage-stage';
+    let out = (name || '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim();
+    out = out.replace(/[. ]+$/, '');
+    if (WIN_RESERVED.test(out.replace(/\..*$/, ''))) out = '_' + out;
+    return out || 'sage-stage';
   }
 
   // first #hex in a background value — the guaranteed-paintable base color

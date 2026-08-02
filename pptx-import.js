@@ -523,13 +523,22 @@
     const presRels = await loadRels(zip, 'ppt/presentation.xml');
     const sldSz = kid(pres, 'sldSz');
     const W = num(sldSz, 'cx', 12192000), H = num(sldSz, 'cy', 6858000);
-    const slidePaths = kids(kid(pres, 'sldIdLst'), 'sldId')
+    // Templates from a stranger are capped at 12 screens / 24 widgets by
+    // sanitizeTemplate; a .pptx had no cap at all, so a file claiming a few
+    // thousand slides produced a few thousand screens and a deck the teacher
+    // could not navigate out of. This one is generous rather than defensive —
+    // a real lesson deck is tens of slides, not hundreds — and it reports what
+    // it dropped rather than truncating in silence.
+    const MAX_SLIDES = 120;
+    const allSlidePaths = kids(kid(pres, 'sldIdLst'), 'sldId')
       .map((n) => { const rel = presRels[rAttr(n, 'id')]; return rel && rel.path; })
       .filter(Boolean);
-    if (!slidePaths.length) throw new Error('No slides found in the file.');
+    if (!allSlidePaths.length) throw new Error('No slides found in the file.');
+    const slidePaths = allSlidePaths.slice(0, MAX_SLIDES);
+    const droppedSlides = allSlidePaths.length - slidePaths.length;
 
     const layoutCache = new Map();
-    const skipped = { charts: 0, media: 0, shapes: 0 };
+    const skipped = { charts: 0, media: 0, shapes: 0, slides: droppedSlides };
     const slides = [];
 
     for (let i = 0; i < slidePaths.length; i++) {
@@ -984,6 +993,7 @@
           D.toast((targetDeckId ? 'Added ' : 'Imported ') + screens.length + ' slide' + (screens.length === 1 ? '' : 's') + ' into “' + deck.name + '”');
           const problems = [];
           const sk = parsed.skipped;
+          if (sk.slides) problems.push(sk.slides + ' slide' + (sk.slides === 1 ? '' : 's') + ' past the first 120 were not imported — that is the cap on one file.');
           if (sk.charts) problems.push(sk.charts + ' chart/diagram element' + (sk.charts === 1 ? '' : 's') + " couldn't be imported.");
           if (sk.media) problems.push(sk.media + ' picture' + (sk.media === 1 ? '' : 's') + ' were in a format browsers can\'t show (e.g. WMF/EMF clip art).');
           if (mode === 'widgets' && sk.shapes) problems.push(sk.shapes + ' decorative shape' + (sk.shapes === 1 ? '' : 's') + ' were left out.');

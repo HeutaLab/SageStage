@@ -403,20 +403,47 @@ paths assume one pointer.
   holds all canvases before any writer runs ([`export.js:616`](../export.js#L616));
   at 2× a ~30-screen deck retains ~1 GB → OOM risk on teacher hardware. Release
   per-screen or cap concurrent canvases.
-- [ ] 🟡 **`.pptx` import has no slide-count cap** ([`pptx-import.js:523`](../pptx-import.js#L523)) — unlike `sanitizeTemplate`'s 12/24 slices; a hostile deck produces unbounded screens.
+  **Scoped 2026-08-02, not done — deliberately.** Confirmed real: the render loop
+  fills `shots[]` with every canvas before any writer starts, and while each
+  writer *does* call `releaseCanvas` as it consumes a shot, the peak is at the end
+  of the loop. The fix is well-defined because all three writers need only a
+  raster plus dimensions — `writePngs` a PNG blob, `writePdf` a JPEG dataURL via
+  `toDataURL`, `writePptx` the raster plus `canvas.width/height` — and the chosen
+  format is known at render time. So: rasterise to the writer's format straight
+  after each screen renders, release the canvas, hand the writers blobs. Left for
+  its own session because it refactors three writers in the export path and the
+  thing being fixed (peak memory on a ~30-screen 2× export) cannot be honestly
+  verified without actually running one and watching memory.
+- [x] 🟡 **`.pptx` import has no slide-count cap** ([`pptx-import.js:523`](../pptx-import.js#L523)) — unlike `sanitizeTemplate`'s 12/24 slices; a hostile deck produces unbounded screens.
+  **Fixed 2026-08-02** — capped at 120 slides (generous: a real lesson deck is
+  tens, not hundreds), and the dropped count is reported in the existing
+  post-import problems list rather than truncating in silence.
 - [ ] 🟡 **`pickImage` has no `onerror`, caps only width, and ignores EXIF orientation** ([`app.js:8593`](../app.js#L8593)) — a HEIC/broken file silently does nothing; a tall image can still overflow quota; portrait phone photos render sideways.
 - [ ] 🟡 **Repeating timer bursts a volley of chimes after tab-suspend** — it advances one cycle per paint tick and beeps each ([`app.js:5543`](../app.js#L5543)).
-- [ ] 🟡 **Clipboard PNG copy is dead on WebKit (the Tauri v2 target)** — `clipboard.write` inside the async `toBlob` callback loses user activation ([`app.js:8104`](../app.js#L8104)). Pass a promise-of-blob to `ClipboardItem` synchronously.
+- [x] 🟡 **Clipboard PNG copy is dead on WebKit (the Tauri v2 target)** — `clipboard.write` inside the async `toBlob` callback loses user activation ([`app.js:8104`](../app.js#L8104)). Pass a promise-of-blob to `ClipboardItem` synchronously.
+  **Fixed 2026-08-02** — `ClipboardItem` receives a *promise* of the blob, so the
+  write stays synchronous with the click and the user activation survives. One
+  path for WebKit and Chromium both.
 - [ ] 🟡 **Draw-pad PNG export omits the paper background** — grid/number-line/fraction-bar papers are CSS on `wrap` and never drawn, so marks export floating on white ([`app.js:8063`](../app.js#L8063)).
 - [ ] 🟡 **Each draw-pad remount leaks the previous canvas + undo history** — a `body` capture listener is added every mount and never removed ([`app.js:8520`](../app.js#L8520)).
-- [ ] 🟡 **No `hashchange` handling** — Back in a pinned `#s=` tab desyncs the URL from the view until reload ([`app.js:215`](../app.js#L215)).
+- [x] 🟡 **No `hashchange` handling** — Back in a pinned `#s=` tab desyncs the URL from the view until reload ([`app.js:215`](../app.js#L215)).
+  **Fixed 2026-08-02** — a `hashchange` listener re-reads `#s=` and re-renders,
+  guarded against the re-entry `setCurrent()` causes by assigning the hash
+  itself. Verified: pin → change screen → Back restores hash *and* widgets.
 - [ ] ⚪ **Widget delete via Backspace has no confirm/undo** (screens do) ([`app.js:8892`](../app.js#L8892)).
-- [ ] ⚪ **`deleteList` leaves dangling `w.props.list` references** (unlike `renameList`) ([`app.js:9443`](../app.js#L9443)).
-- [ ] ⚪ **qr.js error card says "max ~134 chars" but the limit is 134 *bytes*** (multibyte URLs fail sooner) ([`qr.js:325`](../qr.js#L325)).
-- [ ] ⚪ **`sanitizeFilename` doesn't guard Windows reserved names (CON, PRN…)** ([`export.js:68`](../export.js#L68)).
-- [ ] ⚪ **`this._rerender = render` is a dead store that aliases the shared registry object** and pins a closed widget's DOM in memory ([`app.js:357`](../app.js#L357)).
+- [x] ⚪ **`deleteList` leaves dangling `w.props.list` references** (unlike `renameList`) ([`app.js:9443`](../app.js#L9443)).
+  **Fixed 2026-08-02** — follows the reference into widget props, as `renameList`
+  always has.
+- [x] ⚪ **qr.js error card says "max ~134 chars" but the limit is 134 *bytes*** (multibyte URLs fail sooner) ([`qr.js:325`](../qr.js#L325)).
+  **Fixed 2026-08-02** — the card says bytes.
+- [x] ⚪ **`sanitizeFilename` doesn't guard Windows reserved names (CON, PRN…)** ([`export.js:68`](../export.js#L68)).
+  **Fixed 2026-08-02** — reserved names are prefixed, and trailing dots/spaces
+  stripped (Windows drops those silently, which then collides).
+- [x] ⚪ **`this._rerender = render` is a dead store that aliases the shared registry object** and pins a closed widget's DOM in memory ([`app.js:357`](../app.js#L357)).
+  **Fixed 2026-08-02** — removed. `this` was the shared registry object, so
+  nothing ever read it, and it pinned the last instance's DOM for the page's life.
 - [ ] ⚪ **No `@media print`** — printing an agenda emits the fixed toolbar soup ([`style.css`](../style.css)).
-- [ ] ⚪ **Dashboard search isn't diacritic-folded** ("José" ≠ "jose") ([`app.js:9581`](../app.js#L9581)); list add/remove does a full re-render that drops input focus ([`app.js:9639`](../app.js#L9639)).
+- [x] ⚪ **Dashboard search isn't diacritic-folded** ("José" ≠ "jose") ([`app.js:9581`](../app.js#L9581)); list add/remove does a full re-render that drops input focus ([`app.js:9639`](../app.js#L9639)).
 
 ---
 
@@ -450,3 +477,7 @@ Confirmed correct during review; changing them risks regressions:
 - The z-index architecture is a coherent documented scale (ink < shades < spotlight < chrome < panels < modal < toast); per-widget z can't overlay app chrome.
 - Deck duplicate/import deep-clone with fresh ids at every level — no aliasing or id collisions across decks.
 - The v1→v2 (pre-decks) migration imports cleanly as a single deck.
+
+  **Partly fixed 2026-08-02** — a shared `fold()` (NFD, strip combining marks,
+  lowercase) now backs deck and list search; verified "francais cafe" finds
+  "Français café". The focus-dropping re-render on list add/remove is NOT done.

@@ -322,7 +322,10 @@
       ctx.fillStyle = '#c00';
       ctx.font = '13px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Text too long (max ~134 chars)', sizePx / 2, sizePx / 2);
+      // "chars" was a lie for anyone outside ASCII: the limit is 134 BYTES, and
+      // a URL with accented or non-Latin characters spends two or three bytes
+      // per character, so it fails far sooner than the count suggests.
+      ctx.fillText('Text too long (max ~134 bytes)', sizePx / 2, sizePx / 2);
       return false;
     }
     const n = matrix.length;

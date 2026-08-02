@@ -5699,3 +5699,55 @@ byte-identical to the reading taken at the very start of the day before any test
 wrote anything. The 5/4/4 was the anomaly — an artifact of the sentinel recovery,
 where the second tab wrote back its own in-memory copy. Widget ids and
 coordinates settled it in one query where deck-level counts could not.
+
+---
+
+## 2 August 2026 — the housekeeping tail
+
+**Eight of P6's fifteen, and the one that matters most left deliberately undone.**
+
+The clipboard one is the pick of them, because it was broken on precisely the
+platform being shipped to. Copying a draw-pad image awaited a blob inside
+`toBlob`'s callback and only *then* called `clipboard.write` — by which point the
+click's user activation was several turns spent, and WebKit refuses. Chromium is
+lenient, so it worked in every browser it was tested in and would have failed in
+the Tauri build. Handing `ClipboardItem` a *promise* of the blob keeps the write
+synchronous with the gesture: the browser holds the clipboard open and waits.
+One path, both engines.
+
+**`hashchange` was simply absent.** A pinned `#s=` tab is a real workflow — one
+screen per display — and Back or Forward changed the URL while the view stayed
+put until a reload. Now the hash is re-read and the screen re-rendered, guarded
+against the re-entry `setCurrent()` causes by assigning `location.hash` itself.
+Verified by pinning, moving, and pressing Back: the hash and the rendered widget
+ids both return to the first screen.
+
+**Two were about names.** `deleteList` cleared the deck's `classList` but never
+followed the reference into widget props, which `renameList` has always done —
+so deleting a register left every name picker and groups widget pointing at one
+that no longer existed. And dashboard search compared raw lowercase, so a deck
+called "Français café" could not be found by typing "francais cafe" — which is
+how anyone types at speed on a board, and in an international school those names
+are the common case rather than the exception. A shared `fold()` now backs deck
+and list search. The other half of that finding — a list add/remove doing a full
+re-render and dropping input focus — is not done and is marked as such.
+
+The rest were small and exact: the `.pptx` importer had no slide cap at all
+while stranger-supplied templates are held to 12 screens, so it now stops at 120
+and *says* what it dropped rather than truncating quietly; `sanitizeFilename`
+learned about CON, PRN, AUX and friends, plus the trailing dots and spaces
+Windows silently strips into collisions; the QR error card stopped promising 134
+*characters* when the limit is 134 bytes, which is a lie to anyone whose URL
+isn't ASCII; and `this._rerender = render` came out, having been a store onto the
+shared registry object that nothing ever read while pinning the last-mounted
+instance's DOM for the life of the page.
+
+**The 🟠 was scoped and then left alone, on purpose.** Export really does hold
+every screen's canvas at once — the writers release as they consume, but the peak
+is at the end of the render loop, and 30 screens at 2× is around a gigabyte on a
+teacher's laptop. The fix is clear: all three writers need only a raster plus
+dimensions, and the output format is known before rendering starts, so each
+screen can be rasterised to the writer's format and its canvas released
+immediately. What stopped it being done today is that the defect is a memory
+peak, and a memory fix nobody has watched a real 30-screen export survive is a
+claim rather than a fix. It has its own session coming.
