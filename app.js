@@ -9907,6 +9907,14 @@
 
   // ---------------------------------------------------------------- screens
   function renderScreen() {
+    // Any render invalidates the cross-tab "what am I showing" cache. Local
+    // navigation — changing deck or screen — goes through here without touching
+    // the adopt path, and a stale cache there could match an incoming payload
+    // and skip a rebuild this tab genuinely needed, leaving it showing a screen
+    // the state has moved on from. Nulling errs the other way: at worst one
+    // extra rebuild, never a wrong screen. The adopt handler re-seeds it after
+    // calling this.
+    lastAdoptedVisible = null;
     for (const inst of instances.values()) {
       if (inst.cleanup) inst.cleanup();
       inst.el.remove();
@@ -14089,9 +14097,11 @@
       return JSON.stringify(d.screens[clamp(d.current || 0, 0, d.screens.length - 1)]);
     } catch (e) { return 'unreadable-' + Math.random(); }  // never match → rebuild
   };
-  let lastAdoptedVisible = (() => {
-    try { return visibleScreenOf(normalize(JSON.parse(persisted.raw))); } catch (e) { return null; }
-  })();
+  // Seeded for real after the boot render below — renderScreen() nulls it.
+  let lastAdoptedVisible = null;
+  // How long this tab has been refusing to adopt because of its own pending
+  // write. Reset every time it does adopt; see the handler below.
+  let declinedSince = 0;
 
   // keep tabs in sync: adopt changes written by another tab instead of clobbering them
   SageStorage.onExternalChange((raw) => {
@@ -14111,11 +14121,29 @@
       // This tab is holding an edit that has not been written yet. Adopting now
       // would replace `state` underneath it and the edit would simply cease to
       // exist — the teacher's last few hundred milliseconds of typing, gone with
-      // no error. Let the local change win and land; its own write then reaches
-      // the other tab through this same path. Last writer wins is what
-      // localStorage gives us regardless, so this only decides WHICH tab is the
-      // last writer, and the one being typed into is the better answer.
-      if (SageStorage.hasPending && SageStorage.hasPending()) return;
+      // no error. So the local change wins and lands.
+      //
+      // Be clear about what this does NOT do: the other tab's change is then
+      // overwritten by ours and is genuinely lost. Both directions lose an edit,
+      // and the choice is only about which one. Retrying the declined payload
+      // afterwards does not help — by then our write has replaced it in storage,
+      // so re-adopting it would revert the local edit instead. Converging both
+      // needs per-field merging with timestamps, which this does not have.
+      // The tab being typed into is the better winner, and that is the whole
+      // claim.
+      //
+      // But refusing FOREVER is a different bug. A tab that is continuously
+      // dirty — someone drawing, the file backend's debounce bounded at 10s for
+      // exactly that case — would ignore the other surface indefinitely and the
+      // two would silently diverge for as long as the drawing lasted. So hold
+      // out for one debounce or so, then give way.
+      if (SageStorage.hasPending && SageStorage.hasPending()) {
+        if (!declinedSince) declinedSince = Date.now();
+        if (Date.now() - declinedSince < 1200) return;
+        // fall through: better to lose the tail of this edit than to stop
+        // seeing the other tab at all
+      }
+      declinedSince = 0;
 
       // Remounting is expensive and destructive: it rebuilds every widget on the
       // screen, taking caret, focus and any in-flight typing with it. Most
@@ -14128,12 +14156,16 @@
       // written (fitToWindow adjusts geometry at mount, widgets normalise their
       // own props), so comparing to it never matches and every write rebuilt.
       const wasShowing = lastAdoptedVisible;
-      lastAdoptedVisible = visibleScreenOf(incoming);
+      const incomingVisible = visibleScreenOf(incoming);
       state = incoming;
       // no rewardsDayTick here — the writing tab already ticked this state,
       // and a tick's save() would echo writes back and forth between tabs
       applyReadingFont(); renderStarPill();
-      if (lastAdoptedVisible !== wasShowing) renderScreen();
+      // renderScreen() clears the cache (any local navigation must invalidate
+      // it, or a later external change could compare against a screen this tab
+      // stopped showing and skip a rebuild it needed) — so set it AFTER.
+      if (incomingVisible !== wasShowing) renderScreen();
+      lastAdoptedVisible = incomingVisible;
       if (dashEl) renderDashboard();
     } catch (err) { /* ignore malformed writes */ }
   });
@@ -14217,6 +14249,13 @@
   $('#delScreen').replaceChildren(iconEl('trash'));
   $('#deckBtn').prepend(iconEl('screens'));
   renderScreen();
+  // renderScreen() nulls the cross-tab cache by design, and this boot render is
+  // no exception — so re-seed it here from the bytes we actually booted with.
+  // Without this the first external change of the session always rebuilt, since
+  // it had nothing to compare against.
+  lastAdoptedVisible = (() => {
+    try { return visibleScreenOf(normalize(JSON.parse(persisted.raw))); } catch (e) { return null; }
+  })();
   // ------------------------------------------------ taster (sagestage.app)
   // docs/sagestage-app-design.md §2: three guarded moves, all inert without
   // window.SAGE_DEMO — the product never sets it; only the deployed taster's

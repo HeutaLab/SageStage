@@ -5653,3 +5653,49 @@ has no accounting, and the annotation eraser grows storage instead of shrinking
 it. Also still open, and worth saying plainly: focus is not preserved across a
 rebuild that genuinely is needed — this work makes the needless rebuilds stop,
 it does not make the necessary ones painless.
+
+**Reviewed the same day, and two of the three concerns were real.**
+
+The first was that a declined payload is never retried, so the loss had merely
+been pointed the other way. Investigating it produced a better answer than the
+proposed fix: **retrying cannot work.** By the time our own write has landed it
+has already replaced the remote change in storage, so re-adopting the stashed
+copy would revert the local edit instead of merging anything. Both directions
+lose an edit, and converging them needs per-field merging with timestamps, which
+this does not have. The tab being typed into is the better winner and that is the
+entire claim — now said out loud in the code rather than implied.
+
+What *was* fixable is the unbounded case. A tab that is continuously dirty —
+someone drawing, with the file backend's debounce bounded at ten seconds for
+exactly that reason — would have refused every external change for as long as
+the drawing lasted, and the two surfaces would silently diverge. It now holds out
+for about one debounce and then gives way: losing the tail of one edit beats
+losing sight of the other tab altogether.
+
+The second concern was a stale cache. `lastAdoptedVisible` was only written in
+the adopt handler, so local navigation left it describing a screen the tab had
+stopped showing — and the dangerous direction is a *skipped* rebuild, leaving the
+wrong screen up. `renderScreen()` now nulls it, which errs the safe way: at worst
+one extra rebuild, never a wrong screen. That in turn meant the boot render wiped
+the seed, so the first external change of every session rebuilt for nothing; the
+seed is re-taken immediately after the boot render.
+
+Verified with two tabs across four behaviours: the first external change of a
+session no longer rebuilds; four successive off-screen writes in steady state
+rebuild nothing while still being adopted; a change to the visible screen still
+syncs and rebuilds; and after local navigation the next external change *does*
+rebuild, with the rendered widget count matching what the state says the screen
+holds.
+
+The third concern stands unaddressed and should be said plainly: none of this is
+tested on the Tauri backend, where `queue.dirty` also covers draining and windows
+sync by a different route. That waits for the board.
+
+One scare along the way, recorded because the reasoning is the useful part. A
+mid-session read showed Classroom management as 5/4/4 widgets and a later one as
+5/4/2, which looked like two widgets destroyed by the testing. It was not: screen
+three holds `e0aie4zl` (timer, 80,80) and `kmbg4hzt` (visualtimer, 78.34,335.25),
+byte-identical to the reading taken at the very start of the day before any test
+wrote anything. The 5/4/4 was the anomaly — an artifact of the sentinel recovery,
+where the second tab wrote back its own in-memory copy. Widget ids and
+coordinates settled it in one query where deck-level counts could not.
