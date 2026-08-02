@@ -9030,10 +9030,32 @@
     node.style.setProperty('--ink-soft', t.soft);
     node.style.setProperty('--accent', t.acc);
     node.style.setProperty('--accent-ink', t.accInk);
-    node.style.setProperty('--accent-wash', t.accWash);
-    node.style.setProperty('--accent-soft', t.accSoft);
+    // --accent-soft keeps the meaning it has always had in this codebase: the
+    // pale "this control is ON" FILL, paired with accent-coloured text on top
+    // (.dt-btn.active, .mini-btn.active, .lists-side button.active and eight
+    // more). Re-pointing it to a text colour would render those dark-on-dark.
+    // The accent-coloured TEXT is a separate token.
+    node.style.setProperty('--accent-soft', t.accWash);
+    node.style.setProperty('--accent-text', t.accSoft);
     node.style.setProperty('--accent-deep', t.accDeep);
     node.style.setProperty('--scrim', t.scrim || 'transparent');
+  }
+
+  // For a white chrome surface that belongs to a themed widget — the settings
+  // panel. It takes the theme's hue but never its ink or its card-relative
+  // accent: both are chosen to sit on the CARD, and on a dark theme the accent is
+  // pale and the ink near-white, which on white chrome is unreadable. The deep
+  // tone is the one value guaranteed legible on white for every theme.
+  function paintThemeOnWhite(node, t) {
+    node.style.setProperty('--accent', t.accDeep);
+    node.style.setProperty('--accent-text', t.accDeep);
+    node.style.setProperty('--accent-deep', t.accDeep);
+    node.style.setProperty('--accent-ink', '#fff');
+    // let the pale on-state fill and the inks fall back to the chrome defaults
+    node.style.removeProperty('--accent-soft');
+    node.style.removeProperty('--ink');
+    node.style.removeProperty('--ink-soft');
+    node.style.removeProperty('--scrim');
   }
 
   function applyTheme(widgetEl, w) {
@@ -9069,7 +9091,7 @@
       const inst = instances.get(w.id);
       if (inst) applyTheme(inst.el, w);
       // the open settings panel carries the widget's theme too, so it has to move with it
-      if (settingsPanel && settingsFor === w.id) paintTheme(settingsPanel, t);
+      if (settingsPanel && settingsFor === w.id) paintThemeOnWhite(settingsPanel, t);
       paint();
     };
     for (const t of THEMES) {
@@ -9079,7 +9101,10 @@
       // a see-through theme shows the stage through its face, so it gets no fill
       if (!t.clear) face.style.background = t.bg;
       const card = el('button', {
-        class: 'theme-card' + (t.clear ? ' checker' : ''),
+        // A clear theme's swatch has to stand on something, and which something
+        // matters: clearlight carries near-white ink for use over dark wallpaper,
+        // so on a light checkerboard its "Aa" disappears entirely.
+        class: 'theme-card' + (t.clear ? (t.dark ? ' checker checker-dark' : ' checker') : ''),
         'data-theme': t.id,
         role: 'radio',
         'aria-checked': 'false',
@@ -9111,6 +9136,22 @@
   function closeSettingsPanel() {
     if (settingsPanel) { settingsPanel.remove(); settingsPanel = null; settingsFor = null; }
   }
+
+  // Click away to dismiss, the same way the ⋮ menu already behaves. Without this
+  // the × was the only exit, so a teacher mid-lesson had to travel to the far
+  // corner of the panel to get back to the board.
+  document.addEventListener('pointerdown', (e) => {
+    if (!settingsPanel || settingsPanel.contains(e.target)) return;
+    // the gear and the ⋮ own their own open/close toggle — let it run, or
+    // dismissing here first would turn the gear's second press back into an open
+    if (e.target.closest && e.target.closest('.wbtn, .wmenu')) return;
+    // Working with the widget you are configuring is not clicking away: set a
+    // timer's duration, press Start to hear it, adjust again — all without the
+    // panel vanishing underneath you.
+    const inst = settingsFor && instances.get(settingsFor);
+    if (inst && inst.el.contains(e.target)) return;
+    closeSettingsPanel();
+  });
 
   function openSettingsPanel(w, force) {
     if (!force && settingsFor === w.id) { closeSettingsPanel(); return; }
@@ -9148,7 +9189,7 @@
     // The panel is body-parented, so it inherits nothing from the widget it
     // configures. Stamp the theme on it or its controls stay teal while the
     // widget behind them is rose.
-    paintTheme(settingsPanel, themeOf(w));
+    paintThemeOnWhite(settingsPanel, themeOf(w));
     document.body.append(settingsPanel);
   }
 

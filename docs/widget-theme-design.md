@@ -1,8 +1,14 @@
 # Sage Stage — Widget themes: real accents and an honest swatch
 
-**Status:** Design for review — not yet implemented. Palette derived and verified
-2026-08-02; every value in §4 is measured, not chosen by eye. Live preview at
-`theme-check.html` (same convention as `icon-check.html` / `print-check.html`).
+**STATUS: BUILT, same day — §2–§6 complete, §7 partial.** The palette, the token
+contract, `applyTheme`, the scrim, the new picker swatch, the settings-panel stamp and the
+popover pins are all live and verified in the app (see §10 for what was exercised). What
+remains is the tail of §7: 41 hardcoded teal literals still sit inside widget bodies — 28
+in the English suite, 12 maths marks, 1 in modelled writing — plus the cubes widget's
+private `--sm-acc`. Those are the ones where control and teaching material are genuinely
+hard to tell apart, so they were deliberately left for a second pass rather than swept
+blind. Everything measured below is shipped. Live preview at `theme-check.html` (same
+convention as `icon-check.html` / `print-check.html`).
 **Origin:** Glenn, 2026-08-02, live on the board: the theme picker "is too similar to
 ClassroomScreen", and "the colours need a revamp because there is a clash for the text
 and buttons". Both complaints turned out to have one root cause — see §1.
@@ -407,6 +413,25 @@ reads `w.theme`, painting an opaque white ground first), and export, which calls
    writing). They are already broken on dark themes. Shipping accents without fixing them
    makes the dark themes look deliberate while staying unusable in exactly the widgets a
    maths lesson runs on. Worth a follow-up.
+
+## 10a. What the build actually found
+
+Three things only showed up once it ran, and all three are recorded because they will bite
+again:
+
+1. **`index.html` cache-busts with `app.js?v=NN`.** Edits appear to do nothing until that
+   number is bumped — and the browser also caches `index.html` itself, so a plain reload
+   keeps serving the old version reference. This is not a dev annoyance: without the bump,
+   a teacher on an existing install would keep running the old JS after an update. Bumped
+   to `app.js?v=77` / `style.css?v=114`.
+2. **Stamping the full theme on the settings panel was wrong.** The panel is white chrome;
+   handing it a dark theme's near-white `--ink` made every label vanish. It now takes
+   `paintThemeOnWhite`, which passes the hue through as `--accent-deep` and leaves ink
+   alone. That is the same rule the in-widget popovers use — **white surfaces take the
+   deep tone** — so it is one rule, not two special cases.
+3. **`clearlight`'s swatch was unreadable.** Its near-white ink sat on a light
+   checkerboard, so the "Aa" disappeared entirely. It now gets a dark checkerboard, which
+   is also more honest: that theme exists for dark wallpapers.
 
 ## 10. Verification
 

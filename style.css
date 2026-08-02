@@ -4,6 +4,12 @@
   --ink-soft: #5b6b7b;
   --accent: #0f766e;
   --accent-soft: #ccfbf1;
+  /* The chrome defaults for the theme accent family. applyTheme overwrites all of
+     these on a widget element; outside a widget they resolve here, which is what
+     keeps the dock, dashboard, modals and help on the house teal. */
+  --accent-ink: #fff;
+  --accent-text: #0f766e;
+  --accent-deep: #0f766e;
   --panel: rgba(255, 255, 255, 0.92);
   --panel-border: rgba(34, 48, 60, 0.08);
   --shadow: 0 10px 30px rgba(15, 30, 45, 0.18);
@@ -323,6 +329,35 @@ input, select, textarea { font: inherit; color: inherit; }
 .widget.theme-dark .widget-settings { background: rgba(255, 255, 255, 0.08); }
 .widget.theme-dark .glyph,
 .widget.theme-dark .tool .glyph { color: #22303c; }
+
+/* A see-through card keeps its translucent field, but anything that has to be
+   READ sits on an opaque scrim plate — otherwise its contrast is whatever the
+   teacher's wallpaper happens to be, which is unmeasurable. --scrim is written
+   by applyTheme; `glass` is included because at 0.55 alpha it is as see-through
+   as `clear`, and measured honestly its accent edge was 2.93:1 on a mid-grey
+   wallpaper, i.e. already below the floor before any of this. */
+.widget.theme-scrim .btn,
+.widget.theme-scrim .text-input,
+.widget.theme-scrim select.text-input,
+.widget.theme-scrim textarea.text-input,
+.widget.theme-scrim .widget-settings { background-color: var(--scrim); }
+.widget.theme-scrim .btn { background-color: var(--accent); }
+
+/* These three popovers are DOM children of the widget but paint their own white
+   ground, so the cascade would hand them a theme accent chosen to read on a dark
+   card. They are chrome: pin them back to the deep tone, which is legible on
+   white for every theme. */
+.widget .wmenu,
+.widget .text-toolbar,
+.widget .tb-pop,
+.widget .mw-pop {
+  --accent: var(--accent-deep);
+  --accent-text: var(--accent-deep);
+  --accent-ink: #fff;
+  --accent-soft: #ccfbf1;
+  --ink: #22303c;
+  --ink-soft: #5b6b7b;
+}
 .widget-header {
   display: flex;
   align-items: center;
@@ -360,7 +395,7 @@ input, select, textarea { font: inherit; color: inherit; }
   opacity: 0.55;
 }
 .widget:hover .wbtn { opacity: 1; }
-.widget-header .wbtn:hover { background: rgba(15, 118, 110, 0.12); color: var(--ink); }
+.widget-header .wbtn:hover { background: var(--accent-soft); color: var(--ink); }
 .widget-header .wbtn.close:hover { background: #fee2e2; color: var(--danger); }
 
 .widget-body {
@@ -438,33 +473,60 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .spanel-sec { display: flex; flex-direction: column; gap: 9px; font-size: 14px; }
 
-/* per-widget color themes (mini theme cards) */
+/* Per-widget colour themes. Each swatch is an honest preview of the only two
+   things a theme controls — its ink, drawn as "Aa", and its accent, drawn as a
+   button pill — plus a spoken name, so a theme is something a teacher can say
+   across a room and a screen reader can announce. */
 .theme-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+  gap: 9px;
 }
 .theme-card {
-  height: 48px;
-  border-radius: 11px;
-  border: 2px solid rgba(34, 48, 60, 0.14);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: 4px;
-  padding: 6px;
+  padding: 0;
+  background: none;
+  border: 0;
   transition: transform 0.1s ease;
 }
-.theme-card:hover { transform: scale(1.07); }
-.theme-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.theme-card.checker {
+.tsw-face {
+  height: 46px;
+  border-radius: 12px;
+  border: 2px solid rgba(34, 48, 60, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+}
+.tsw-aa { font-size: 17px; font-weight: 700; letter-spacing: 0.2px; line-height: 1; }
+.tsw-pill { width: 22px; height: 11px; border-radius: var(--radius-pill); display: block; flex-shrink: 0; }
+.tsw-name {
+  font-size: 14px; /* the screen floor */
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-align: center;
+  line-height: 1.15;
+}
+.theme-card:hover { transform: scale(1.05); }
+/* Selection cannot lean on the accent: against a themed face the house teal is
+   invisible on several themes. The ring is drawn in the panel's own ink, and the
+   name goes bold as well, so the state never rests on colour alone. */
+.theme-card.active .tsw-face {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--panel, #fff), 0 0 0 4px var(--ink);
+}
+.theme-card.active .tsw-name { color: var(--ink); font-weight: 700; }
+.theme-card:focus-visible { outline: none; }
+.theme-card:focus-visible .tsw-face { outline: 3px solid var(--accent); outline-offset: 3px; }
+.theme-card.checker .tsw-face {
   background: repeating-conic-gradient(#cbd5e1 0% 25%, #fff 0% 50%) 0 0 / 8px 8px;
 }
-.tc-bar { width: 26px; height: 5px; border-radius: var(--radius-pill); display: block; }
-.tc-row { display: flex; align-items: center; gap: 3px; }
-.tc-bar.tc-short { width: 16px; }
-.tc-dot { width: 5px; height: 5px; border-radius: 50%; }
+.theme-card.checker-dark .tsw-face {
+  background: repeating-conic-gradient(#41505e 0% 25%, #26313c 0% 50%) 0 0 / 8px 8px;
+}
 
 /* floating text formatting toolbar */
 .text-toolbar {
@@ -697,9 +759,15 @@ input, select, textarea { font: inherit; color: inherit; }
 /* generic controls inside widgets */
 .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .grow { flex: 1; }
+/* --accent-ink, not #fff: on the seven dark themes the accent is the PALE thing
+   and a white label sits at 1.3-2.0:1 on it. The pairing is what makes a
+   per-theme accent safe at all. --accent-soft is a flat opaque tone rather than
+   an alpha over the card, because color-mix() is dropped whole by the pre-2023
+   Chromium common on locked-down school machines, and an alpha over an unknown
+   card cannot be measured. */
 .btn {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
   font-weight: 600;
   font-size: 14px;
   padding: 7px 14px;
@@ -708,8 +776,8 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .btn:hover { filter: brightness(1.1); }
 .btn.ghost {
-  background: rgba(15, 118, 110, 0.1);
-  color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text, var(--accent));
 }
 .btn.small { padding: 4px 10px; font-size: 14px; }
 /* --danger-ink, not --danger: these are all small red words on the tint, which
@@ -964,12 +1032,12 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
 /* calendar */
 .cal-head { display: flex; align-items: center; gap: 6px; padding-bottom: 6px; flex-shrink: 0; }
 .cal-title { flex: 1; text-align: center; font-weight: 800; border-radius: 8px; padding: 3px 0; }
-.cal-title:hover { background: rgba(15, 118, 110, 0.08); }
+.cal-title:hover { background: var(--accent-soft); }
 .cal-grid { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; gap: 2px; min-height: 0; }
 .cal-dow { font-size: 10px; text-transform: uppercase; color: var(--ink-soft); display: grid; place-items: center; font-weight: 700; }
 .cal-day { display: grid; place-items: center; border-radius: 8px; font-weight: 600; font-size: 13px; }
 .cal-day.other { opacity: 0.3; }
-.cal-day.today { background: var(--accent); color: #fff; font-weight: 800; }
+.cal-day.today { background: var(--accent); color: var(--accent-ink, #fff); font-weight: 800; }
 
 /* countdown */
 .count-label { text-align: center; font-weight: 700; color: var(--ink-soft); flex-shrink: 0; }
@@ -987,7 +1055,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
 /* scoreboard */
 .score-grid { flex: 1; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); overflow: auto; }
 .score-card {
-  background: rgba(15, 118, 110, 0.07);
+  background: var(--accent-soft);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -1007,7 +1075,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
   font-weight: 800;
   font-size: 16px;
 }
-.score-btns button:hover { background: rgba(15, 118, 110, 0.18); }
+.score-btns button:hover { background: var(--accent-soft); }
 
 /* activity games --------------------------------------------------------- */
 .prompt-game,
@@ -1360,7 +1428,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
 
 /* groups */
 .groups-out { flex: 1; overflow: auto; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); align-content: start; }
-.group-card { background: rgba(15, 118, 110, 0.07); border-radius: 12px; padding: 8px 10px; }
+.group-card { background: var(--accent-soft); border-radius: 12px; padding: 8px 10px; }
 .group-card h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--accent); margin-bottom: 4px; }
 .group-card div { font-size: 14px; line-height: 1.45; }
 
@@ -1608,7 +1676,7 @@ body.helping, body.helping * { cursor: help !important; }
   transition: background 0.12s ease;
 }
 .dt-btn .ic svg { width: 22px; height: 22px; }
-.dt-btn:hover { background: rgba(15, 118, 110, 0.1); }
+.dt-btn:hover { background: var(--accent-soft); }
 .dt-btn.active { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .dt-sep { width: 1px; height: 30px; background: var(--panel-border); }
 .dt-swatches { display: flex; flex-direction: column; gap: 4px; }
@@ -1632,7 +1700,7 @@ body.helping, body.helping * { cursor: help !important; }
   border-radius: 9px;
 }
 .dt-size span { display: block; border-radius: 50%; background: var(--ink); }
-.dt-size:hover { background: rgba(15, 118, 110, 0.1); }
+.dt-size:hover { background: var(--accent-soft); }
 .dt-size.active { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .dt-pop {
   position: absolute;
@@ -2783,7 +2851,7 @@ html[data-reading-font='dys'] .dash-greet-line { line-height: 1.18; }
 .tclock { gap: 6px; }
 .tclock-task {
   flex-shrink: 0;
-  background: rgba(15, 118, 110, 0.1);
+  background: var(--accent-soft);
   border-radius: 12px;
   padding: 8px 12px;
   font-size: 15px;
@@ -2818,10 +2886,10 @@ html[data-reading-font='dys'] .dash-greet-line { line-height: 1.18; }
   font-weight: 700;
   padding: 3px 8px;
   border-radius: 8px;
-  background: rgba(15, 118, 110, 0.12);
+  background: var(--accent-soft);
   color: var(--ink);
 }
-.tclock-ampm:hover { background: rgba(15, 118, 110, 0.24); }
+.tclock-ampm:hover { background: var(--accent-soft); }
 .tclock-words {
   flex-shrink: 0;
   text-align: center;
@@ -2842,7 +2910,7 @@ html[data-reading-font='dys'] .dash-greet-line { line-height: 1.18; }
 }
 .tclock-game .tclock-level { font-size: 12.5px; max-width: 132px; }
 .tclock-game .btn.small { padding: 4px 10px; }
-.tclock-game .btn.active { background: rgba(15, 118, 110, 0.16); }
+.tclock-game .btn.active { background: var(--accent-soft); }
 .tclock-game .btn:disabled { opacity: 0.4; pointer-events: none; }
 .tclock-score {
   font-weight: 700;
@@ -2898,8 +2966,8 @@ html[data-reading-font='dys'] .dash-greet-line { line-height: 1.18; }
   place-items: center;
   color: var(--ink-soft);
 }
-.spot-btn:hover { background: rgba(15, 118, 110, 0.12); color: var(--ink); }
-.spot-btn.active { background: rgba(15, 118, 110, 0.16); color: var(--ink); }
+.spot-btn:hover { background: var(--accent-soft); color: var(--ink); }
+.spot-btn.active { background: var(--accent-soft); color: var(--ink); }
 .spot-btn .ic svg { width: 17px; height: 17px; }
 
 /* ---------- Screen shades (pull tabs) ---------- */
@@ -2959,7 +3027,7 @@ html[data-reading-font='dys'] .dash-greet-line { line-height: 1.18; }
   background: rgba(34, 48, 60, 0.07);
   color: var(--ink-soft);
 }
-.tq-btn.active { background: rgba(15, 118, 110, 0.16); color: var(--ink); }
+.tq-btn.active { background: var(--accent-soft); color: var(--ink); }
 .tq-step {
   display: inline-flex;
   align-items: center;
@@ -2974,7 +3042,7 @@ html[data-reading-font='dys'] .dash-greet-line { line-height: 1.18; }
   font-size: 12px;
   color: var(--ink-soft);
 }
-.tq-mini:hover { background: rgba(15, 118, 110, 0.15); color: var(--ink); }
+.tq-mini:hover { background: var(--accent-soft); color: var(--ink); }
 .tq-mini:disabled { opacity: 0.35; pointer-events: none; }
 .tq-snap {
   font-size: 11px;
@@ -2982,7 +3050,7 @@ html[data-reading-font='dys'] .dash-greet-line { line-height: 1.18; }
   padding: 4px 5px;
   color: var(--ink-soft);
 }
-.tq-snap.active { background: rgba(15, 118, 110, 0.22); color: var(--ink); }
+.tq-snap.active { background: var(--accent-soft); color: var(--ink); }
 
 /* ---------- Money pieces, tray & mat ---------- */
 .mn-piece {
@@ -3136,7 +3204,7 @@ html[data-reading-font='dys'] .dash-greet-line { line-height: 1.18; }
 .ft-seg { padding: 0; }
 .ft-seg .tq-btn { border-radius: 0; background: transparent; }
 .ft-seg .tq-btn + .tq-btn { border-left: 1px solid rgba(34, 48, 60, 0.12); }
-.ft-seg .tq-btn.active { background: rgba(15, 118, 110, 0.16); color: var(--ink); }
+.ft-seg .tq-btn.active { background: var(--accent-soft); color: var(--ink); }
 
 /* number-line ruler backdrop */
 .ft-ruler { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
@@ -3258,7 +3326,7 @@ html[data-reading-font='dys'] .dash-greet-line { line-height: 1.18; }
 .bm-seg:first-of-type { border-radius: 10px 0 0 10px; margin-left: 0; }
 .bm-seg:last-of-type { border-radius: 0 10px 10px 0; }
 .bm-seg:only-of-type { border-radius: 10px; }
-.bm-seg.active { z-index: 2; outline: 3px solid rgba(15, 118, 110, 0.7); outline-offset: 2px; }
+.bm-seg.active { z-index: 2; outline: 3px solid var(--accent); outline-offset: 2px; }
 .bm-seg.hidden-val::after {
   content: "";
   position: absolute;
@@ -3339,7 +3407,7 @@ html[data-reading-font='dys'] .dash-greet-line { line-height: 1.18; }
 }
 .bm-end::after { height: 62%; background: rgba(34, 48, 60, 0.45); }
 .bm-div:hover::after,
-.bm-end:hover::after { background: rgba(15, 118, 110, 0.8); }
+.bm-end:hover::after { background: var(--accent-soft); }
 .bm-live .bm-seg,
 .bm-live .bm-bar,
 .bm-live .bm-brk { transition: none; }
@@ -3893,7 +3961,7 @@ html[data-reading-font='dys'] .dash-greet-line { line-height: 1.18; }
   filter: drop-shadow(0 2px 3px rgba(15, 30, 45, 0.18));
 }
 .pw-whole { border-width: 3.5px; }
-.pw-node.active { z-index: 2; outline: 3px solid rgba(15, 118, 110, 0.7); outline-offset: 2px; }
+.pw-node.active { z-index: 2; outline: 3px solid var(--accent); outline-offset: 2px; }
 .pw-node.hidden-val::after {
   content: "";
   position: absolute;
@@ -4274,7 +4342,7 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 .ws-col.ws-over,
-.ws-pool.ws-over { border-style: solid; border-color: #0f766e; background: rgba(20, 184, 166, 0.14); }
+.ws-pool.ws-over { border-style: solid; border-color: var(--accent); background: rgba(20, 184, 166, 0.14); }
 .ws-cols.ws-dragging .ct-bin { opacity: 1; }
 .ws-col-h {
   text-align: center;
@@ -4598,7 +4666,7 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
 .wb-lane.wb-t3 .wb-lane-h { color: var(--wb-t3); }
 .wb-lane-h { font-size: max(0.92em, 13px); }
 .wb-lane.ws-over,
-.wb-pool.ws-over { border-style: solid; border-color: #0f766e; background: rgba(20, 184, 166, 0.14); }
+.wb-pool.ws-over { border-style: solid; border-color: var(--accent); background: rgba(20, 184, 166, 0.14); }
 .wb-lanes.ct-dragging .ct-bin { opacity: 1; }
 .wb-lane-h {
   text-align: center;
@@ -4842,8 +4910,8 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
   border: 1.5px solid var(--panel-border, #e2e6e1); background: rgba(255, 255, 255, 0.6);
   transition: border-color 0.12s ease, opacity 0.12s ease, box-shadow 0.12s ease;
 }
-.wb-slice-tile:hover { border-color: #0f766e; }
-.wb-slice-tile.picked { border-color: #0f766e; box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.4); }
+.wb-slice-tile:hover { border-color: var(--accent); }
+.wb-slice-tile.picked { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.4); }
 .wb-slice-x {
   position: absolute; top: 3px; right: 3px;
   width: 22px; height: 22px; display: grid; place-items: center;

@@ -5088,3 +5088,103 @@ Glenn's say-so — the deliberate "Run workflow" click, run 30733134055,
 green in ~20s — and confirmed live with a fresh-boot pass on sagestage.app
 itself. The brand session's pending work (index.html, sprout.svg, its log
 entry above) stays exactly where this session found it.
+
+---
+
+## 2 August 2026 — the swatch was lying, and the buttons proved it
+
+Glenn opened the widget settings panel and said two things: the colour theme
+picker "is too similar to ClassroomScreen", and "the colours need a revamp
+because there is a clash for the text and buttons". They turned out to be one
+complaint. Checked against ClassroomScreen's live app the same afternoon, their
+picker is element-for-element what `buildThemeGrid` drew — checkerboard for
+transparency, a long dark bar, a short accent bar, a dot, in a right-hand panel
+under a "Color theme" heading. And the reason the colours clashed is that the
+short accent bar was **fiction**: every theme carried an `acc` value used in
+exactly one place, painting that swatch. `applyTheme` never applied it. Every
+real control kept the one global teal, so picking a rose widget promised a pink
+accent and delivered teal buttons on pink, 175° apart.
+
+Measured before touching anything: the ghost button's teal label was below
+4.5:1 on **18 of the 20 themes** — 1.09:1 on grape, the word simply invisible —
+and the solid button's edge was below the 3:1 non-text floor on all seven dark
+themes. Secondary ink failed on five. Body ink passed everywhere, which is
+exactly why the problem read as *buttons and small text* and not as "the theme
+is wrong".
+
+**The palette is now derived, not picked.** A theme is a hue plus an intent in
+OKLCH; background, both inks, the accent, its label, the ghost fill and the
+accent text all fall out of that. The rule proposes and the audit disposes —
+each value is measured and only auto-corrected if it misses. All twenty clear
+4.5:1 text and 3:1 edges, and still clear both under simulated deuteranopia and
+protanopia. The engine, the rule and the check page generator are committed at
+`docs/design/theme-palette/`, so the numbers in the spec regenerate rather than
+drift; the README says to change the rule and re-run, never to hand-edit hex.
+
+Four things the derivation itself caught. `card`, `glass` and `clear` keep
+`#0f766e` exactly — `card` is the fallback for every unset theme and resolves
+for 52 of the 94 widgets across the shipped templates, so honouring its promised
+indigo would have repainted 55% of every template overnight; pinning teal means
+the app's default face does not move at all. `glass` was found to be failing
+*already*, at 2.93:1, once measured through its 0.55 alpha against a worst-case
+wallpaper instead of the default stage — so it joins `clear` and `clearlight`
+under one rule: a see-through card keeps its translucent field, but its controls
+sit on a scrim. Lemon and Sun borrow a warm amber, because yellow cannot darken
+without going olive. And on dark cards the ghost fill goes *darker*, not
+lighter — washing toward a pale accent drove the accent text to near-white and
+made it indistinguishable from body text, which is the one defect the first two
+drafts shipped. A perceptual-separation check now guards it.
+
+**The swatch stops being abstract.** Each one shows the theme's real ink as
+"Aa" beside its real accent as a button pill, with a spoken name under it —
+Paper, Frost, Clear, Clear light, and sixteen that already had nouns. Ids never
+change; they are what every deck persists. Selection is a ring in the panel's
+own ink plus a bold name, never the accent, which is invisible against several
+cards. Arrow-key navigable, one tab stop, real accessible names instead of
+"clearlight".
+
+Three things only the build found. `index.html` cache-busts with `app.js?v=NN`
+and the browser caches the HTML too, so edits appear to do nothing until the
+number is bumped — not a dev annoyance, since without it a teacher keeps running
+old JS after an update. Stamping the full theme on the settings panel was wrong:
+it is white chrome, and a dark theme's near-white ink made every label vanish;
+white surfaces take the deep tone, the same rule the in-widget popovers use.
+And `clearlight`'s swatch was unreadable until it got a dark checkerboard —
+which is more honest anyway, since that theme exists for dark wallpapers.
+
+One bug caught by the audit rather than by eye, after it had already shipped
+into the working tree: `--accent-soft` has always meant the pale "this control
+is ON" fill, paired with accent ink on top, in eleven rules. The first pass
+re-pointed it to a text colour, which would have rendered the draw pad's active
+tool pills dark-on-dark. The name keeps its meaning; the accent-coloured text
+is `--accent-text`.
+
+Scope was Glenn's call: **chrome follows the theme, teaching material never
+does.** Shipped — the token contract, the scrim, the swatch, the panel stamp,
+the popover pins, and twenty-four interaction-chrome rules converted off
+hardcoded teal. Deliberately left: 41 literals still inside widget bodies, 28 of
+them across the English suite, where control and content are genuinely hard to
+tell apart and a blind sweep two days before a vacation is the wrong risk. Also
+recorded and not yet done: the colour-blind guidance belongs in front of
+teachers, not just in the spec — under deuteranopia Lilac and Sky collapse to
+0.01 and Grape and Ocean to 0.02, which is inherent to twenty themes on one hue
+wheel and cannot be fixed by better hues, only told the truth about. The largest
+set that survives both simulations is seven: Lilac, Lemon, Tangerine, Grape,
+Crimson, Navy, Ink.
+
+Verified in the app: Grape, Forest, Rose, Sun and Ink on real widgets, the
+switch back to Paper leaving nothing stuck, the ⋮ menu staying legible on a dark
+card, the settings panel readable again, and the console clean throughout. Spec
+at `docs/widget-theme-design.md`, palette preview at `theme-check.html`.
+
+**And one thing Glenn spotted while reviewing the themes**, unrelated to colour
+but found because he was living in the settings panel all afternoon: the panel
+had no way out but its own ×. The widget ⋮ menu has dismissed on an outside
+click since it shipped; the side panel never got the same treatment, so a
+teacher mid-lesson had to travel to the far corner of a 380px panel to get back
+to the board. It now dismisses on a click anywhere else — with two deliberate
+exceptions. The gear and the ⋮ keep their own toggle, or dismissing first would
+turn the gear's second press back into an open. And clicking the widget you are
+*configuring* is not clicking away: set a timer's duration, press Start to hear
+it, adjust again, all without the panel vanishing underneath you. Verified by
+press, not just by synthetic event — the timer ran and the panel stayed.
