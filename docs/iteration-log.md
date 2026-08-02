@@ -4931,3 +4931,19 @@ the confirmation copy promises only what is verifiable — the double opt-in ema
 receipt, not our success message. Without JS it posts natively rather than breaking.
 assemble.sh refuses to ship the page while its endpoint is a placeholder, which is the
 copy-dist reflex applied to a form: better a 404 than a page that silently eats signups.
+
+**sagestage.app locked against spoofing.** The audit found the product domain wide open —
+Hover's default MX still pointing at a mailbox nobody owns, no SPF, no DMARC, so anyone
+could send mail as @sagestage.app and have it delivered. That is the plausible attack on
+an edtech brand: phish a school from an address that looks like the product. Fixed by
+deleting the MX and publishing a null-sending posture: TXT `v=spf1 -all` at the apex and
+`v=DMARC1; p=reject; rua=…` at _dmarc.
+
+The asymmetry with sagestage.co.uk is deliberate and worth remembering. The .co.uk domain
+sends real mail, so its DMARC sits at p=none while the aggregate reports prove alignment;
+tightening early there could spam-folder a newsletter. The .app domain sends nothing ever,
+so p=reject is correct from the first minute and costs nothing. Same standard, opposite
+settings, for the same reason: match the policy to what the domain actually does.
+
+Verified over DoH on two resolvers, with a propagation watcher on Google's cache. The
+websites were untouched throughout — apex A records and all four pages unchanged.
