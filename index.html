@@ -5,40 +5,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sage Stage — your classroom screen, your data</title>
   <link rel="stylesheet" href="vendor/fonts/fonts.css?v=1" />
-  <link rel="stylesheet" href="style.css?v=115" />
+  <link rel="stylesheet" href="style.css?v=116" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>" />
 </head>
 <body>
   <div id="stage"></div>
 
-  <div id="topbar">
+  <header id="topbar">
     <div class="brand">
-      <span class="logo">🌿</span>
+      <span class="logo" aria-hidden="true">🌿</span>
       <span id="brandName">Sage Stage</span>
       <span class="tag">100% local</span>
     </div>
     <div class="top-actions">
-      <button class="icon-btn" id="homeBtn" data-help="homeBtn" title="All decks & class lists">🏠</button>
-      <button class="icon-btn" id="dataBtn" data-help="dataBtn" title="Your data — backup, restore, and recently closed widgets">💾</button>
-      <button class="icon-btn" id="helpBtn" data-help="helpBtn" title="Help — what you're looking at, and where your data lives">❓</button>
-      <button class="icon-btn" id="fullscreenBtn" data-help="fullscreenBtn" title="Fullscreen">⛶</button>
+      <button class="icon-btn" id="homeBtn" data-help="homeBtn" title="All decks &amp; class lists" aria-label="All decks and class lists"><span aria-hidden="true">🏠</span></button>
+      <button class="icon-btn" id="dataBtn" data-help="dataBtn" title="Your data — backup, restore, and recently closed widgets" aria-label="Your data — backup, restore, and recently closed widgets"><span aria-hidden="true">💾</span></button>
+      <button class="icon-btn" id="helpBtn" data-help="helpBtn" title="Help — what you're looking at, and where your data lives" aria-label="Help — what you're looking at, and where your data lives"><span aria-hidden="true">❓</span></button>
+      <button class="icon-btn" id="fullscreenBtn" data-help="fullscreenBtn" title="Fullscreen" aria-label="Fullscreen"><span aria-hidden="true">⛶</span></button>
     </div>
-  </div>
+  </header>
 
-  <div id="toolbar"></div>
+  <nav id="toolbar" aria-label="Widgets"></nav>
 
-  <div id="screenNav">
-    <button id="prevScreen" data-help="prevScreen" title="Previous screen">‹</button>
+  <nav id="screenNav" aria-label="Screens">
+    <button id="prevScreen" data-help="prevScreen" title="Previous screen" aria-label="Previous screen"><span aria-hidden="true">‹</span></button>
     <button id="deckBtn" data-help="deckBtn" title="Screens"><span id="screenLabel">1 / 1</span></button>
-    <button id="nextScreen" data-help="nextScreen" title="Next screen">›</button>
-    <button id="addScreen" data-help="addScreen" title="Add screen">＋</button>
-    <button id="delScreen" data-help="delScreen" title="Delete this screen">🗑</button>
-  </div>
+    <button id="nextScreen" data-help="nextScreen" title="Next screen" aria-label="Next screen"><span aria-hidden="true">›</span></button>
+    <button id="addScreen" data-help="addScreen" title="Add screen" aria-label="Add screen"><span aria-hidden="true">＋</span></button>
+    <button id="delScreen" data-help="delScreen" title="Delete this screen" aria-label="Delete this screen"><span aria-hidden="true">🗑</span></button>
+  </nav>
 
   <canvas id="drawLayer"></canvas>
   <div id="drawTools"></div>
 
-  <div id="toast"></div>
+  <!-- role="status" is an implicitly polite live region: a screen reader
+       announces a toast when it appears without interrupting the teacher
+       mid-sentence. Without it "Could not save — storage is full" was silent. -->
+  <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <script src="sanitize.js?v=1"></script>
   <script src="snapshots.js?v=2"></script>
@@ -56,7 +59,7 @@
   <script src="modelwrite.js?v=28"></script>
   <script src="english-text.js?v=17"></script>
   <script src="help/widgets-data.js?v=1"></script>
-  <script src="storage.js?v=2"></script>
-  <script src="app.js?v=79"></script>
+  <script src="storage.js?v=3"></script>
+  <script src="app.js?v=86"></script>
 </body>
 </html>

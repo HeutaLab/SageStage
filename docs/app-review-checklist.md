@@ -164,7 +164,7 @@ origin, or leaks data off-device, breaks the product's headline promise.
   stores (`SageSnapshots.clearAll` + a new `clearAux`, kept separate so a future
   "delete my snapshots" cannot throw away undo). If the IndexedDB clear fails
   the teacher is told, rather than the toast claiming everything went.
-- [ ] 🟠 **No unload flush; "Backup restored" can be a lie.** ✓ verified.
+- [x] 🟠 **No unload flush; "Backup restored" can be a lie.** ✓ verified · **fixed 2026-08-02** — `pagehide` + `visibilitychange:hidden` both call `SageStorage.flush()` at the foot of `storage.js`. The flush already existed and was wired to nothing in the browser build, which is the build the 13 Aug testers run.
   `save()` is a bare 250 ms debounce with no `pagehide`/`visibilitychange`
   listener ([`app.js:200`](../app.js#L200)). Close within the window and the last
   change is lost; import even toasts success *before* persisting
@@ -177,25 +177,45 @@ origin, or leaks data off-device, breaks the product's headline promise.
   cancelled). Because every widget `pointerdown` bumps `z` and calls `save()`, a
   tap on the touch-board tab forces a full remount in the teacher's tab — losing
   caret, focus, and in-flight typing.
-- [ ] 🟠 **Corrupt / unrecognized stored JSON is discarded, then overwritten.**
+- [x] 🟠 **Corrupt / unrecognized stored JSON is discarded, then overwritten.**
   `load()` returns null on any parse/normalize failure and the next `save()`
-  clobbers the only copy ([`app.js:188`](../app.js#L188)). A one-line backup to
-  `sage-stage-v1-corrupt` before overwriting makes it recoverable. (Phase 3 adds
-  this for the file backend; the browser backend still needs it.)
-- [ ] 🟠 **Absolute-pixel widget geometry strands widgets off-screen on a smaller display.**
+  clobbers the only copy. A one-line backup to `sage-stage-v1-corrupt` before
+  overwriting makes it recoverable. (Phase 3 adds this for the file backend; the
+  browser backend still needs it.)
+  **Fixed 2026-08-02** — `SageStorage.quarantine(raw)`, a backend method so
+  `app.js` never asks which backend it got; the file backend no-ops because its
+  timestamped backups already mean the main file is never the only copy. One
+  correction to the original finding: `normalize()` returns `null` on several
+  paths *without* throwing (empty deck list being the easy one), so a
+  try/catch-only guard would have missed the commoner case — both paths are
+  handled. The teacher is told via the existing `persisted.notice` channel.
+- [x] 🟠 **Absolute-pixel widget geometry strands widgets off-screen on a smaller display.**
   Widgets store/apply raw px and only *live* drag/resize clamps to the window;
   nothing re-clamps on mount or window resize
   ([`app.js:8907`](../app.js#L8907)). Build at 1920, open on a 1366 projector →
   a widget renders fully off-screen with no way to grab it. (The "positions are
   fractions, scales laptop→projector" promise applies to *template instantiation*
   only, not the live shell.)
+  **Fixed 2026-08-02** — `fitToWindow(w)` at mount plus a debounced `resize`
+  handler, both applying the *same* rule the drag already enforced (≥60px stays
+  grabbable), so only geometry that was already unreachable ever moves and a
+  layout opened on the display it was built for never shuffles. Widget elements
+  carry `data-wid` so the resize path can find the model without a full remount.
+  Left open by design: mount fits in memory without forcing a save, so viewing a
+  deck on a small laptop doesn't overwrite its big-board geometry, but any
+  interaction persists the clamp. A proportional re-fit (as `demo.js` does for
+  the taster) or per-display geometry is a design decision, not a bug fix.
 - [ ] 🟡 **`normalize()` only shallow-validates** — `{decks:[{screens:[null]}]}`
   passes, is persisted by the already-queued `save()`, then crashes every boot
   ([`app.js:143`](../app.js#L143)). Validate screen/widget shape; floor `d.current`.
-- [ ] 🟡 **`uid()` is weak and can emit < 8 chars** ([`app.js:10`](../app.js#L10)) —
+- [x] 🟡 **`uid()` is weak and can emit < 8 chars** —
   `Math.random().toString(36).slice(2,10)`. Screen ids are global routing keys
   (`#s=`) and `removeWidget` deletes the id from **every** deck, so a collision
-  removes an unrelated widget. Use `crypto.randomUUID()`.
+  removes an unrelated widget.
+  **Fixed 2026-08-02** — nine CSPRNG bytes, fixed at 18 chars.
+  `crypto.getRandomValues` rather than the suggested `crypto.randomUUID`, which
+  requires a secure context this app doesn't always have (`file://`, custom
+  schemes). Existing ids are untouched and nothing parses id length.
 - [ ] 🟡 **`save()` runs on every widget `pointerdown`** (z-bump), doing a full
   `JSON.stringify` of possibly-megabytes of base64 imagery on the main thread per
   tap ([`app.js:8956`](../app.js#L8956)) — and thrashing other tabs via the adopt
@@ -236,7 +256,11 @@ screen**, which is worse than a crash.
   Reached on the −10–10 number line with half minor-ticks → Facts like
   "−3.−5 + 1 = …". **Fix:** take the remainder from `Math.abs`, put the sign back
   on the front. Browser-verified: Facts now reads "−3.5 + 1 = −2.5".
-- [ ] 🟠 **Base 10 "10 ⇄ 1" exchange is dead for thousands and above.** ✓ verified.
+- [x] 🟠 **Base 10 "10 ⇄ 1" exchange is dead for thousands and above.** ✓ verified ·
+  **ALREADY FIXED — this finding is stale.** The `d >= 3` early return is gone; the
+  guard is now `d >= 6` (an index bound, nothing above millions) with the column
+  checks doing the real gating, and `app.js` carries a comment saying exactly
+  that. Confirmed by reading the source 2026-08-02; nothing changed.
   The chip is offered whenever a column has ≥10 and a place exists above
   (`c.d < 6`, [`app.js:3081`](../app.js#L3081)), but `exchange()` returns
   immediately when `d >= 3` ([`app.js:2899`](../app.js#L2899)). On the TTh and
@@ -244,23 +268,23 @@ screen**, which is worse than a crash.
   says "12 thousands = 1 ten thousand and 2 thousands". (The ones→tens exchange I
   tested by hand works fine — this is specifically the ≥ thousands case; the PV
   counters twin has no such block.)
-- [ ] 🟠 **20-frame → ten-frame switch leaves phantom cells that corrupt the number sentence** — counters in cells 10–19 render loose but are still pooled as in-frame, so a frame visibly holding 4 reads "4 + 4 = 8" ([`app.js:2645`](../app.js#L2645)).
-- [ ] 🟠 **Exchange animation timeout mutates state with no re-validation** (Dienes
+- [x] 🟠 **20-frame → ten-frame switch leaves phantom cells that corrupt the number sentence** — counters in cells 10–19 render loose but are still pooled as in-frame, so a frame visibly holding 4 reads "4 + 4 = 8" ([`app.js:2645`](../app.js#L2645)).
+- [x] 🟠 **Exchange animation timeout mutates state with no re-validation** (Dienes
   [`app.js:2923`](../app.js#L2923), PV `:3528`). Tapping Clear / Random / switch-mat
   during the 360 ms flight leaves a phantom next-place block — worst case an
   invisible-but-counted block after a mid-flight chart switch.
-- [ ] 🟠 **Frame-tiles "make it *without* a ten" accepts builds that use a ten** —
+- [x] 🟠 **Frame-tiles "make it *without* a ten" accepts builds that use a ten** —
   `checkBuild` has no forbid-denomination constraint, so 15 = 10 + 5 is marked
   "✓ Correct!" ([`app.js:1832`](../app.js#L1832)).
-- [ ] 🟡 **Class shop "ring up" clears the customer's own money, not just the payment** ([`app.js:1666`](../app.js#L1666)) — filter to the counter side.
-- [ ] 🟡 **Teaching clock: "one minutes to twelve"** — singular guard is missing in the to-branch (English and German) ([`app.js:393`](../app.js#L393)).
-- [ ] 🟡 **Number line: dragging a landing dot onto an occupied tick stacks duplicates** — one-per-number is enforced only at creation ([`app.js:4498`](../app.js#L4498)).
-- [ ] 🟡 **Frame-tiles resize de-snaps completed frames** — snap fractions are recomputed against new geometry, so tiles drift off-grid and lose their "done" state ([`app.js:2013`](../app.js#L2013)).
-- [ ] 🟡 **A saved completed ten-frame re-beeps on every mount / screen switch** — `framesDone` is per-mount but completion is persisted ([`app.js:2007`](../app.js#L2007)).
-- [ ] 🟡 **Switching currency leaves a live challenge in the old currency** — `w.props.game` isn't reset ([`app.js:1567`](../app.js#L1567)).
-- [ ] ⚪ **Impossible-exchange "hot" glow** — a place at its cap (e.g. 10+ millions, or ten-thousands on the TTh chart) glows as if exchangeable with no chip possible ([`app.js:3714`](../app.js#L3714)).
-- [ ] ⚪ **Mixed minus glyphs on negative lines** — integer labels use the locale hyphen, fraction/decimal labels use "−" ([`app.js:4351`](../app.js#L4351)).
-- [ ] ⚪ **Word builder `cleanWord` strips accents ("CAFÉ"→"CAF"); an all-punctuation line auto-wins** ([`app.js:7122`](../app.js#L7122)).
+- [x] 🟡 **Class shop "ring up" clears the customer's own money, not just the payment** ([`app.js:1666`](../app.js#L1666)) — filter to the counter side.
+- [x] 🟡 **Teaching clock: "one minutes to twelve"** — singular guard is missing in the to-branch (English and German) ([`app.js:393`](../app.js#L393)).
+- [x] 🟡 **Number line: dragging a landing dot onto an occupied tick stacks duplicates** — one-per-number is enforced only at creation ([`app.js:4498`](../app.js#L4498)).
+- [x] 🟡 **Frame-tiles resize de-snaps completed frames** — snap fractions are recomputed against new geometry, so tiles drift off-grid and lose their "done" state ([`app.js:2013`](../app.js#L2013)).
+- [x] 🟡 **A saved completed ten-frame re-beeps on every mount / screen switch** — `framesDone` is per-mount but completion is persisted ([`app.js:2007`](../app.js#L2007)).
+- [x] 🟡 **Switching currency leaves a live challenge in the old currency** — `w.props.game` isn't reset ([`app.js:1567`](../app.js#L1567)).
+- [x] ⚪ **Impossible-exchange "hot" glow** — a place at its cap (e.g. 10+ millions, or ten-thousands on the TTh chart) glows as if exchangeable with no chip possible ([`app.js:3714`](../app.js#L3714)).
+- [x] ⚪ **Mixed minus glyphs on negative lines** — integer labels use the locale hyphen, fraction/decimal labels use "−" ([`app.js:4351`](../app.js#L4351)).
+- [x] ⚪ **Word builder `cleanWord` strips accents ("CAFÉ"→"CAF"); an all-punctuation line auto-wins** ([`app.js:7122`](../app.js#L7122)).
 
 ## P3 — Touch & multi-touch (the target platform)
 
@@ -297,32 +321,41 @@ paths assume one pointer.
 
 ## P4 — Accessibility
 
-- [ ] 🟠 **The "More" panel widget cells are keyboard-dead** — `div role="button"
+- [x] 🟠 **The "More" panel widget cells are keyboard-dead** — `div role="button"
   tabindex="0"` but `el()` wires only `click`, so Enter/Space do nothing
   ([`app.js:10397`](../app.js#L10397)). This is the only route to most of the ~40
   widgets. Add an Enter/Space handler in `el()` (fixes the game cells too).
-- [ ] 🟠 **Modals have no dialog semantics** — no `role="dialog"`/`aria-modal`, focus
+- [x] 🟠 **Modals have no dialog semantics** — no `role="dialog"`/`aria-modal`, focus
   isn't moved in or trapped, Escape doesn't close ([`app.js:10504`](../app.js#L10504)).
-- [ ] 🟠 **No `prefers-reduced-motion` anywhere** — infinite `pulse`/`dn-glow`/`game-pop`
+- [x] 🟠 **No `prefers-reduced-motion` anywhere** — infinite `pulse`/`dn-glow`/`game-pop`
   plus JS spinners run regardless (`style.css`, 0 matches).
-- [ ] 🟠 **Invisible focus indicators on the dashboard/deck text controls** —
+- [x] 🟠 **Invisible focus indicators on the dashboard/deck text controls** —
   `.dash-search:focus` ring is ~1.1:1; `.deck-title`/`.name-add` set
   `outline:none` ([`style.css:2160`](../style.css#L2160)). These are the fields
   teachers tab through to rename decks and lists.
-- [ ] 🟠 **Toasts are screen-reader-silent** — `#toast` has no `role="status"`/
+- [x] 🟠 **Toasts are screen-reader-silent** — `#toast` has no `role="status"`/
   `aria-live`, so "⚠️ Could not save — storage is full" is never announced
   ([`index.html:42`](../index.html#L42)). Only 4 `aria-` attributes exist in all
   of `app.js`; the shell has no landmarks.
 - [ ] 🟠 **Child-facing hit targets far below 44px** — `.wbtn` 24×24, resize handle
   20×20 at 40% opacity, poll vote ≈28px, name-chip-× 18×18
   ([`style.css:224`](../style.css#L224)). Close and resize are core child actions.
-- [ ] 🟡 **Hover-only affordances invisible on touch** — agenda delete, deck kebab,
+  **Partly done 2026-08-02** — the resize grip is 44×44 at 0.65 opacity (its
+  glyph is unchanged; only the hit area grew, outwards into the widget's own
+  corner where nothing can collide). **`.wbtn` deliberately left: it needs a
+  design call, not a patch.** Those buttons sit adjacent in the widget header, so
+  expanding each to 44px makes their targets overlap — and the neighbour of
+  Settings is Close. Enlarging the targets would trade an accessibility miss for
+  a destructive mis-hit. The real fix is bigger buttons and/or more gap, which
+  changes chrome Glenn has just redesigned. Same question for poll vote and
+  name-chip-×.
+- [x] 🟡 **Hover-only affordances invisible on touch** — agenda delete, deck kebab,
   clear-theme widget headers are `opacity:0` until `:hover` ([`style.css:738`](../style.css#L738)).
-- [ ] 🟡 **`color-mix()` used with no fallback in 5 places** — pre-2023 Chromium (common
+- [x] 🟡 **`color-mix()` used with no fallback in 5 places** — pre-2023 Chromium (common
   on locked-down school machines) drops the declaration, making connect-four slots
   and symbol-picker buttons vanish ([`style.css:1092`](../style.css#L1092)).
-- [ ] 🟡 **Emoji-only topbar buttons named by `title` only; ⛶ (U+26F6) has spotty Windows coverage; no landmarks** ([`index.html:23`](../index.html#L23)).
-- [ ] ⚪ **`.deck-menu` (z 6500) paints above `#toast` (z 6000)** so an open kebab can cover a toast ([`style.css:1917`](../style.css#L1917)).
+- [x] 🟡 **Emoji-only topbar buttons named by `title` only; ⛶ (U+26F6) has spotty Windows coverage; no landmarks** ([`index.html:23`](../index.html#L23)).
+- [x] ⚪ **`.deck-menu` (z 6500) paints above `#toast` (z 6000)** so an open kebab can cover a toast ([`style.css:1917`](../style.css#L1917)).
 
 ## P5 — Rendering & performance (weak school GPUs)
 

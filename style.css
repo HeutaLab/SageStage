@@ -265,6 +265,7 @@ input, select, textarea { font: inherit; color: inherit; }
   place-items: center;
   color: var(--ink);
   background: var(--surface-muted);
+  background: #eef1f7;  /* fallback: color-mix() is dropped WHOLE by pre-2023 Chromium (locked-down school machines), and without this the glyph tile has no background at all */
   background: color-mix(in srgb, var(--acc, #c7d2fe) 26%, #fff);
   border-radius: 10px;
 }
@@ -916,6 +917,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
   padding: 6px 8px;
   border-radius: 10px;
   color: var(--ink);
+  background: #eef1f7;  /* fallback — see .tool .glyph; without it these buttons vanish entirely */
   background: color-mix(in srgb, var(--acc, #c7d2fe) 22%, #fff);
   border: 2px solid transparent;
 }
@@ -1296,6 +1298,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
   width: 100%;
   aspect-ratio: 1;
   border-radius: 50%;
+  background: #eef1f7;  /* fallback — without it the connect-four slots disappear and the game is unplayable */
   background: color-mix(in srgb, var(--ink) 11%, #fff);
   box-shadow: inset 0 3px 8px rgba(15,30,45,.18);
 }
@@ -1397,6 +1400,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
   place-items: center;
   color: var(--ink);
   background: #f1f5f4;
+  background: #eef1f7;  /* fallback: color-mix() is dropped WHOLE by pre-2023 Chromium (locked-down school machines), and without this the glyph tile has no background at all */
   background: color-mix(in srgb, var(--acc, #c7d2fe) 26%, #fff);
   border-radius: 10px;
 }
@@ -6533,4 +6537,62 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
 
   /* folded in from the old sentence-builder-only reduced-motion block */
   .sb-card, .sb-card:hover { transition: none; transform: none; }
+
+  /* The one infinite animation the sweep above missed. The finished timer flashes
+     its whole readout to 35% opacity forever; the same rule already turns the
+     text danger-red, so standing still it still plainly reads "time is up". */
+  .time-display.finished { animation: none; }
 }
+
+/* ====================================================================== a11y
+   Accessibility fixes, 2026-08-02, from the 21 July review's P4 section.
+   Kept together at the end rather than scattered so they can be read — and
+   reverted — as one decision. Every rule here is additive: nothing above is
+   restyled, and a user with no assistive need sees no difference except where
+   a control was previously invisible or unreachable.
+   ====================================================================== */
+
+/* Focus must be VISIBLE, and these are the fields a teacher tabs through to
+   rename a deck or add a child to a list. `.deck-title` and `.name-add` set
+   outline:none outright; `.dash-search` had a ring at about 1.1:1, which is a
+   ring you cannot see. WCAG 2.4.11 wants 3:1 against what surrounds it, so the
+   ring is drawn in the ink colour rather than the pale accent, and offset so it
+   never sits on top of the control's own border. :focus-visible, so a mouse
+   click doesn't leave a ring behind — only keyboard travel does. */
+.dash-search:focus-visible,
+.deck-title:focus-visible,
+.name-add:focus-visible,
+.icon-btn:focus-visible,
+.wbtn:focus-visible,
+.btn:focus-visible,
+[role="button"]:focus-visible {
+  outline: 3px solid var(--ink, #0f172a);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* …and undo the two rules that explicitly removed it. */
+.deck-title:focus-visible,
+.name-add:focus-visible { outline: 3px solid var(--ink, #0f172a); }
+
+/* The resize grip was 20x20 at 40% opacity — a child's target, drawn faint, well
+   under any touch guidance. The grip GLYPH keeps its size and position (the
+   ::after is untouched); only the hit area grows, outwards into the widget's own
+   corner where there is nothing to collide with. This is the one small control
+   that can be enlarged without risking a mis-hit on its neighbour. */
+.resize-handle {
+  width: 44px;
+  height: 44px;
+  opacity: 0.65;
+}
+
+/* Hover-only affordances are invisible on a touch board — which is the target
+   platform. On any device whose primary pointer cannot hover, show them. */
+@media (hover: none) {
+  .widget.theme-clear .widget-header { opacity: 1; }
+  .agenda-item .rm { opacity: 1; }
+  .widget-header .wbtn { opacity: 1; }
+}
+
+/* A toast said "Could not save — storage is full" underneath an open deck menu,
+   which is precisely when a teacher needs to see it. Toast wins. */
+#toast { z-index: 6600; }

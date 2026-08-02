@@ -5188,3 +5188,372 @@ turn the gear's second press back into an open. And clicking the widget you are
 *configuring* is not clicking away: set a timer's duration, press Start to hear
 it, adjust again, all without the panel vanishing underneath you. Verified by
 press, not just by synthetic event — the timer ran and the panel stayed.
+
+---
+
+## 2 August 2026 — the paperwork that wasn't blocking anything
+
+**It started as a payment failure and ended as a wrong assumption — two of
+them, as it turned out.** The Apple Developer enrolment for HeutaLab kept dying
+at the payment step, a red banner and nothing more, while the personal route
+seemed to sail through. The bank was an unhelpful witness in a useful way: no
+authorisation attempt had reached the account and nothing was declined on their
+side. The tempting inference — and the one drawn here first — was that this was
+never about the card at all: organisation enrolment wants a verified legal
+entity and a D-U-N-S number, individual enrolment wants neither, no company is
+registered, so the org route had nothing to verify and the banner was merely
+where Apple said so.
+
+**That was wrong, and the correction arrived within the hour.** The same banner
+came up on the *personal* enrolment, which needs no entity — so the entity was
+never the cause. Read properly, the Thai banner had been naming the culprit all
+along: *the card issuer could not verify the validity of the use of card
+···5708*. Apple is pointing at the issuer. What reconciles that with a bank
+that sees nothing is that all three likely causes fail where phone support
+doesn't look — a 3-D Secure challenge that never completes is not logged as a
+decline, a per-card "online/international transactions" switch blocks before the
+fraud log, and an AVS mismatch (the billing address on file is the school's)
+fails at verification rather than authorisation. The question to put to the bank
+is about 3DS verification attempts, not declines.
+
+**The answer came from Apple Singapore, because there is no Developer Program
+support in Thailand at all.** Not stated outright, but unmistakable: another
+account might work, and failing that, a credit card would be required. Which
+resolves everything the evidence had refused to fit. The Developer Program is an
+**auto-renewing annual membership**, so enrolling asks the issuer to authorise a
+recurring mandate rather than a single charge, and the Thai debit card cannot
+carry one. Hence a card that sailed through hotel bookings the same week — a
+one-off charge is a different animal — and hence a bank with genuinely nothing
+to show, because a mandate that fails at setup never becomes a declined
+transaction and appears in no log their staff can read. "Your card issuer could
+not verify the validity of the use of the card" is simply where that surfaces.
+
+**The detour that didn't happen is the part worth keeping.** Between the wrong
+diagnosis and the right one sat a run of increasingly structural ideas: pay from
+a UK Revolut account, move the Apple Account region to the UK to match it, or
+form a Wyoming LLC with a registered agent and a US bank account to hold a US
+Apple Account. Every one of them would have failed, because Revolut and Wise
+cards are debit as well — the one variable that mattered was the only one none
+of those plans changed. The near-miss was a $25,000-penalty Form 5472 regime and
+a permanent tax home chosen to clear a ฿3,590 charge. The rule that survives:
+when a diagnosis is still a guess, the cheap reversible test comes first, and
+jurisdiction follows the tax answer rather than the payment error. Three wrong
+theories cost an afternoon; the structural fix would have cost years.
+
+Nothing here is on the critical path — testers run on the browser build in
+eleven days, and signing is not needed until the September Tauri work. It waits
+on a credit card, which Bangkok Patana employment and a work permit should make
+routine, if not fast.
+
+---
+
+## 2 August 2026 — two ways a tester could have lost their work
+
+**The review's line numbers had gone stale, which turned out to be the useful
+part.** Both fixes were filed against `app.js` in the 21 July checklist, but the
+storage layer has been refactored since: the debounce and the write live in
+`storage.js` now, and `save()` is three lines of delegation. Following the
+anchors rather than the file numbers landed on a comment that stated the bug
+outright — *"Nothing in the browser build calls this yet; the Tauri close/quit
+handlers will."* The tester group on 13 August runs on the browser build. The
+close-time flush existed, was correct, and was wired to nothing.
+
+**So a teacher who closed the tab inside the 250ms debounce lost their last
+change**, silently, with the app having given every appearance of saving. Now
+`pagehide` and `visibilitychange:hidden` both call it. Both are needed:
+visibility is the event that reliably fires on tab-switch, minimise and mobile
+background, and on some mobile browsers is the only one that fires at all, while
+pagehide covers close and navigate-away. `flush()` already no-ops when nothing is
+pending, so firing on every tab switch costs nothing, and `localStorage.setItem`
+is synchronous — which is what lets the local backend genuinely finish inside the
+handler rather than merely starting to.
+
+**A third and a fourth followed the same afternoon: the widget that could not be
+reached, and the id that could delete someone else's work.** Widget geometry is
+stored in raw pixels, and only the *live* drag and resize ever clamped it to the
+window — nothing did at mount, and nothing did when the window itself changed
+size. Build a screen on a large display, open it on a 1366 laptop or a smaller
+classroom board, and a widget renders entirely outside the viewport: not visible,
+not draggable, not resizable, unreachable by any means the app offers. The deck
+just looks emptier than it is. (The "positions are fractions, scales
+laptop→projector" promise covers *template instantiation*; the live shell never
+had it.) Testers open decks on their own machines, which is precisely the
+condition that triggers this.
+
+**The rule chosen is the one the drag already enforces** — a widget may hang off
+an edge, but at least 60px of it stays grabbable — applied now at mount and on a
+debounced window resize. That choice does the important work: a widget that fits
+is never touched, so a layout opened on the display it was built for does not
+shuffle itself. Children navigate this app by remembering where things are, and
+an auto-arrange that "helpfully" tidies a working board would be a worse bug than
+the one being fixed. Only geometry that was already unusable moves.
+
+**One consequence left deliberately undecided.** Mount fits the widget in memory
+but does not itself force a save, so merely *looking* at a deck on a small laptop
+does not overwrite the geometry it had on the big board — reopen it there and the
+original layout is intact. Interact at all, though, and the clamped position is
+what persists. That is a defensible middle (don't destroy a layout for viewing
+it; what you see is what you get once you touch it) but it is a middle, not a
+design. The fuller answers — a proportional re-fit like the taster's `demo.js`,
+or remembering geometry per display — are Glenn's call, not a thing to decide
+inside a bug fix.
+
+**And `uid()` was one character of entropy away from deleting the wrong widget.**
+`Math.random().toString(36).slice(2, 10)` yields at most eight characters and
+sometimes fewer, because a random value with a short base-36 expansion produces a
+short string. Ids are routing keys, not labels: a screen id travels in the `#s=`
+URL, and `removeWidget` deletes an id from *every* deck — so a collision does not
+merely confuse the display, it silently removes an unrelated widget from another
+deck. They are also minted in bulk by template instantiation and deck
+duplication, which is exactly where birthday collisions live. Now nine CSPRNG
+bytes, fixed at eighteen characters. `getRandomValues` rather than the checklist's
+suggested `randomUUID`, because `randomUUID` requires a secure context and this
+app is opened from `file://` and custom schemes as well as https. Existing ids
+are untouched and keep working; nothing anywhere parses id length.
+
+Verified against the real state, backed up and restored each time. A widget
+stranded at (4000, 3000) mounted at exactly `innerWidth-60` / `innerHeight-40`
+with 60px reachable, while the widget beside it that already fitted did not move
+at all — which is the assertion that matters, since it is the one protecting the
+layout. Resizing the viewport to 480×420 re-fitted the stranded widget and again
+left the other alone. A newly added traffic light came out as
+`0b3g5p324f5d521j0l`; the two existing widgets kept their eight-character ids.
+Console clean throughout, `app.js?v=81`.
+
+---
+
+## 2 August 2026 — the app becomes usable without a mouse
+
+**Nine of the ten accessibility findings closed, and one of them was already
+done.** The review said "no `prefers-reduced-motion` anywhere — 0 matches", but
+two large and carefully-reasoned blocks have since been written, covering
+entrances, mascot, win-state pops, the exchange chip, the syllable clap and the
+blend sweep, each with a note on what static state carries the meaning instead.
+Only one infinite animation had slipped the net: the finished timer flashing its
+whole readout to 35% opacity forever. That is now stilled, and the same rule's
+danger-red text still says "time is up" perfectly well standing still. This is
+the second checklist item today whose stated facts had gone out of date — worth
+remembering that the list is a set of leads, not a set of defects.
+
+**The one that mattered most was three lines in `el()`.** The "More" panel's
+widget cells are `div role="button" tabindex="0"`, and `el()` wired only
+`click` — so Enter and Space did nothing. That panel is the only route to most
+of the forty-odd widgets, which means the majority of the app could not be
+reached without a mouse at all. Fixed at the helper rather than the panel, so the
+game cells came along for free: thirty-one keyboard-reachable cells now, Enter
+and Space both synthesising a real click (so every listener already attached
+fires, whoever attached it), Space's page-scroll suppressed, and unrelated keys
+still doing nothing.
+
+**Modals had none of the three things a modal needs.** No `role="dialog"` or
+`aria-modal`, so a screen reader announced nothing when one opened; no focus
+management, so Tab wandered out into the page behind; and no Escape, which is
+the one that bites in a classroom — a teacher with thirty children waiting
+presses Escape, and when nothing happens they go hunting for the ×. One
+`wireDialog` helper now serves all three overlay builders so they cannot drift
+apart, and it does something the review didn't ask for: on a confirm it focuses
+**Cancel**, never the danger button, so Enter on a freshly-opened dialog can
+never be the destructive answer. Verified end to end on the delete-screen
+confirm — role and aria-modal set, label taken from the message, focus on
+Cancel, Tab wrapping at both ends, Escape closing, focus returning to the button
+that opened it, and the screen still there afterwards.
+
+The rest were smaller and mostly invisible until they weren't: toasts became a
+polite live region (⚠️ "Could not save — storage is full" was previously
+announced to nobody) and now paint above an open deck menu instead of under it;
+the four emoji topbar buttons got real accessible names with the glyphs marked
+decorative; the shell got landmarks (`header`, and two labelled `nav`s) after a
+check that nothing selected those elements by tag; focus rings became visible and
+`:focus-visible`, including on the two controls that had set `outline:none`
+outright — the fields a teacher tabs through to rename a deck or add a child;
+hover-only affordances now show on any device that cannot hover, which is the
+target platform; and four `color-mix()` sites got a plain fallback declaration
+before them, because pre-2023 Chromium drops the declaration whole and the
+connect-four slots and symbol-picker buttons simply vanished on exactly the
+locked-down school machines this app is for.
+
+**One left open on purpose.** `.wbtn` at 24×24 is a genuine miss, but those
+buttons sit adjacent in the widget header, and the neighbour of Settings is
+Close. Expanding each target to 44px makes them overlap, trading an
+accessibility failure for a destructive mis-hit — so the fix is bigger buttons or
+more gap, which is chrome Glenn has just redesigned and therefore his call, not a
+patch. The resize grip had no such problem: no neighbours, so its target went
+20×20 at 0.4 opacity to 44×44 at 0.65, with the glyph itself untouched.
+
+**The corrupt-state fix found a second, commoner failure on the way in.** The
+plan was a one-line stash before the overwrite, on the theory that `load()` fails
+by throwing. It doesn't, mostly: `normalize()` returns `null` on several paths
+*without* throwing — an empty deck list being the easy one to hit — and a
+try/catch-only guard would have sailed straight past the case most likely to
+occur. Both paths now quarantine to `sage-stage-v1-corrupt` before the fresh
+default state is written over the only copy the teacher had. Verified against
+both: unparseable bytes, and valid JSON that normalize rejects.
+
+Two seams worth recording. The quarantine is a backend method rather than a
+`localStorage` call in `app.js`, because the file backend already keeps
+timestamped backups and offers to recover from them — it has nothing to
+quarantine, and says so in four lines rather than making `app.js` ask which
+backend it got. And the teacher is told, through the `persisted.notice` channel
+that already existed for file-backend messages, rather than a new one: silent
+recovery is right, silent destruction is not.
+
+Verified in the browser at `localhost:8642`, with the real 12,751-character state
+backed up first and restored after — four decks intact, console clean, no toast
+on a valid boot. The flush was checked with a pending write and a known payload:
+untouched before the event, written on `visibilitychange:hidden`, written again
+on `pagehide`, and — the assertion that matters most — *not* written when the tab
+is merely visible, so the guard holds and an ordinary click doesn't defeat the
+debounce. `index.html` cache-busts bumped to `storage.js?v=3` and `app.js?v=80`;
+without that a teacher keeps running the old JS after an update, which is the
+whole reason the numbers are there.
+
+**Then the larger correction.** The go-to-market checklist's §1 had been written
+for a UK-resident founder — decide sole trader or Ltd, £50 to Companies House,
+order the Windows OV certificate, and treat the whole block as the long pole
+because certificates are calendar time. None of that fits: UK citizen, no UK
+bank, no UK address, an NI number and a US filing obligation, resident where
+Apple bills in THB, banking through Wise. A UK Ltd would have bought permanent
+Companies House and corporation-tax filings in a country with no other
+connection, in exchange for a vendor name on an installer. The OV certificate
+isn't even orderable without an entity to validate.
+
+**What the situation actually supports, today, with no company at all:**
+individual Apple enrolment → Developer ID and notarization → a merchant of
+record selling and handling global sales tax → Wise receiving. Every link
+standard, and none of it requiring an entity — though the first link is
+currently stuck behind the card problem above, which is a different queue
+entirely. The merchant of record earns more of its keep here than it
+would for a UK founder, because being seller-of-record across jurisdictions is
+the one genuinely hard part at this distance, and both Lemon Squeezy and Paddle
+onboard individuals.
+
+So §1 was rewritten, the deferrals given their reasons rather than just being
+dropped, and the "publisher identity blocks everything" line in the open
+decisions struck through and answered: it blocks nothing. What survives as real
+is one cross-border tax consultation — UK citizenship, Thai residency and a US
+obligation is a three-jurisdiction question, and whether to incorporate at all
+falls out of that answer — timed before the first money rather than before the
+first build. The trademark check against Sage plc is reweighted rather than
+binned, since UK primaries are no longer the first market.
+
+Two things noted and deliberately not acted on. The £25–35 price range is still
+anchored on UK comparators while the first market is international schools; the
+anchor needs re-checking, but that is a pricing conversation with datapoints
+attached, not a doc edit. And §2–§5 still carry smaller UK-shaped assumptions
+that were left alone — the ask was §1, and a speculative sweep of the rest would
+have buried the one correction that matters.
+
+---
+
+## 2 August 2026 — four ways the maths was wrong on the board
+
+**The four P2 majors, and one of them had already been fixed.** "Base 10 10 ⇄ 1
+exchange is dead for thousands and above" describes an early return on `d >= 3`
+that no longer exists: the guard is now `d >= 6`, an index bound with nothing
+above millions, and the column checks do the real gating. `app.js` even carries a
+comment explaining the change. That is the third stale item found today, and by
+now the pattern is the finding rather than the bug — a checklist written against
+a moving codebase decays, and the only safe use of it is as a list of leads.
+
+**The counters widget was counting a frame that wasn't there.** Ten-frame cells
+are the top half of the twenty-frame, so hopping between the two keeps every
+counter in place — true going up, false coming down. Switching 20 → 10 left
+counters holding cell indices 10-19, addresses in a half of the frame that no
+longer exists. `cellCenter` found nothing and rendered them loose, while the
+number sentence pooled anything with a non-null cell as *in* the frame. A frame
+visibly holding four counters counted eight, and the sentence underneath read
+"4 + 4 = 8" — wrong arithmetic, on the board, in front of the class, in a widget
+whose entire job is to make ten visible. Now anything past the new cap is evicted
+on the switch and `adoptLoose` re-seats what fits; what doesn't stays loose,
+which is what the eye sees and what the sentence should say. Verified with eight
+counters seated four-and-four across both halves: in the twenty-frame the
+sentence read "8 + 12 = 20", and after the switch five had been re-seated, three
+were loose, no cell pointed past nine, and the sentence read "5 + 5 = 10" —
+matching the frame exactly.
+
+**An exchange stays in the air for 360ms, and Clear could land inside it.**
+Nothing cancelled the pending timeout, so it fired against a mat that had been
+emptied — or, worse, switched — and deposited its new block anyway: counted by
+the Facts line, sometimes into a column the new chart doesn't even have, and
+therefore invisible. Both twins had it, Dienes and place-value counters, and the
+place-value one has two flights (exchange and break-apart) sharing the timer.
+A `cancelFlight()` in each, called from Clear, Random, New number and the chart
+switch. Verified by racing it: ten ones on the mat, exchange chip and Clear
+clicked in the same synchronous block, and 700ms later the mat was empty — no
+phantom. Then the happy path re-checked, because a cancel that over-fires is its
+own bug: ten ones became one ten, Facts reading "1 ten".
+
+**And the challenge that marked its own forbidden answer correct.** "Make 15
+WITHOUT using a ten shape" generated no constraint at all — just a target — so
+`checkBuild` compared the sum and nothing else, and 15 = 10 + 5, the single build
+the task exists to rule out, came back "✓ Correct!". A child doing exactly the
+wrong thing was told they were right. One `noTen` flag on the generator, one line
+in `checkBuild`, and the key list in the comment above the challenge table
+updated so the next person can see the flag exists.
+
+Nine P2 items remain, all 🟡 or ⚪: the class shop clearing the customer's own
+money, "one minutes to twelve", duplicate landing dots, frame-tiles de-snapping
+on resize, a completed ten-frame re-beeping on every mount, a live challenge
+surviving a currency switch, the impossible-exchange glow, mixed minus glyphs,
+and `cleanWord` eating accents. All real; none of them is a wrong answer of the
+kind the four above were.
+
+---
+
+## 2 August 2026 — the last nine, and P2 is clear
+
+**All nine remaining maths items, which finishes the section.** Several turned
+out to be one wrong character; two turned out to be bigger than filed.
+
+**The teaching clock was worse in German than the review knew.** English was as
+described: the past-branch has always guarded the singular, the to-branch never
+did, so 11:59 read "one minutes to twelve". German had *neither* branch guarded,
+and a second error underneath it — `N[0]` is `'eins'`, the counting form, where a
+feminine noun needs `'eine'`. So 12:01 read "eins Minuten nach zwölf": wrong
+number-word and wrong plural in four syllables. The o'clock line directly above
+already made exactly this adjustment for "ein Uhr", so the pattern was known and
+simply hadn't been carried down. Both now read correctly in the live app —
+"one minute to twelve", "eine Minute nach zwölf".
+
+**The class shop was confiscating the child's purse.** `ringUp` cleared
+`p.pieces` outright with the comment "the payment disappears into the till" —
+but `p.pieces` is *both* sides of the counter, so the coins the child still had
+in front of them went into the till as well. "Keep the rest of your money" was
+unteachable, and the change stage began from an empty purse. Now only the
+counter side is swallowed, matching the `sideSum` split the widget already uses
+to decide what was paid.
+
+**Two rules existed but only on one path each.** "One dot per number" was
+enforced where number-line marks are *created* and not where they are *dragged*,
+so a dot dropped on an occupied tick stacked invisibly on the one already there.
+The drop is now refused and the dot sent home rather than deleted — the teacher
+was moving it, not discarding it. And the "hot" glow on a place-value column lit
+on ten-or-more alone, while the exchange chip beside it also required somewhere
+to exchange *to*; on the top place of a chart the number glowed and no chip ever
+came. The glow now uses the chip's own condition, in both twins.
+
+**The frame-tiles resize fix needed a hook the widget had never taken.** Tile
+positions persist as fractions of the mat, but the frame grid is laid out from
+`unit()`, which scales with the widget — so resizing slid every snapped tile off
+the grid and a completed frame stopped reading as complete, the "done" ring going
+out on work a child had actually finished. `api.onResize` existed and was wired
+to nothing anywhere in the app; `frametiles.mount` did not even take `api`. It
+does now, and re-snaps on resize.
+
+The rest were small: a completed ten-frame re-chimed on every remount because
+`framesDone` is per-mount while the tiles that filled it are persisted (the first
+paint now adopts existing completions in silence, so only completions that happen
+while the teacher is watching make a sound); switching currency left a challenge
+priced in the old one; integer number-line labels used the locale hyphen while
+fraction labels used U+2212, two characters for one idea on the same screen; and
+`cleanWord` stripped accents outright, turning CAFÉ into "CAF", while a line of
+only hyphens survived its filter and won the game instantly, because "every
+letter has been guessed" is vacuously true when there are no letters.
+
+**How far each was actually taken.** The clock wording was verified in the
+running app in both languages, and `cleanWord` against its real inputs
+(CAFÉ→CAFE, naïve→NAIVE, "---" rejected). The other seven are code-reading fixes
+at sites whose behaviour is stated plainly in the surrounding code; the two that
+would most repay a hands-on check are the number-line drag and the frame-tiles
+resize, since both are pointer gestures rather than logic, and both are worth a
+minute on the board on the 12th.

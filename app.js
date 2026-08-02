@@ -10,7 +10,25 @@
 
   // ---------------------------------------------------------------- helpers
   const $ = (sel, root) => (root || document).querySelector(sel);
-  const uid = () => Math.random().toString(36).slice(2, 10);
+  // Ids are routing keys, not labels. A screen id travels in the `#s=` URL, and
+  // removeWidget deletes an id from EVERY deck — so a collision does not merely
+  // confuse the UI, it silently deletes an unrelated widget in another deck.
+  // The old `Math.random().toString(36).slice(2, 10)` gave at most 8 characters
+  // and sometimes fewer, because a random value whose base-36 expansion is short
+  // yields a short string — and ids are minted in bulk by template
+  // instantiation and deck duplication, which is exactly where birthday
+  // collisions live. Same shape, fixed length, drawn from the CSPRNG.
+  //
+  // getRandomValues rather than randomUUID: randomUUID needs a secure context
+  // and this app is opened from file:// and custom schemes as well as https.
+  const uid = () => {
+    const b = new Uint8Array(9);
+    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(b);
+    else for (let i = 0; i < b.length; i++) b[i] = Math.floor(Math.random() * 256);
+    let s = '';
+    for (const n of b) s += n.toString(36).padStart(2, '0');
+    return s;
+  };
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
   function el(tag, attrs, ...children) {
@@ -23,6 +41,23 @@
         else if (k === 'html') node.innerHTML = v;
         else node.setAttribute(k, v);
       }
+    }
+    // A div carrying role="button" and tabindex="0" IS a button as far as a
+    // screen reader is concerned, and a keyboard user will press Enter or Space
+    // on it — but only a real <button> turns those keys into a click. The "More"
+    // panel's widget cells are exactly this shape, and they are the only route to
+    // most of the forty-odd widgets, so without this the majority of the app
+    // cannot be reached without a mouse. The game cells share the shape and so
+    // get fixed here too.
+    //
+    // Synthesising a click rather than invoking a handler we would have to be
+    // handed means every listener already attached fires, whoever attached it.
+    if (tag !== 'button' && node.getAttribute('role') === 'button') {
+      node.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+        e.preventDefault();   // Space would otherwise scroll the panel underneath
+        node.click();
+      });
     }
     for (const child of children.flat()) {
       if (child == null) continue;
@@ -256,12 +291,20 @@
   const persisted = await SageStorage.init();
 
   function load() {
+    if (!persisted.raw) return null;
     try {
-      if (!persisted.raw) return null;
-      return normalize(JSON.parse(persisted.raw));
-    } catch (e) {
-      return null;
+      const loaded = normalize(JSON.parse(persisted.raw));
+      if (loaded) return loaded;
+    } catch (e) { /* falls through to the quarantine below */ }
+    // Unreadable, or readable but unrecognisable — normalize() returns null on
+    // several paths without throwing, and both used to end the same way: a fresh
+    // default state that the next save() wrote straight over the only copy the
+    // teacher had. Stash the bytes first. Silent recovery is right; silent
+    // destruction is not, so say so once the UI exists to say it in.
+    if (SageStorage.quarantine(persisted.raw)) {
+      persisted.notice = 'Your saved screens could not be read, so this is a fresh start. The unreadable copy has been kept in case it can be rescued — please don’t clear the app’s data.';
     }
+    return null;
   }
 
   let state = load() || normalize(defaultState());
@@ -623,7 +666,10 @@
         if (m === 30) return 'half past ' + on;
         if (m === 45) return 'quarter to ' + next;
         if (m < 30) return N[m - 1] + (m % 5 ? (m === 1 ? ' minute' : ' minutes') : '') + ' past ' + on;
-        return N[59 - m] + ((60 - m) % 5 ? ' minutes' : '') + ' to ' + next;
+        // The past-branch above has always guarded the singular; this one hadn't,
+        // so 11:59 read "one minutes to twelve" on the board.
+        const to = 60 - m;
+        return N[to - 1] + (to % 5 ? (to === 1 ? ' minute' : ' minutes') : '') + ' to ' + next;
       },
     },
     fr: {
@@ -665,8 +711,15 @@
         if (m === 15) return 'Viertel nach ' + N[h - 1];
         if (m === 30) return 'halb ' + N[h % 12];
         if (m === 45) return 'Viertel vor ' + N[h % 12];
-        if (m < 30) return N[m - 1] + (m % 5 ? ' Minuten' : '') + ' nach ' + N[h - 1];
-        return N[59 - m] + ((60 - m) % 5 ? ' Minuten' : '') + ' vor ' + N[h % 12];
+        // German needs two corrections at one minute, and had neither: 'eins' is
+        // the counting form, but before a feminine noun it is 'eine', and one
+        // minute is 'Minute'. So 12:01 read "eins Minuten nach zwölf" — wrong
+        // twice. The o'clock line above already makes the same adjustment for
+        // "ein Uhr".
+        const mins = (n) => (n === 1 ? 'eine Minute' : N[n - 1] + ' Minuten');
+        if (m < 30) return (m % 5 ? mins(m) : N[m - 1]) + ' nach ' + N[h - 1];
+        const to = 60 - m;
+        return (to % 5 ? mins(to) : N[to - 1]) + ' vor ' + N[h % 12];
       },
     },
     es: {
@@ -1801,7 +1854,9 @@
       });
       ta.value = activeLines.join('\n');
       box.append(
-        settingRow('Currency', selectInput(curOpts, w.props.cur, (v) => { w.props.cur = v; w.props.pieces = []; api.refresh(); })),
+        // The live challenge goes too: its target was priced in the old currency,
+        // so leaving it up asks the child to make "45p" out of euros.
+        settingRow('Currency', selectInput(curOpts, w.props.cur, (v) => { w.props.cur = v; w.props.pieces = []; w.props.game = null; api.refresh(); })),
         checkRow('Write as £0.47 (not 47p)', w.props.decimal, (v) => { w.props.decimal = v; api.refresh(); }),
       );
       moneySkinSettings(box, w, api);
@@ -1900,7 +1955,12 @@
         const got = sideSum(false);
         if (got < p.price) { flash('Not enough yet — the till stays shut! 🔒'); return; }
         p.changeDue = got - p.price;
-        p.pieces = []; // the payment disappears into the till
+        // Only what was pushed across the counter goes into the till. This used
+        // to clear p.pieces outright, which also swallowed the coins the child
+        // still had in front of them on the customer side — so "keep the rest of
+        // your money" became impossible to teach, and the change stage started
+        // from an empty purse.
+        p.pieces = (p.pieces || []).filter((x) => x.fx <= 0.5);
         beep(1);
         if (p.changeDue === 0) { p.stage = 'done'; p.score++; }
         else p.stage = 'change';
@@ -1976,7 +2036,9 @@
       });
       ta.value = (Array.isArray(w.props.custom) && w.props.custom.length ? w.props.custom : MONEY_PACKS[2].lines).join('\n');
       box.append(
-        settingRow('Currency', selectInput(curOpts, w.props.cur, (v) => { w.props.cur = v; w.props.pieces = []; api.refresh(); })),
+        // The live challenge goes too: its target was priced in the old currency,
+        // so leaving it up asks the child to make "45p" out of euros.
+        settingRow('Currency', selectInput(curOpts, w.props.cur, (v) => { w.props.cur = v; w.props.pieces = []; w.props.game = null; api.refresh(); })),
         settingRow('Shop name', el('input', {
           class: 'text-input', type: 'text', value: w.props.shopName || '', style: 'flex:1;min-width:0;',
           onchange: (e) => { w.props.shopName = e.target.value.slice(0, 40); api.refresh(); },
@@ -2028,7 +2090,7 @@
   // Strand-organised challenge bank. Each gen returns plain data (so it can be
   // saved): text + a set of constraints the generic checker enforces. Fields —
   // target (hole-unit sum), tiles (exact count), same (all equal), allOdd,
-  // needTen, parityReq, prime (seed tiles), value (re-label mode), revealType
+  // needTen, noTen, parityReq, prime (seed tiles), value (re-label mode), revealType
   // (parity|number → Reveal not Check), rel (compare relation).
   const FTR = (R, lo, hi) => lo + R(hi - lo + 1); // inclusive random
   const FT_STRANDS = [
@@ -2066,7 +2128,11 @@
       { label: 'Teen numbers', gen: (R) => { const t = FTR(R, 11, 19); return { target: t, needTen: true, text: 'Make ' + t + ' — one ten and some ones' }; } },
       { label: 'Tens and ones', gen: (R) => { const t = FTR(R, 12, 20); return { target: t, needTen: true, text: 'Build ' + t + ' with a ten shape and ones' }; } },
       { label: 'Make twenty', gen: () => ({ target: 20, needTen: true, text: 'Make 20 — how many ten shapes?' }) },
-      { label: 'Show me without the ten', gen: (R) => { const t = FTR(R, 11, 18); return { target: t, text: 'Make ' + t + ' WITHOUT using a ten shape' }; } },
+      // noTen is the whole point of this challenge: the child is being asked to
+      // partition a teen number without leaning on the ten shape. Without the
+      // flag only the SUM was checked, so 15 = 10 + 5 — the exact build the task
+      // forbids — came back "✓ Correct!".
+      { label: 'Show me without the ten', gen: (R) => { const t = FTR(R, 11, 18); return { target: t, noTen: true, text: 'Make ' + t + ' WITHOUT using a ten shape' }; } },
     ] },
     { id: 'times', name: 'Times tables & arrays', acts: [
       { label: 'Equal groups', gen: (R) => { const g = FTR(R, 2, 4), v = FTR(R, 2, 5); return { target: g * v, tiles: g, same: true, text: 'Build ' + g + ' groups of ' + v + ' (= ' + (g * v) + ')' }; } },
@@ -2103,7 +2169,7 @@
       frames: 1, lineMax: 10, magic: true, showTotal: true, flash: false,
       gameOn: true, strand: 1, act: 0, score: 0, streak: 0, game: null,
     }),
-    mount(body, w) {
+    mount(body, w, api) {
       body.classList.add('mntray', 'fttiles');
       const p = w.props;
       if (!Array.isArray(p.pieces)) p.pieces = [];
@@ -2113,6 +2179,7 @@
       let wrongTimer = null;
       const pieceEls = new Map(); // piece id -> element
       const framesDone = new Set();
+      let framesPrimed = false;   // see paintFrames: the first paint adopts existing completions silently
       let cmpChip = null, subA = null, subB = null; // compare-mode furniture refs
 
       const task = el('div', { class: 'tclock-task' });
@@ -2241,8 +2308,31 @@
           if (!rects[i]) return;
           const done = frameFill(rects[i]).every((v) => v === 1);
           f.classList.toggle('done', done);
-          if (done && !framesDone.has(i)) { framesDone.add(i); beep(1); }
+          // The chime marks the MOMENT a frame is completed. framesDone is
+          // per-mount but the tiles that filled the frame are persisted, so the
+          // first paint after any remount — reopening the deck, or just flipping
+          // to the next screen and back — rediscovered a finished frame and
+          // celebrated it again. Adopt what is already complete in silence; only
+          // completions that happen while the teacher is looking make a sound.
+          if (done && !framesDone.has(i)) { framesDone.add(i); if (framesPrimed) beep(1); }
           if (!done) framesDone.delete(i);
+        });
+        framesPrimed = true;
+      }
+
+      // Tile positions persist as fractions of the mat, but the frame grid is
+      // laid out from unit(), which scales with the widget. So resizing slid
+      // every snapped tile off the grid: a finished frame stopped reading as
+      // finished, and the "done" ring went out on work the child had actually
+      // completed. Re-snap on resize — the fractions keep each tile inside the
+      // frame it was in, and trySnap puts it back on the nearest slot.
+      if (api && api.onResize) {
+        api.onResize(() => {
+          for (const pc of p.pieces) {
+            const elp = pieceEls.get(pc.id);
+            if (elp) trySnap(elp, pc);
+          }
+          paintAll();
         });
       }
 
@@ -2450,6 +2540,7 @@
         if (g.same && !(p.pieces.length && p.pieces.every((x) => x.v === p.pieces[0].v))) return false;
         if (g.allOdd && !(p.pieces.length && p.pieces.every((x) => x.v % 2 === 1))) return false;
         if (g.needTen && !p.pieces.some((x) => x.v === 10)) return false;
+        if (g.noTen && p.pieces.some((x) => x.v === 10)) return false;
         return true;
       }
 
@@ -2562,6 +2653,24 @@
   // ten-frame cells are the top half of the 20 frame, so hopping between the
   // two keeps every counter in its place; any other switch re-reads positions
   const ctKeepCells = (a, b) => (a === 'frame' || a === 'frame2') && (b === 'frame' || b === 'frame2');
+
+  // ...but that is only true going UP. Coming back down, 20 → 10, the bottom
+  // half of the frame ceases to exist: cells 10-19 are out of range on a
+  // ten-frame. They kept their cell index all the same, so the sentence pooled
+  // them as IN the frame (`i.cell != null`) while cellCenter found no such cell
+  // and they rendered loose. A frame visibly holding four counters counted
+  // eight, and the number sentence under it read "4 + 4 = 8" — wrong maths, on
+  // the board, in front of the class.
+  //
+  // Evict anything past the new cap and let adoptLoose re-seat what fits; what
+  // doesn't fit stays loose, which is what the eye sees and what the sentence
+  // should say.
+  const CT_CAP = (mat) => (mat === 'frame2' ? 20 : mat === 'frame' ? 10 : Infinity);
+  const ctReseat = (items, from, to) => {
+    if (!ctKeepCells(from, to)) { for (const it of items) it.cell = null; return; }
+    const cap = CT_CAP(to);
+    for (const it of items) if (it.cell != null && it.cell >= cap) it.cell = null;
+  };
 
   WIDGETS.counters = {
     title: 'Counters', icon: 'counters', accent: '#fca5a5', w: 620, h: 480,
@@ -2879,7 +2988,7 @@
             title: 'Switch the mat',
             onclick: () => {
               if (p.mat === id) return;
-              if (!ctKeepCells(p.mat, id)) { for (const it of p.items) it.cell = null; }
+              ctReseat(p.items, p.mat, id);
               p.mat = id;
               adoptLoose();
               commit();
@@ -2937,7 +3046,7 @@
           preset('Array 3 × 4', () => ({ mat: 'array', covered: false, sent: true, items: inCells(0, [28, 29, 30, 31, 40, 41, 42, 43, 52, 53, 54, 55]) })),
         ),
         settingRow('Mat', selectInput(CT_MATS, w.props.mat || 'blank', (v) => {
-          if (!ctKeepCells(w.props.mat, v)) { for (const it of w.props.items || []) it.cell = null; }
+          ctReseat(w.props.items || [], w.props.mat, v);
           w.props.mat = v;
           api.refresh();
         })),
@@ -3131,6 +3240,18 @@
       }
 
       // a ten-of-a-kind converges into one of the next place up — the exchange
+      // An exchange is in flight for 360ms. Clear, Random and the mat switch can
+      // all land inside that window, and the timeout then fires against a mat
+      // that no longer exists as it was: it pushes its new block onto an emptied
+      // mat, or into a column the new chart doesn't have — a phantom block,
+      // counted by the Facts line but invisible on screen. Anything that
+      // replaces the mat wholesale cancels the flight first.
+      function cancelFlight() {
+        clearTimeout(exT);
+        exT = null;
+        animating = false;
+      }
+
       function exchange(d) {
         // d >= 6 is an index guard only (nothing above millions). The old
         // `d >= 3` predated the big charts: their Th→TTh and up chips rendered
@@ -3317,7 +3438,11 @@
           const colEl = el('div', { class: 'dn-col', style: `left:${c.x}px;width:${c.w}px;height:${g.H}px;` });
           const head = el('div', { class: 'dn-head', style: `height:${g.head}px;font-size:${clamp(g.head * 0.42, 12, 19)}px;` },
             el('span', { class: 'dn-hlabel' }, c.w > 128 ? DN_HEAD[c.d] : DN_SHORT[c.d]),
-            n ? el('span', { class: 'dn-count' + (n >= 10 ? ' hot' : '') }, String(n)) : null,
+            // "Hot" must mean "you can exchange this", so it uses exactly the
+            // chip's own condition. Glowing on n >= 10 alone lit up columns with
+            // nowhere to exchange TO — the top place of a chart, or millions —
+            // promising a chip that never appeared.
+            n ? el('span', { class: 'dn-count' + (n >= 10 && c.d < 6 && colsOf().includes(c.d + 1) ? ' hot' : '') }, String(n)) : null,
             n >= 10 && c.d < 6 && colsOf().includes(c.d + 1) ? el('button', {
               class: 'dn-xchip', title: `Exchange ten ${DN_MANY[c.d]} for one ${DN_ONE[c.d + 1]}`,
               onpointerdown: (e) => e.stopPropagation(),
@@ -3438,6 +3563,7 @@
       }
 
       function randomNumber() {
+        cancelFlight();
         const [lo, hi] = DN_RANGE[p.mat] || DN_RANGE.plain;
         const n = lo + Math.floor(Math.random() * (hi - lo + 1));
         p.items = [];
@@ -3472,7 +3598,7 @@
           el('button', { class: 'tq-btn', title: 'Check the mat against the target', onclick: checkTask }, 'Check'),
           el('button', {
             class: 'tq-btn', title: 'Clear the mat and set a new target',
-            onclick: () => { p.items = []; taskDone = false; newTarget(); commit(); },
+            onclick: () => { cancelFlight(); p.items = []; taskDone = false; newTarget(); commit(); },
           }, 'New number'),
           p.streak > 0 ? el('span', { class: 'dn-streak' }, `⭐ ${p.streak}`) : null,
         ].filter(Boolean));
@@ -3514,6 +3640,7 @@
               if (p.mat === id) return;
               const bad = dnMisfit(p.items, id);
               if (bad != null) { toast(`The ${label} chart has no ${DN_MANY[bad]} column — exchange or clear them first`); return; }
+              cancelFlight();   // an in-flight block would land in a column this chart may not have
               p.mat = id;
               if (p.task) { newTarget(); taskDone = false; } // a target must be buildable on the new chart
               if (id === 'm' && mat.clientWidth < 1100) toast('Stretch the widget nice and wide — the million cube needs room!');
@@ -3526,7 +3653,7 @@
           tq('Cover', 'Hide the mat behind a cover', p.covered, () => { clearTimeout(flashT); flashing = false; p.covered = !p.covered; commit(); }),
           tq('Build', 'Challenge: build a target number', p.task, () => setTask(!p.task)),
           tq('Random', 'Scatter a random number onto the mat', false, randomNumber),
-          tq('Clear', 'Take every block off the mat', false, () => { p.items = []; taskDone = false; commit(); }),
+          tq('Clear', 'Take every block off the mat', false, () => { cancelFlight(); p.items = []; taskDone = false; commit(); }),
         );
       }
 
@@ -3743,6 +3870,16 @@
         commit();
       }
 
+      // Same 360ms window, same hazard, same answer as the Dienes twin: Clear,
+      // New number and the chart switch all cancel an exchange (or a break) that
+      // is still in the air, so its timeout cannot deposit a counter onto a
+      // chart that has since been emptied or changed shape.
+      function cancelFlight() {
+        clearTimeout(exT);
+        exT = null;
+        animating = false;
+      }
+
       // a ten-of-a-kind converges into one of the next place up — the exchange
       function exchange(d) {
         if (animating || p.covered || !fitsMat(d + 1)) return;
@@ -3954,7 +4091,7 @@
           const colEl = el('div', { class: 'dn-col', style: `left:${c.x}px;width:${c.w}px;height:${g.H}px;` });
           const head = el('div', { class: 'dn-head', style: `height:${g.head}px;font-size:${clamp(g.head * 0.42, 12, 19)}px;` },
             el('span', { class: 'dn-hlabel' }, c.w > 128 ? PV_HEAD[pvI(c.d)] : PV_SHORT[pvI(c.d)]),
-            n ? el('span', { class: 'dn-count' + (n >= 10 ? ' hot' : '') }, String(n)) : null,
+            n ? el('span', { class: 'dn-count' + (n >= 10 && cols.includes(c.d + 1) ? ' hot' : '') }, String(n)) : null,
             n >= 10 && cols.includes(c.d + 1) ? el('button', {
               class: 'dn-xchip', title: `Exchange ten ${PV_MANY[pvI(c.d)]} for one ${PV_ONE[pvI(c.d + 1)]}`,
               onpointerdown: (e) => e.stopPropagation(),
@@ -4085,6 +4222,7 @@
       }
 
       function randomNumber() {
+        cancelFlight();
         const [lo, hi, step] = PV_RANGE[p.mat] || PV_RANGE.plain;
         const n = lo + Math.floor(Math.random() * ((hi - lo) / step + 1)) * step;
         p.items = [];
@@ -4119,7 +4257,7 @@
           el('button', { class: 'tq-btn', title: 'Check the chart against the target', onclick: checkTask }, 'Check'),
           el('button', {
             class: 'tq-btn', title: 'Clear the chart and set a new target',
-            onclick: () => { p.items = []; taskDone = false; newTarget(); commit(); },
+            onclick: () => { cancelFlight(); p.items = []; taskDone = false; newTarget(); commit(); },
           }, 'New number'),
           p.streak > 0 ? el('span', { class: 'dn-streak' }, `⭐ ${p.streak}`) : null,
         ].filter(Boolean));
@@ -4164,6 +4302,7 @@
               if (p.mat === id) return;
               const bad = pvMisfit(p.items, id);
               if (bad != null) { toast(`The ${label} chart has no ${PV_MANY[pvI(bad)]} column — exchange or clear them first`); return; }
+              cancelFlight();   // an in-flight counter would land in a column this chart may not have
               p.mat = id;
               if (p.task) { newTarget(); taskDone = false; } // a target must be buildable on the new chart
               commit();
@@ -4177,7 +4316,7 @@
           tq('Cover', 'Hide the chart behind a cover', p.covered, () => { clearTimeout(flashT); flashing = false; p.covered = !p.covered; commit(); }),
           tq('Build', 'Challenge: build a target number', p.task, () => setTask(!p.task)),
           tq('Random', 'Scatter a random number onto the chart', false, randomNumber),
-          tq('Clear', 'Take every counter off the chart', false, () => { p.items = []; taskDone = false; commit(); }),
+          tq('Clear', 'Take every counter off the chart', false, () => { cancelFlight(); p.items = []; taskDone = false; commit(); }),
         );
       }
 
@@ -4607,7 +4746,15 @@
         return { den, wh, rem: n - wh * den };
       }
       function nlTxt(v) {
-        if (p.den === 1) return Number.isInteger(v) ? dnFmt(v) : pvFmt(Math.round(v * 1000));
+        if (p.den === 1) {
+          // Take the sign off first so this branch uses the SAME minus glyph as
+          // the ones below. dnFmt/pvFmt emit the locale hyphen, so an integer
+          // line read "-3" while a fraction line read "−3" — two characters for
+          // one idea, occasionally on the same screen.
+          const neg = v < 0 ? '−' : '';
+          const av = Math.abs(v);
+          return neg + (Number.isInteger(av) ? dnFmt(av) : pvFmt(Math.round(av * 1000)));
+        }
         const neg = v < 0 ? '−' : '';
         const av = Math.abs(v);
         if (!p.frac && NL_DEC.includes(p.den)) return neg + pvFmt(Math.round(av * 1000 / p.den));
@@ -4749,6 +4896,7 @@
         const x0 = e0.clientX, y0 = e0.clientY;
         let away = false;
         const elc = dot || chip;
+        const f0 = m.f, v0 = m.v;   // where it came from, in case the drop is refused
         const move = (ev) => {
           if (ev.pointerId !== pid) return;
           if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
@@ -4769,6 +4917,15 @@
           else if (!moved && chip) { // tap a blank-line mark: edit its label
             openEd(m, p.marks, xOf(m.f, g), g.lineY + 26, m.t || '');
             return;
+          }
+          // "One dot per number" was enforced only where marks are CREATED
+          // (see the guard by p.marks.push), so a dot dragged onto an occupied
+          // tick stacked a second one invisibly on top of the first — two dots
+          // at 7, and the line reads as though there were one. Refuse the drop
+          // and send it home rather than deleting it: the teacher was moving
+          // this dot, not discarding it.
+          else if (moved && !p.blank && p.marks.some((x) => x !== m && x.v === m.v)) {
+            m.f = f0; m.v = v0;
           }
           commit();
         };
@@ -7422,8 +7579,16 @@
       wordIndex: 0, guessed: [], misses: 0, maxMisses: 6,
     }),
     mount(body, w) {
-      const cleanWord = (s) => String(s || '').toUpperCase().replace(/[^A-Z '\-]/g, '').trim();
-      w.props.words = gameLines(w.props.words, ['CLASSROOM']).map(cleanWord).filter(Boolean);
+      // Fold accents to their base letters BEFORE the A-Z filter, or "CAFÉ" loses
+      // its É outright and the class is asked to spell "CAF".
+      const cleanWord = (s) => String(s || '')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .toUpperCase().replace(/[^A-Z '\-]/g, '').trim();
+      // And a word has to contain an actual letter. A line of only hyphens or
+      // apostrophes survived the old `.filter(Boolean)` and then won the game
+      // instantly, because "every letter has been guessed" is vacuously true
+      // when there are no letters to guess.
+      w.props.words = gameLines(w.props.words, ['CLASSROOM']).map(cleanWord).filter((x) => /[A-Z]/.test(x));
       if (!w.props.words.length) w.props.words = ['CLASSROOM'];
       w.props.wordIndex = clamp(+w.props.wordIndex || 0, 0, w.props.words.length - 1);
       w.props.guessed = Array.isArray(w.props.guessed) ? w.props.guessed.filter((x) => GAME_ALPHABET.includes(x)) : [];
@@ -9560,12 +9725,55 @@
     else if (mod && key === 'd') { e.preventDefault(); duplicateWidget(w); }
   });
 
+  // Widget geometry is stored in raw pixels, and until now only the LIVE drag and
+  // resize clamped it to the window — nothing did at mount, or when the window
+  // itself changed size. Build a screen on a 1920 display, open it on a 1366
+  // laptop or a smaller classroom board, and a widget could render entirely
+  // outside the viewport: not visible, not draggable, not resizable, no way to
+  // reach it at all. The deck simply looked emptier than it was. (The
+  // "positions are fractions, scales laptop→projector" promise covers TEMPLATE
+  // instantiation; the live shell never had it.)
+  //
+  // The rule below is deliberately the SAME one the drag already enforces — a
+  // widget may hang off an edge, but at least 60px of it stays grabbable — so
+  // this only ever moves a widget that was already unreachable. Anything that
+  // fits is left exactly where the teacher put it. That matters more than it
+  // looks: children navigate this app by remembering where things are, so a
+  // layout opened on the display it was built for must not shuffle itself.
+  function fitToWindow(w) {
+    const x = clamp(w.x, -w.w + 60, window.innerWidth - 60);
+    const y = clamp(w.y, 0, window.innerHeight - 40);
+    if (x === w.x && y === w.y) return false;
+    w.x = x; w.y = y;
+    return true;
+  }
+
+  // Plugging in a projector, un-maximising the window, or a soft keyboard opening
+  // all change the viewport under a screen that is already mounted. Debounced,
+  // because dragging a window edge fires this continuously.
+  let refitTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(refitTimer);
+    refitTimer = setTimeout(() => {
+      let moved = false;
+      for (const node of document.querySelectorAll('.widget[data-wid]')) {
+        const w = findWidgetById(node.dataset.wid);
+        if (!w || !fitToWindow(w)) continue;
+        node.style.left = w.x + 'px';
+        node.style.top = w.y + 'px';
+        moved = true;
+      }
+      if (moved) save();
+    }, 150);
+  });
+
   function mountWidget(w) {
     const def = WIDGETS[w.type];
     if (!def) return;
+    fitToWindow(w);
 
     const body = el('div', { class: 'widget-body' });
-    const widgetEl = el('div', { class: 'widget', 'data-help': w.type, style: `left:${w.x}px;top:${w.y}px;width:${w.w}px;height:${w.h}px;z-index:${w.z};` });
+    const widgetEl = el('div', { class: 'widget', 'data-help': w.type, 'data-wid': w.id, style: `left:${w.x}px;top:${w.y}px;width:${w.w}px;height:${w.h}px;z-index:${w.z};` });
 
     // A widget that lays itself out to the width it has been given needs to
     // hear about the resize. ResizeObserver is the obvious answer and is fine
@@ -11742,10 +11950,53 @@
     closeDockPanels();
   }, true);
 
+  // ------------------------------------------------------------ dialog plumbing
+  // Every overlay in this app is a plain div, which meant three things went
+  // wrong at once: a screen reader announced nothing when one opened, Tab
+  // wandered out into the page behind it, and Escape did nothing. In a
+  // classroom the last is the one that bites — a teacher with thirty children
+  // waiting presses Escape, and when nothing happens they have to go hunting
+  // for the ×.
+  //
+  // One helper for all three overlay builders so they cannot drift apart.
+  // Returns a function that puts focus back where it was, which the caller's
+  // own close() invokes — closing a dialog should not dump the teacher at the
+  // top of the document.
+  const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  function wireDialog(backdrop, close, opts) {
+    const o = opts || {};
+    const card = backdrop.querySelector('.modal') || backdrop;
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'true');
+    if (o.label) card.setAttribute('aria-label', String(o.label).slice(0, 120));
+    if (!card.hasAttribute('tabindex')) card.setAttribute('tabindex', '-1');
+
+    const returnTo = document.activeElement;
+    const focusables = () => [...card.querySelectorAll(FOCUSABLE)].filter((n) => n.offsetParent !== null);
+
+    backdrop.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close(); return; }
+      if (e.key !== 'Tab') return;
+      const f = focusables();
+      if (!f.length) { e.preventDefault(); card.focus(); return; }
+      const first = f[0], last = f[f.length - 1];
+      // Wrap at both ends — that IS the trap; nothing else keeps Tab inside.
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+
+    if (o.focus && o.focus.focus) o.focus.focus();
+    else { const f = focusables(); (f.length ? f[0] : card).focus(); }
+
+    return () => { try { if (returnTo && returnTo.focus) returnTo.focus(); } catch (e) { /* it left the DOM */ } };
+  }
+
   // ---------------------------------------------------------------- list manager
   let modal = null;
+  let modalRestore = null;
   function closeModal() {
     if (modal) { modal.remove(); modal = null; }
+    if (modalRestore) { modalRestore(); modalRestore = null; }
   }
   function openModal(title, bodyBuilder, onClose) {
     closePanels();
@@ -11758,6 +12009,7 @@
     const finish = () => { closeModal(); if (onClose) onClose(); };
     bodyBuilder(bodyEl, finish);
     document.body.append(modal);
+    modalRestore = wireDialog(modal, finish, { label: title });
   }
 
   // stand-alone confirm overlay — doesn't touch the `modal` singleton, so it can
@@ -11772,7 +12024,8 @@
       class: 'modal-backdrop',
       onclick: (e) => { if (e.target === backdrop) close(); },
     });
-    const close = () => backdrop.remove();
+    let restore = null;
+    const close = () => { backdrop.remove(); if (restore) { restore(); restore = null; } };
     const row = el('div', { class: 'row', style: 'justify-content:flex-end;flex-wrap:wrap;' },
       el('button', { class: 'btn ghost', onclick: () => close() }, cancelLabel));
     if (altLabel && typeof onAlt === 'function') {
@@ -11784,6 +12037,9 @@
     backdrop.append(el('div', { class: 'modal confirm-modal' },
       el('div', { class: 'modal-body' }, el('p', {}, message), row)));
     document.body.append(backdrop);
+    // Focus Cancel, not the danger button: Enter on a freshly-opened confirm
+    // must never be the destructive answer.
+    restore = wireDialog(backdrop, close, { label: message, focus: row.firstChild });
   }
 
   // window.prompt's replacement, in confirmDialog's mould. It exists because
@@ -11799,7 +12055,8 @@
       class: 'modal-backdrop',
       onclick: (e) => { if (e.target === backdrop) close(); },
     });
-    const close = () => backdrop.remove();
+    let restore = null;
+    const close = () => { backdrop.remove(); if (restore) { restore(); restore = null; } };
     const input = el('input', {
       class: 'text-input', type: 'text', value: initial == null ? '' : String(initial), placeholder,
       style: 'width:100%;box-sizing:border-box;',
@@ -11818,7 +12075,9 @@
           el('button', { class: 'btn ghost', onclick: () => close() }, 'Cancel'),
           el('button', { class: 'btn', onclick: () => submit() }, label)))));
     document.body.append(backdrop);
-    input.focus();
+    // The text field keeps the focus it always had; wireDialog adds the dialog
+    // semantics, the Tab trap and the focus return around it.
+    restore = wireDialog(backdrop, close, { label: message, focus: input });
     input.select();
   }
 

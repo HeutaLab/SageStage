@@ -83,12 +83,26 @@
         saveTimer = setTimeout(doWrite, 250);
       },
 
-      // Force any pending write NOW. Nothing in the browser build calls this yet;
-      // the Tauri close/quit handlers will.
+      // Force any pending write NOW. Called by the Tauri close/quit handlers and,
+      // since 2026-08-02, by the browser build's own close-time flush at the foot
+      // of this file. Synchronous inside — localStorage.setItem is — which is what
+      // lets it finish inside a pagehide handler.
       async flush() {
         if (!pending) return;
         clearTimeout(saveTimer);
         doWrite();
+      },
+
+      // Keep an unreadable state instead of silently overwriting it. app.js's
+      // load() returns null on any parse or normalize failure and the very next
+      // save() clobbers the only copy — so a teacher whose decks failed to parse
+      // lost them outright, with nothing left to diagnose from. One extra key,
+      // written once: the boot after this one reads a valid state and never comes
+      // back here.
+      quarantine(raw) {
+        if (typeof raw !== 'string' || !raw) return false;
+        try { localStorage.setItem(LS_KEY + '-corrupt', raw); return true; }
+        catch (e) { return false; }  // near-full storage — the live save matters more
       },
 
       // THROW AWAY a pending write instead of performing it. Erase needs this and
@@ -423,6 +437,12 @@
       async flush() { await queue.flush(); },
       cancel() { queue.cancel(); },
 
+      // Nothing to do here: this backend already keeps timestamped backups and
+      // offers to recover from them (recoveryCandidates / restoreFrom), so a
+      // corrupt main file is never the only copy. The method exists so app.js can
+      // call it without asking which backend it got.
+      quarantine() { return false; },
+
       async erase() {
         queue.cancel();
         // Quiesce the other windows BEFORE deleting anything, and give the event
@@ -636,4 +656,26 @@
   if (window.SageStorage._wireQuit) {
     window.SageStorage._wireQuit().catch(() => { /* the app still runs */ });
   }
+
+  // Close-time flush for the BROWSER build. Until now only the Tauri quit
+  // handlers forced a pending write out, so a teacher who closed the tab inside
+  // the 250ms debounce lost their last change — and the tester group runs on the
+  // browser build, where that was the whole safety net.
+  //
+  // Both events are needed. visibilitychange:hidden is the one that reliably
+  // fires when a tab is switched away from, minimised or backgrounded, and is the
+  // only one some mobile browsers give at all; pagehide covers close and
+  // navigate-away. flush() is a no-op when nothing is pending, so firing on every
+  // tab switch costs nothing. Registered for both backends: harmless where the
+  // quit handlers already exist, and a background tab is worth flushing either way.
+  const flushNow = () => {
+    try {
+      const p = window.SageStorage.flush();
+      if (p && typeof p.catch === 'function') p.catch(() => { /* the exit is happening */ });
+    } catch (e) { /* nothing left to try */ }
+  };
+  window.addEventListener('pagehide', flushNow);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushNow();
+  });
 }());

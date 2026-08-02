@@ -2,7 +2,8 @@
 
 **Status:** Working checklist — distilled from the go-to-market discussion of 2026-07-30
 **Companion documents:** [Licensing, bundles & release](licensing-design.md) · [Storage abstraction & Tauri desktop](storage-abstraction-plan.md) · [Iteration log](iteration-log.md)
-**Date:** 2026-07-30
+**Date:** 2026-07-30 · **§1 rewritten 2026-08-02** — the original assumed a
+UK-resident founder and front-loaded paperwork that gates nothing.
 
 The model in one line: **never sell data, attention, or access to a teacher's
 own work — sell new capability (widget bundles) and convenience (seat
@@ -11,30 +12,81 @@ item that fails it gets cut rather than softened.
 
 ---
 
-## 1. Now → mid-August — paperwork and proof
+## 1. Now → mid-August — the testers are the only hard date
 
-The certificates are calendar time, not work time, and they are the long pole
-([licensing-design §9.6](licensing-design.md)). Start them before the Tauri
-build, not after.
+_Rewritten 2026-08-02. The original section was written for a UK-resident sole
+trader or Ltd. That is not the situation: **UK citizen with no UK ties** — no
+bank, no address, an NI number and a US filing obligation — resident where Apple
+bills in THB, banking through Wise, [first market international
+schools](iteration-log.md) rather than UK primaries, and macOS-first on
+platform. Almost everything the old §1 called a blocker turned out to gate
+nothing._
 
-- [ ] **Decide publisher identity** — sole trader or limited company.
-      Recommendation: Ltd (~£50, Companies House) so the installer, the
-      invoices and the licence terms all show a vendor, not a private
-      individual. Blocks both certificates — decide first.
-- [ ] **Trademark sanity check** on trading as "Sage on the Stage" given Sage
-      plc — one short IP consultation, before anything is bought in the name.
-- [ ] **Start Apple Developer Program enrolment** (2–4 weeks as an
-      organisation; needs the registered entity plus a D-U-N-S number).
-- [ ] **Order the Windows OV code-signing certificate** (OV, not EV —
-      [licensing-design §9.5](licensing-design.md); a hardware token arrives by
-      post and signing happens on the machine it is plugged into).
-- [ ] **Open the merchant-of-record account** — Lemon Squeezy or Paddle.
-      Confirm both: a licence-key pool with automatic email delivery, and
-      invoice/purchase-order buying for schools.
+**Nothing in this section blocks shipping.** This chain works today with no
+company, no D-U-N-S and no UK address:
+
+> individual Apple enrolment → Developer ID + notarization → merchant of record
+> sells → Wise receives
+
+The certificates were only ever the long pole on the *organisation* route: the
+individual route has no entity to verify and no D-U-N-S queue in front of it.
+Enrolment is nonetheless gated on getting hold of a **credit card** (see the
+first item) — a constraint unrelated to entity, region or route.
+
+**Operational note for a Thailand-based operation:** there is **no Apple
+Developer Program support in Thailand**. Enrolment and membership issues route
+through Apple Singapore. Worth knowing before the next problem, and worth
+factoring into any support expectation for the App Store path the assessment
+suite's iPad app will take.
+
+- [ ] **Enrol in the Apple Developer Program as an individual.** For Developer ID
+      signing and notarization outside the Mac App Store the individual account
+      is functionally complete; the only thing forgone is the vendor name on the
+      installer. **Blocked at payment until a credit card is available — a debit
+      card will not do it.** Confirmed with Apple on 2026-08-02 (see below): the
+      membership is an *auto-renewing annual subscription*, so enrolment needs
+      the issuer to authorise a recurring mandate, not a one-off charge, and the
+      Thai debit card cannot carry one. That is why the same card works fine for
+      one-off e-commerce (hotel bookings the same week) and why the bank had
+      nothing to show: a mandate that fails at setup never becomes a declined
+      transaction, so it appears in no log they read from. It surfaces only as
+      Apple's banner, *"your card issuer could not verify the validity of the use
+      of card ···5708."* **Action: obtain a credit card** — Bangkok Patana
+      employment plus work permit should make a Thai one routine, if not quick.
+      Not urgent: testers run on the browser build, and signing is not needed
+      until the September Tauri work.
+- [ ] **Open the merchant-of-record account** — Lemon Squeezy or Paddle. Both
+      onboard individuals as seller of record and handle global sales tax and
+      VAT, which is the genuinely hard part at this distance and the reason MoR
+      matters more here than it would for a UK-resident founder. Confirm both:
+      a licence-key pool with automatic email delivery, and invoice/purchase-order
+      buying for schools. Payout to Wise.
 - [ ] **Run the 13 Aug tester group** on the browser build. Watch for the
       widget testers mention unprompted — that moment becomes the demo video,
       the thumbnail, and the first ten seconds of every clip.
 - [ ] **Collect tester quotes and written permission** to use them publicly.
+- [ ] **One cross-border tax consultation — before revenue arrives, not before
+      the build.** UK citizenship, Thai residency and a US filing obligation is
+      a three-jurisdiction question, and whether to incorporate *at all* falls
+      out of the tax answer rather than the other way round. The wrong structure
+      is expensive to unwind, so this comes before the first money, not before
+      the first build.
+
+### Deferred, with reasons
+
+- **Publisher identity / any entity.** Buys the vendor name on the installer and
+  whatever the tax consultation recommends — nothing else. A UK Ltd specifically
+  would mean permanent Companies House and corporation-tax filings in a country
+  with no other connection, plus a registered-office service, for that one
+  cosmetic gain. Revisit when revenue makes the question concrete.
+- **Windows OV code-signing certificate.** OV requires a verified legal business
+  entity — registration, verifiable address and phone — so it is not orderable
+  as specced ([licensing-design §9.5](licensing-design.md) assumed the entity).
+  Individual-validation certificates are the alternative when the time comes.
+  macOS-first defers this regardless.
+- **Trademark check on "Sage on the Stage" vs Sage plc.** Reweighted, not
+  dropped — UK primaries are no longer the first market, so UK-specific exposure
+  is not the first question. Still worth doing before money is spent on the name.
 
 ## 2. September — build, and become findable
 
@@ -122,8 +174,14 @@ build, not after.
 
 ## Open decisions (carried from [licensing-design §11](licensing-design.md))
 
-- **Publisher identity** — blocks everything in §1; decide first.
-- **Price** — needs the two per-seat datapoints above.
+- ~~**Publisher identity** — blocks everything in §1; decide first.~~
+  **Resolved 2026-08-02: it blocks nothing.** Ship as an individual; revisit an
+  entity only if the tax consultation recommends one, or when the vendor name on
+  the installer is worth its filing overhead. See §1.
+- **Price** — needs the two per-seat datapoints above. Note the working £25–35
+  range is anchored on UK comparators while the first market is international
+  schools; the MoR sells in local currency either way, but the anchor should be
+  re-checked against what those schools actually pay.
 - **Perpetual vs annual** — recommended resolution: the individual/department
   split in §4.
 - **Founder count** — 75 is the working number; nothing depends on it.
