@@ -2,10 +2,46 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!-- This app's one origin holds every deck and every class list of children's
+       names, so the policy's job is that nothing which is not ours can run in
+       it. `script-src 'self'` is honest here only because there are no inline
+       handlers, no CDN, self-hosted chrome fonts and every library vendored.
+       Must come before anything it governs: a meta policy applies only to what
+       is fetched after it is parsed.
+
+       What each relaxation buys, so that none of them are cargo cult:
+         blob:  the export workers, which are built from a Blob, and the local
+                document preview's object URLs
+         data:  the favicon below, and teacher-uploaded images, which are
+                stored as data URLs rather than as files
+         https: the widgets that exist to show the web — embed, video,
+                document — plus community template sources and the Unsplash
+                backgrounds. Never in script-src, never in default-src.
+
+       Deliberately absent: `data:` in frame-src. That is the shape of the
+       attack this release closed — a shared template naming a data:text/html
+       document and getting script onto the classroom board.
+
+       Keep in step with the Tauri CSP (storage-abstraction-plan.md §7). The two
+       should say the same thing, and this is the stricter starting point. -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' blob:;
+    worker-src 'self' blob:;
+    child-src 'self' blob:;
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob: https:;
+    font-src 'self';
+    media-src 'self' data: blob: https:;
+    frame-src 'self' blob: https:;
+    connect-src 'self' https:;
+    object-src 'none';
+    base-uri 'none';
+    form-action 'none'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sage Stage — your classroom screen, your data</title>
   <link rel="stylesheet" href="vendor/fonts/fonts.css?v=1" />
-  <link rel="stylesheet" href="style.css?v=119" />
+  <link rel="stylesheet" href="style.css?v=121" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>" />
 </head>
 <body>
@@ -43,7 +79,7 @@
        mid-sentence. Without it "Could not save — storage is full" was silent. -->
   <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="sanitize.js?v=1"></script>
+  <script src="sanitize.js?v=2"></script>
   <script src="snapshots.js?v=2"></script>
   <script src="qr.js?v=6"></script>
   <script src="templates.js?v=5"></script>
@@ -60,6 +96,6 @@
   <script src="english-text.js?v=17"></script>
   <script src="help/widgets-data.js?v=1"></script>
   <script src="storage.js?v=4"></script>
-  <script src="app.js?v=91"></script>
+  <script src="app.js?v=93"></script>
 </body>
 </html>

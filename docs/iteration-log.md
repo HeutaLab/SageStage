@@ -5751,3 +5751,114 @@ screen can be rasterised to the writer's format and its canvas released
 immediately. What stopped it being done today is that the defect is a memory
 peak, and a memory fix nobody has watched a real 30-screen export survive is a
 claim rather than a fix. It has its own session coming.
+
+---
+
+## 2 August 2026 (later) — P0 closed
+
+**The five majors and both polish items, in the fresh session the handoff asked
+for. Two of the seven fixes turned up a hole the review had not found, and both
+were worse than the item that led to them.**
+
+**The template importer was collecting URLs and stripping none of them.** The
+`/^(https?:|data:)/i` test existed only to populate the vetting dialog;
+`javascript:` did not even match it, so the one scheme that matters was the one
+hidden from the teacher. What replaced it is two passes, and the split is the
+interesting part. At the live sinks — the widgets that actually build an iframe,
+an `<img>` or a `window.open` — an **allow-list** holds each prop to what that
+sink can safely take: http(s) only for a frame, http(s) plus a base64
+`data:image` for a picture, `mailto:` permitted only on the Link widget because
+it hands the string to the system browser rather than rendering it. Then a
+**deny-list** sweeps every remaining string in the props tree, however deep.
+
+Deny-listing is the wrong instinct nearly everywhere, and it is right there, for
+a reason worth writing down: an allow-list cannot go into arbitrary text.
+`"Note: bring a coat"` opens with something a regex cannot distinguish from a
+scheme, and blanking it would eat the teacher's agenda. The first version did
+exactly that — it also flagged `"Learn about javascript: in year 6"`, which is a
+Year 6 lesson, and `C:\Users\...`. The allow-list guards the sinks; the
+deny-list catches the schemes that are hostile *by name* in props no widget
+reads today, because the prop a widget reads tomorrow is the same prop.
+
+A related correction fell out of it. `bare()` — the strip that stops a scheme
+hiding behind whitespace — was removing every unicode space, which is what made
+a sentence look like a URL. It now removes what the URL parser itself removes
+and nothing more: leading control characters and spaces, tab/CR/LF anywhere.
+That is also a small soundness fix in the other direction, since the old version
+could approve `"htt ps://x"` as https and then hand back a string the browser
+resolves as a relative path.
+
+**The webcam fix is the one I'd defend hardest, because it deletes the feature
+rather than guarding it.** `props.auto` was the memory of a teacher pressing
+"Enable camera", and it was *saved* — so it travelled inside a shared deck, and
+every later mount called `getUserMedia` with no gesture behind it. Opening
+somebody's screen turned on your camera, silently, if the origin had ever been
+granted. Stripping it on import would have worked. Not persisting it at all
+works better and needs no guard: the grant now lives in an in-memory Set keyed
+by widget id, the same shape `sessionFiles` already uses for local documents.
+Nothing to carry, so there is no import path left to get wrong. What it costs is
+one click after a reload. What it keeps is the thing the flag was really for —
+switching screens away and back mid-lesson without re-clicking.
+
+**Then the two the review had not found.** The Document widget's `documentKind()`
+routes by filename as well as MIME type, and a blob: URL is same-origin with the
+app — so `notes.pdf` carrying `type: text/html` was framed as a live page with
+every deck and every class list in reach. The file is now retyped at pick time
+with `file.slice(0, size, 'application/pdf')`, which relabels without copying
+the bytes, and that file becomes a broken PDF instead. The remote branches got
+`sandbox="allow-scripts"`; local PDFs deliberately did not, because the retype
+closes it at the source and sandboxing the browser's own PDF viewer is not free.
+
+The other was the Video widget, gated on `/youtube\.com\/embed\//.test(u)` —
+unanchored, over the whole string. `https://evil.example/#youtube.com/embed/`
+matched, and that branch had no sandbox at all. It is decided by the parsed
+hostname now.
+
+**The vetting dialog was trusting a name the attacker chose.** `seenTemplates`
+held `tpl.id`, so a source could ship something benign, have the id remembered,
+and then serve anything at all under it. Trust is keyed on a SHA-256 of the
+sanitized template now. Where SubtleCrypto is missing the fingerprint is empty
+and the dialog shows every time — the right way to fail, and specifically better
+than a cheap synchronous hash: FNV and its relatives are invertible, so a second
+preimage is easy and the dialog would only *look* like a check. The disclosure
+also walks the whole tree now, reads hrefs back out of cleaned `props.html`, and
+lists what was **removed** — which matters more than what survived, because a
+template carrying `javascript:` was not written in good faith and the teacher is
+really being asked to judge the source.
+
+**The CSP went in last and is the one that could have broken everything.** It
+did not, but only because it was checked rather than assumed. Enforcement is
+positively confirmed — an injected inline `<script>` does not run and a
+`data:text/html` iframe is refused, both reported as violations — and every
+relaxation is there for a named reason rather than by habit. `blob:` is the
+export workers and the local document preview; `data:` is the favicon and
+teacher-uploaded images; `https:` is confined to `img-src`, `media-src`,
+`frame-src` and `connect-src`, and appears in neither `script-src` nor
+`default-src`. `data:` is deliberately absent from `frame-src`, that being the
+shape of the attack the rest of this work closed.
+
+**A note on the testing, since it is where the time went.** The fixture was a
+hostile template served through the real community-source path — not a unit
+test — so every claim below is about the running app: eight addresses stripped
+and disclosed, four legitimate ones kept, all four traps dead, no request to any
+attacker host, the camera showing its button, and the spoofed YouTube host
+rendering as a plain `<video>` with no iframe in the document at all. Two tests
+initially proved less than they appeared to. A blob-execution check passed on
+both the fixed *and* the unfixed path, because the CSP was catching the payload
+before the retype mattered; isolating it needed `blob.type`, not script
+execution. And a `fetch()` of a blob URL failed on `connect-src` — the test's
+fault, not the policy's, and worth confirming rather than loosening: the only
+two `fetch()` calls in the whole codebase are the community index and template.
+
+Deck state was fingerprinted before any of it and matched afterwards, ids and
+coordinates included — `kmbg4hzt` still at 78.33984375, which is the check the
+previous session recommended and it is a good one.
+
+**What this does not do.** None of it is tested under Tauri, and two things
+there need a real look rather than an assumption: the CSP has to be ported into
+the Tauri config, and `sameOrigin()` — which is what decides whether an iframe
+gets `allow-same-origin` — depends on what origin the webview actually reports.
+The whole sandbox-escape guard rests on that comparison being right. Export was
+verified at the mechanism level (the blob Worker starts, `importScripts` loads
+JSZip); a full 30-screen export is still the separate session the memory 🟠 is
+waiting for.

@@ -51,16 +51,72 @@
   ]);
 
   const SAFE_SCHEME = /^(?:https?:|mailto:)/i;
+  const HTTP_SCHEME = /^https?:/i;
+  // Inline bitmaps only. `image/svg+xml` is deliberately absent: an SVG is a
+  // document carrying its own script — inert inside <img>, not inert anywhere
+  // else — and the callers below include ones that frame what they are given.
+  const DATA_IMAGE = /^data:image\/(?:png|jpe?g|gif|webp|avif|bmp);/i;
+
+  // Every scheme test below runs against a stripped copy — what the URL parser
+  // itself ignores, and only that: leading control characters and spaces, and
+  // tab/CR/LF anywhere. Strip less and "java\tscript:" walks past, which the
+  // parser accepts. Strip more — every unicode space, say — and the tests read
+  // a scheme into "Learn about javascript: in year 6", which is lesson text.
+  const bare = (s) => s.replace(/^[\u0000-\u0020]+/, '').replace(/[\t\r\n]/g, '');
 
   // A URL the app is willing to follow, or '' — used for hrefs inside stored
-  // html and by the widgets that take a URL from a teacher or a template.
-  // The scheme is tested against a stripped copy, because a scheme can hide
-  // behind whitespace and control characters: "java\tscript:" is one the
-  // parser accepts and a naive regex walks straight past.
+  // html and by the widgets that hand a URL to the system browser.
   function url(raw) {
     const s = String(raw == null ? '' : raw);
-    const bare = s.replace(/[\u0000-\u0020\u00a0\u1680\u2000-\u200f\u2028\u2029\u202f\u205f\u3000\ufeff]/g, '');
-    return SAFE_SCHEME.test(bare) ? s.trim() : '';
+    return SAFE_SCHEME.test(bare(s)) ? s.trim() : '';
+  }
+
+  // A URL for a frame or a media element. Narrower than `url()` on purpose:
+  // mailto: means nothing as a src, and a `data:text/html` document is exactly
+  // how a stranger's template gets script into an iframe.
+  function frameUrl(raw) {
+    const s = String(raw == null ? '' : raw);
+    return HTTP_SCHEME.test(bare(s)) ? s.trim() : '';
+  }
+
+  // A URL for an <img> or a CSS background: the web, or the inline bitmap the
+  // teacher's own upload produces.
+  function imageUrl(raw) {
+    const s = String(raw == null ? '' : raw);
+    const b = bare(s);
+    return (HTTP_SCHEME.test(b) || DATA_IMAGE.test(b)) ? s.trim() : '';
+  }
+
+  // Schemes a stored string must never open with. A deny-list, where every
+  // other test in this file is an allow-list, and deliberately so: the live URL
+  // sinks are guarded above by what each one can safely take, and this backs
+  // the template importer's sweep over *every* string in a props tree — where
+  // an allow-list cannot go, because "Note: bring a coat" opens with something
+  // indistinguishable from a scheme and blanking it would eat the agenda.
+  const HOSTILE_SCHEME = /^(?:javascript|vbscript|livescript|mocha|data|file|blob|about|filesystem|view-source|jar|resource|chrome|ms-its|mhtml):/i;
+
+  function hostileUrl(raw) {
+    const b = bare(String(raw == null ? '' : raw));
+    return HOSTILE_SCHEME.test(b) && !DATA_IMAGE.test(b);
+  }
+
+  // A CSS url() token, or ''. Quoted, with quotes and backslashes escaped, so
+  // the value cannot close the function and start something else; newlines go,
+  // because one inside a quoted CSS string voids the whole declaration.
+  function cssUrl(raw) {
+    const u = imageUrl(raw);
+    if (!u) return '';
+    return 'url("' + u.replace(/[\\"]/g, '\\$&').replace(/[\r\n]/g, '') + '")';
+  }
+
+  // A colour or a gradient, or ''. Nothing here should reach the network: a
+  // template storing `url(https://tracker/x)` under type "gradient" is the same
+  // hotlink as an image background wearing a different label.
+  function cssPaint(raw) {
+    const s = String(raw == null ? '' : raw).trim();
+    if (!s || s.length > 400) return '';
+    if (/url\(|image-set|expression|@import|[\\;{}<>]/i.test(s)) return '';
+    return s;
   }
 
   // A style attribute, reduced to the declarations that only change how words
@@ -138,5 +194,5 @@
     return body ? (body.textContent || '') : '';
   }
 
-  window.SageSanitize = { html, text, url, style };
+  window.SageSanitize = { html, text, url, frameUrl, imageUrl, hostileUrl, cssUrl, cssPaint, style };
 })();

@@ -39,6 +39,13 @@ erase work turned up: the button had never cleared IndexedDB. Fixing them took
 four ride-alongs that shared the same code (`pvFmt` negatives, two `javascript:`
 URL entry points, and the `.pptx` href scheme).
 
+**All of P0 is now closed** (2026-08-02) — the five 🟠 and both ⚪, plus two
+holes the work turned up that the review had not: a `.pdf`-named `text/html`
+file served same-origin from a blob URL, and the Video widget's unanchored
+YouTube test handing a bare iframe to any host with `youtube.com/embed/`
+anywhere in the string. This clears the "Before Phase 2" row of the mapping
+below, so the Tauri CSP can be written strict instead of written around gaps.
+
 **The app is fundamentally sound** — core teaching flows work, state round-trips
 through reload cleanly, currency is integer minor-units (no float bugs), the QR
 encoder is spec-correct, the 42 built-in templates validate clean, and widget
@@ -101,32 +108,102 @@ origin, or leaks data off-device, breaks the product's headline promise.
     built-in dyslexia toggle. **Never bundle paid school fonts** — reference them
     from the machine's install. The complete dropdown needs Rust enumeration, so
     it rides the Tauri phases (see mapping).
-- [ ] 🟠 **`sanitizeTemplate` never rejects dangerous URL schemes.**
-  [`app.js:9964`](../app.js#L9964) — the `/^(https?:|data:)/i` test only *collects*
-  for display; nothing is stripped, and `javascript:` isn't even collected (so
-  it's hidden from vetting). This is the enabler that lets `data:`/`javascript:`
-  reach embed/video/link/document `props.url` on the template path, bypassing the
+- [x] 🟠 **`sanitizeTemplate` never rejects dangerous URL schemes.** ✓ verified ·
+  **fixed 2026-08-02.**
+  The `/^(https?:|data:)/i` test only *collected* for display; nothing was
+  stripped, and `javascript:` wasn't even collected (so it was hidden from
+  vetting). This is the enabler that let `data:`/`javascript:` reach
+  embed/video/link/document `props.url` on the template path, bypassing the
   settings-UI `https://` guard.
-- [ ] 🟠 **Document widget renders remote URLs in an *unsandboxed* iframe.** ✓ verified.
-  [`app.js:6898`](../app.js#L6898) `el('iframe',{src:record.url})` — no `sandbox`.
-  A template-supplied `data:text/html,<script>…` falls to this branch and runs
-  script (opaque origin: can't read `localStorage`, but can exfiltrate over the
-  network and paint fullscreen to the class).
-- [ ] 🟠 **Webcam auto-activates from a shared deck.** ✓ verified.
-  First enable persists `w.props.auto=true`; every later mount runs
-  `if (w.props.auto) start()` → `getUserMedia` with no gesture
-  ([`app.js:6703`](../app.js#L6703)). `sanitizeTemplate` copies `auto` verbatim,
-  so opening a shared screen turns on the **recipient's** camera the moment it
-  renders (silent if permission was ever granted).
-  **Fix:** strip `auto` on import; require a gesture to start the camera.
-- [ ] 🟠 **Embed iframe uses the `allow-scripts allow-same-origin` sandbox-escape combo** on an arbitrary URL ([`app.js:6378`](../app.js#L6378)) — standard for YouTube, a footgun for stranger-supplied template URLs (see scheme item above).
-- [ ] 🟠 **Template vetting is bypassable and incomplete.**
-  `firstTime` is keyed by attacker-controlled `tpl.id` and content is never
-  hashed ([`app.js:10057`](../app.js#L10057)), so a source can ship a benign
-  template under an id, get it trusted, then serve a malicious payload under the
-  same id with no re-disclosure. The URL disclosure also scans only top-level
-  `['url','src','text','value']` — never `props.html`, nested `items[]`/`options[]`,
-  or `javascript:` URLs.
+  Two passes now, and the split matters. **An allow-list at the live sinks**
+  (`URL_SINKS`, keyed by widget type) holds each prop to what that sink can
+  actually take: `frameUrl` (http(s) only) for the three widgets that build an
+  iframe, `imageUrl` (http(s) plus base64 `data:image`, never `svg+xml`) for the
+  image widget, `url` for the Link widget, which may legitimately be a
+  `mailto:`. **A deny-list on a deep walk** of every remaining string
+  (`SageSanitize.hostileUrl`) then blanks a hostile scheme wherever it hides,
+  including in props no widget reads today. The deny-list is right for that pass
+  precisely because an allow-list cannot go there: `"Note: bring a coat"` opens
+  with something indistinguishable from a scheme, and blanking it would eat the
+  teacher's agenda. Backgrounds are covered too — including a `url()` smuggled
+  into a `gradient`-typed value, which was a second door to the same hotlink.
+- [x] 🟠 **Document widget renders remote URLs in an *unsandboxed* iframe.** ✓ verified ·
+  **fixed 2026-08-02.**
+  `el('iframe',{src:record.url})` — no `sandbox`. A template-supplied
+  `data:text/html,<script>…` fell to this branch and ran script (opaque origin:
+  can't read `localStorage`, but can exfiltrate over the network and paint
+  fullscreen to the class).
+  All three remote branches now get `sandbox="allow-scripts"` — scripts, but an
+  opaque origin, so whatever the page turns out to be cannot read this one's
+  storage or navigate the lesson away. `data:` never reaches them at all now
+  (the sink runs `frameUrl`).
+  **A second hole found while fixing it, and not in the original review.** A
+  blob: URL is same-origin with the app, and `documentKind()` routes by filename
+  as well as MIME type — so `notes.pdf` carrying `type: text/html` was framed as
+  a live same-origin page holding every deck and every class list. The local
+  file is now retyped at pick time (`file.slice(0, size, 'application/pdf')`,
+  which relabels without copying the bytes), so that file becomes a broken PDF
+  rather than a page. Isolated and confirmed: the same File serves as
+  `text/html` on the old path and `application/pdf` on the new one. Local PDFs
+  are deliberately *not* sandboxed — the retype closes the hole at the source,
+  and sandboxing the browser's own PDF viewer is not free.
+- [x] 🟠 **Webcam auto-activates from a shared deck.** ✓ verified ·
+  **fixed 2026-08-02.**
+  First enable persisted `w.props.auto=true`; every later mount ran
+  `if (w.props.auto) start()` → `getUserMedia` with no gesture.
+  `sanitizeTemplate` copied `auto` verbatim, so opening a shared screen turned
+  on the **recipient's** camera the moment it rendered (silent if permission had
+  ever been granted).
+  Fixed at the root rather than by patching the import: **the grant is no longer
+  persisted at all.** It lives in `cameraOn`, an in-memory Set keyed by widget
+  id — the same shape as `sessionFiles` for local documents. Nothing to carry in
+  a shared file, so there is no import path left to guard. The convenience it
+  existed for survives: within a session, switching screens away and back
+  re-opens the camera without another click. It costs one click after a reload,
+  which is the right price. `props.auto` is dropped at mount if an old deck
+  still has it, and `IMPORTED_CAPABILITY_PROPS` keeps stripping it on import as
+  belt and braces — and as the place to name the next prop of this shape.
+  Verified with a stubbed camera: 0 `getUserMedia` calls on a fresh load, 1 on
+  the click, 2 after a screen round-trip (auto-resumed), and after a reload the
+  button is back with no call and no `auto` in storage.
+- [x] 🟠 **Embed iframe uses the `allow-scripts allow-same-origin` sandbox-escape combo** on an arbitrary URL — standard for YouTube, a footgun for stranger-supplied template URLs (see scheme item above). ✓ verified · **fixed 2026-08-02.**
+  The pair is only an escape when the framed page is same-origin with us: it can
+  then reach into this document and remove its own sandbox attribute. Embedded
+  players do need both, and are always cross-origin — so `frameSandbox()` grants
+  `allow-same-origin` on exactly that condition and never on our own origin.
+  **The video widget was worse and was not in the review.** It had *no* sandbox
+  at all, gated on `/youtube\.com\/embed\//.test(u)` — an unanchored regex over
+  the whole string, so `https://evil.example/#youtube.com/embed/` matched and
+  earned itself a bare iframe. It is now decided by the parsed hostname
+  (`isYouTubeEmbed`), and the iframe is sandboxed like the others.
+  Browser-verified on one screen: a real YouTube URL gets
+  `allow-scripts allow-same-origin allow-presentation` and plays; a
+  same-origin URL gets `allow-scripts allow-presentation` with same-origin
+  **withheld**; and the spoofed host renders as a plain `<video>` with no iframe
+  in the document at all.
+- [x] 🟠 **Template vetting is bypassable and incomplete.** ✓ verified ·
+  **fixed 2026-08-02.**
+  `firstTime` was keyed by attacker-controlled `tpl.id` with content never
+  hashed, so a source could ship a benign template under an id, get it trusted,
+  then serve a malicious payload under the same id with no re-disclosure. The
+  URL disclosure also scanned only top-level `['url','src','text','value']` —
+  never `props.html`, nested `items[]`/`options[]`, or `javascript:` URLs.
+  Trust is now keyed on a **SHA-256 of the sanitized template** (name, author,
+  screens), so it describes what will actually be instantiated rather than what
+  the file calls itself. No SubtleCrypto — an insecure context, an old engine —
+  returns an empty fingerprint, and an empty fingerprint means the dialog shows
+  every time. That is the right way to fail: a weak hash would be worse than
+  none, because FNV and its relatives are invertible, so a second preimage is
+  cheap and the dialog would only *look* like a check. Old id entries in
+  `seenTemplates` simply never match a hash, so the teacher re-vets once; the
+  list is capped at 200.
+  Disclosure now walks the whole props tree, reads hrefs back out of cleaned
+  `props.html`, and — the part that matters more than the survivors — lists what
+  was **removed**, because a template carrying `javascript:` was not written in
+  good faith and the teacher is really judging the *source*.
+  Verified end to end against a hostile fixture: payload A prompted and was
+  trusted; a swapped payload under the **same id** prompted again; the identical
+  bytes a second time went straight through.
 - [x] 🟡 **`.pptx` slide hyperlinks aren't scheme-validated** — `javascript:`/`data:`
   href from an External relationship survives into a text widget rendered via
   `innerHTML` ([`pptx-import.js:314`](../pptx-import.js#L314)). (Slide *text* is
@@ -134,8 +211,23 @@ origin, or leaks data off-device, breaks the product's headline promise.
   `parasToHtml` runs the link through `SageSanitize.url`; a rejected scheme
   keeps the words and drops the anchor.
 - [x] 🟡 **Text-widget "Link" button and Link widget accept `javascript:` URLs** — [`app.js:5865`](../app.js#L5865), [`app.js:6932`](../app.js#L6932); no scheme check before `createLink` / `window.open`. **Fixed 2026-07-30** — both go through `SageSanitize.url`. The sanitizer covers the stored render, but `createLink` makes a live tappable anchor and `window.open('javascript:…')` inherits this origin, so the entry points needed their own guard.
-- [ ] ⚪ **Background `url()` value isn't escaped** ([`app.js:9056`](../app.js#L9056)). ✓ verified — narrower than it looks: `element.style.background =` can't escape into new CSS rules, so the real risk is a hotlinked tracking image via a template's image background, not script injection.
-- [ ] ⚪ **No CSP meta in `index.html`.** A `default-src 'self'` policy (with the font/photo hosts allow-listed) would harden every item above. Coordinate with the Phase 2 Tauri CSP so the two don't diverge.
+- [x] ⚪ **Background `url()` value isn't escaped.** ✓ verified · **fixed 2026-08-02** — narrower than it looks: `element.style.background =` can't escape into new CSS rules, so the real risk is a hotlinked tracking image via a template's image background, not script injection.
+  One `backgroundCss()` now serves the stage, the dashboard wallpaper and the
+  deck thumbnails, so the three cannot drift apart. Image values go through
+  `SageSanitize.cssUrl` (scheme-checked, then quoted with quotes and backslashes
+  escaped); colour and gradient values through `cssPaint`, which rejects any
+  `url()` of their own. Checked at the sink as well as at import, because a deck
+  saved before the import check existed is still on somebody's disk.
+- [x] ⚪ **No CSP meta in `index.html`.** **Fixed 2026-08-02.** `default-src 'self'`, with `blob:` for the export workers and the local document preview, `data:` for the favicon and teacher-uploaded images, and `https:` confined to the directives that genuinely need it — `img-src`, `media-src`, `frame-src`, `connect-src`. Never in `script-src`, never in `default-src`. `data:` is deliberately absent from `frame-src`: that is the shape of the attack the items above closed.
+  Enforcement confirmed rather than assumed — an injected inline `<script>` does
+  not run (`script-src-elem` violation) and a `data:text/html` iframe is blocked
+  (`frame-src` violation) — and nothing the app legitimately does is broken: the
+  export path's blob Worker starts and `importScripts` loads JSZip, Unsplash
+  backgrounds load, remote sandboxed frames load, and boot is clean with zero
+  violations. The only two `fetch()` calls in the codebase are the community
+  index and template, both covered by `connect-src 'self' https:`.
+  **Still to do at Phase 2:** the Tauri CSP must be brought into line with this
+  one rather than the reverse — see the mapping row below.
 
 ## P1 — Data integrity & loss
 
@@ -455,7 +547,7 @@ queues, but they touch in a few load-bearing places. Recommended interleave:
 | When | Do these review items | Why here |
 |---|---|---|
 | **Before Phase 1** | P1 no-unload flush; P1 corrupt-JSON salvage backup | Phase 1 is "a pure refactor of the write path" — fixing the flush and adding the salvage copy *while you're already in `save()`/`load()`* is nearly free and de-risks the whole seam. The plan explicitly *preserves* the 250 ms-close data loss; this is the moment to reconsider that for ~2 lines. |
-| **Before Phase 2** | **All of P0** (XSS sanitizer, self-hosted chrome fonts + bundled OpenDyslexic, URL schemes, CSP) | Phase 2 loads the app under a Tauri origin with a real CSP and keeps fetching remote `templateSources`. Land the sanitizer + self-hosted fonts first so the Phase 2 CSP can be strict (`script-src 'self'`, no CDN) instead of being loosened to accommodate today's gaps. The plan's §7 CSP notes assume Google Fonts stays — this removes that constraint. |
+| **Before Phase 2** | ~~**All of P0**~~ — **done 2026-08-02.** What remains is Phase 2's own job: port the browser CSP in `index.html` into the Tauri config, and re-check `sameOrigin()`/`frameSandbox()` against whatever origin the webview actually reports (`tauri://localhost` or `http://tauri.localhost` — the escape guard depends on that comparison being right). | Phase 2 loads the app under a Tauri origin with a real CSP and keeps fetching remote `templateSources`. The sanitizer, self-hosted fonts, URL schemes and the meta CSP all landed first, so the Phase 2 CSP can be copied across strict (`script-src 'self'`, no CDN) rather than loosened to accommodate gaps. The plan's §7 CSP notes assume Google Fonts stays — that constraint is gone. |
 | **Rides Phase 2–3 (new feature)** | Installed-font **dropdown** for content fonts — `queryLocalFonts()` + Tauri Rust font enumeration; bundle OpenDyslexic | The privacy fix (self-hosting chrome fonts) ships now. The _pick-your-school's-font_ dropdown needs font enumeration: `queryLocalFonts()` works in a Chromium browser / WebView2 (Windows) as soon as there's a settings UI, but reliable macOS coverage needs the Tauri Rust backend, so the complete version lands with the desktop build. Lets schools use licensed cursive/dyslexia fonts without the app ever redistributing them. |
 | **Alongside Phase 3** | P1 erase-resurrection; P1 widget-geometry off-screen clamp | Phase 3 already reworks erase (`sage:erased` quiesce) and boot recovery — fix the **browser** multi-tab erase in the same pass so both backends behave. The off-screen-widget clamp matters more once desktop windows can be resized freely. |
 | **Alongside Phase 4** | P3 `pointercancel` + `touch-action` + multi-touch drags | Phase 4 is multi-window; the cross-window `sage:written` re-read and the touch-drag robustness are the same "interrupted interaction" problem class. |

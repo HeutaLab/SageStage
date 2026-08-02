@@ -6816,8 +6816,11 @@
     mount(body, w, api) {
       const wrap = el('div', { class: 'media-fill' });
       body.append(wrap);
-      if (w.props.src) {
-        const img = el('img', { src: w.props.src, alt: '' });
+      // the picker only ever writes a data: bitmap, but a template or an older
+      // saved deck can hold anything under this prop
+      const src = SageSanitize.imageUrl(w.props.src);
+      if (src) {
+        const img = el('img', { src, alt: '' });
         img.classList.toggle('cover', w.props.fit === 'cover');
         wrap.append(img);
       } else {
@@ -6839,18 +6842,44 @@
   };
 
   // ---- Embed ----
+  // Resolved against this document, because a URL can be same-origin without
+  // ever saying so. Unparseable answers the cautious way round.
+  function sameOrigin(u) {
+    try { return new URL(u, location.href).origin === location.origin; }
+    catch (e) { return true; }
+  }
+
+  // The sandbox an untrusted page gets. `allow-scripts allow-same-origin`
+  // together is a documented escape *when the framed page is same-origin with
+  // us*: it can reach into this document and remove its own sandbox attribute.
+  // Embedded players genuinely need the pair, and are always cross-origin, so
+  // it is granted on exactly that condition and never on our own origin.
+  function frameSandbox(src, extra) {
+    const tokens = ['allow-scripts'];
+    if (!sameOrigin(src)) tokens.push('allow-same-origin');
+    return tokens.concat(extra || []).join(' ');
+  }
+
+  const badUrlHint = (label) => el('div', { class: 'hint', style: 'text-align:center;padding:10px;' },
+    '⚠️ That is not a web address. Open ⚙ settings and paste an https:// link' + (label ? ' ' + label : '') + '.');
+
   WIDGETS.embed = {
     title: 'Embed', icon: 'embed', accent: '#ddd6fe', w: 420, h: 300,
     defaults: () => ({ url: '' }),
     mount(body, w) {
       const wrap = el('div', { class: 'media-fill' });
       body.append(wrap);
-      if (w.props.url) {
+      // the settings field forces an https:// prefix, but a url that arrived in
+      // a shared template never went through it
+      const src = SageSanitize.frameUrl(w.props.url);
+      if (src) {
         wrap.append(el('iframe', {
-          src: w.props.url,
-          sandbox: 'allow-scripts allow-same-origin allow-presentation',
+          src,
+          sandbox: frameSandbox(src, ['allow-presentation']),
           allow: 'autoplay; encrypted-media',
         }));
+      } else if (w.props.url) {
+        wrap.append(badUrlHint(''));
       } else {
         wrap.append(el('div', { class: 'hint', style: 'text-align:center;padding:10px;' },
           'Open ⚙ settings and paste a URL (e.g. a YouTube embed link). Some sites refuse to be embedded.'));
@@ -7120,18 +7149,35 @@
   };
 
   // ---- Video ----
+  // Decided by the *host*. The old test was an unanchored regex over the whole
+  // string, so https://evil.com/#youtube.com/embed/ read as YouTube and earned
+  // itself the player's iframe treatment.
+  function isYouTubeEmbed(u) {
+    try {
+      const parsed = new URL(u);
+      const host = parsed.hostname.replace(/^www\./, '');
+      return (host === 'youtube.com' || host === 'youtube-nocookie.com') && parsed.pathname.startsWith('/embed/');
+    } catch (e) { return false; }
+  }
+
   WIDGETS.video = {
     title: 'Video', icon: 'video', accent: '#fecaca', w: 420, h: 300,
     defaults: () => ({ url: '' }),
     mount(body, w) {
       const wrap = el('div', { class: 'media-fill' });
       body.append(wrap);
-      const u = w.props.url;
+      const u = SageSanitize.frameUrl(w.props.url);
       if (!u) {
-        wrap.append(el('div', { class: 'hint', style: 'text-align:center;padding:10px;' },
-          'Open ⚙ settings and paste a YouTube link or a direct video URL (.mp4, .webm).'));
-      } else if (/youtube\.com\/embed\//.test(u)) {
-        wrap.append(el('iframe', { src: u, allow: 'autoplay; fullscreen; encrypted-media', allowfullscreen: '' }));
+        wrap.append(w.props.url ? badUrlHint('to a video')
+          : el('div', { class: 'hint', style: 'text-align:center;padding:10px;' },
+            'Open ⚙ settings and paste a YouTube link or a direct video URL (.mp4, .webm).'));
+      } else if (isYouTubeEmbed(u)) {
+        wrap.append(el('iframe', {
+          src: u,
+          sandbox: frameSandbox(u, ['allow-presentation', 'allow-popups', 'allow-popups-to-escape-sandbox']),
+          allow: 'autoplay; fullscreen; encrypted-media',
+          allowfullscreen: '',
+        }));
       } else {
         wrap.append(el('video', { src: u, controls: '', playsinline: '' }));
       }
@@ -7152,28 +7198,44 @@
   };
 
   // ---- Webcam ----
+  // Which webcam widgets the teacher has switched on, for this tab only —
+  // deliberately not a saved prop. It used to be `props.auto`, which meant a
+  // camera grant travelled inside a shared deck and every later mount called
+  // getUserMedia with no gesture behind it: opening somebody's screen turned on
+  // *your* camera, silently, if the origin had ever been granted. Keeping it in
+  // memory is the same shape as `sessionFiles`, and it costs one click after a
+  // reload rather than one click per screen switch.
+  const cameraOn = new Set();
+
   WIDGETS.webcam = {
     title: 'Webcam', icon: 'webcam', accent: '#bae6fd', w: 380, h: 300,
-    defaults: () => ({ mirror: true, auto: false }),
+    defaults: () => ({ mirror: true }),
     mount(body, w, api) {
       const wrap = el('div', { class: 'media-fill' });
       body.append(wrap);
+      // an old deck may still carry the stored flag; it is never read, and
+      // dropping it here stops it being carried on into the next share
+      if ('auto' in w.props) delete w.props.auto;
       let stream = null;
+      let dead = false;
       const start = async () => {
         try {
           stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 } } });
         } catch (e) {
+          cameraOn.delete(w.id);
+          if (dead) return;
           wrap.innerHTML = '';
           wrap.append(el('div', { class: 'hint' }, 'Camera unavailable'));
           return;
         }
-        if (!w.props.auto) { w.props.auto = true; save(); }
+        cameraOn.add(w.id);
+        if (dead) { stream.getTracks().forEach((t) => t.stop()); return; }
         const video = el('video', { autoplay: '', playsinline: '', muted: '', class: w.props.mirror ? 'mirror' : '' });
         video.srcObject = stream;
         wrap.innerHTML = '';
         wrap.append(video);
       };
-      if (w.props.auto) {
+      if (cameraOn.has(w.id)) {
         start();
       } else {
         wrap.append(el('div', { style: 'text-align:center;display:grid;gap:8px;justify-items:center;--acc:#bae6fd;' },
@@ -7182,7 +7244,7 @@
           el('div', { class: 'hint' }, 'The video never leaves this device'),
         ));
       }
-      return () => { if (stream) stream.getTracks().forEach((t) => t.stop()); };
+      return () => { dead = true; if (stream) stream.getTracks().forEach((t) => t.stop()); };
     },
     settings(box, w, api) {
       box.append(checkRow('Mirror image', w.props.mirror, (v) => { w.props.mirror = v; api.refresh(); }));
@@ -7216,9 +7278,18 @@
 
   function setSessionFile(widgetId, file) {
     clearSessionFile(widgetId);
+    // A blob: URL is same-origin with the app, so what the browser decides to
+    // *do* with those bytes is a security question: notes.pdf carrying a
+    // text/html type would be served as a live page holding every deck and
+    // every class list. documentKind() routes by name as well as type, and the
+    // PDF branch is the one that frames the URL, so that is the branch retyped
+    // — the file becomes a broken PDF instead of a page. `slice` rather than a
+    // new Blob because it relabels without copying the bytes.
+    const kind = documentKind({ type: file.type, name: file.name });
+    const served = kind === 'pdf' ? file.slice(0, file.size, 'application/pdf') : file;
     sessionFiles[widgetId] = {
       file,
-      url: URL.createObjectURL(file),
+      url: URL.createObjectURL(served),
       type: file.type || '',
       name: file.name || 'Untitled document',
     };
@@ -7346,7 +7417,9 @@
       const wrap = el('div', { class: 'media-fill' });
       body.append(wrap);
       const local = sessionFiles[w.id];
-      const remote = w.props.url ? { name: w.props.url, type: '', url: w.props.url } : null;
+      const remoteUrl = SageSanitize.frameUrl(w.props.url);
+      const remote = remoteUrl ? { name: remoteUrl, type: '', url: remoteUrl } : null;
+      if (w.props.url && !remote) { wrap.append(badUrlHint('to a document')); return null; }
       const record = remote || local;
       if (!record) {
         const pickBtn = el('button', { class: 'btn', onclick: () => pickDocumentFile(w, api) }, 'Open document file…');
@@ -7359,16 +7432,25 @@
       }
 
       const kind = documentKind(record);
-      if (kind === 'pdf') wrap.append(el('iframe', { src: record.url, title: record.name || 'PDF document' }));
+      // A remote document is a stranger's page and gets an opaque origin: no
+      // allow-same-origin, so whatever it turns out to be cannot read this
+      // one's storage, and no top-level navigation away from the lesson. A
+      // local file is framed without it — the blob was retyped at pick time,
+      // and sandboxing the browser's own PDF viewer is not free.
+      const frame = (rec, title) => el('iframe', Object.assign(
+        { src: rec.url, title: title || rec.name || '' },
+        rec === remote ? { sandbox: 'allow-scripts' } : {},
+      ));
+      if (kind === 'pdf') wrap.append(frame(record, record.name || 'PDF document'));
       else if (kind === 'image') wrap.append(el('img', { src: record.url, alt: record.name || '' }));
       else if (kind === 'text' && local) return renderTextDocument(wrap, local.file);
       else if (kind === 'csv' && local) return renderCsvDocument(wrap, local.file);
-      else if ((kind === 'text' || kind === 'csv') && remote) wrap.append(el('iframe', { src: record.url, title: record.name }));
+      else if ((kind === 'text' || kind === 'csv') && remote) wrap.append(frame(record));
       else if (kind === 'word') wrap.append(documentMessage('Word preview needs conversion',
         'Convert this DOC or DOCX file to PDF, then select the PDF here. The document stays on your device.', w, api));
       else if (kind === 'powerpoint') wrap.append(documentMessage('PowerPoint preview needs conversion',
         'Convert this PPT or PPTX file to PDF, then select the PDF here. The presentation stays on your device.', w, api));
-      else if (remote) wrap.append(el('iframe', { src: record.url, title: record.name }));
+      else if (remote) wrap.append(frame(record));
       else wrap.append(documentMessage('Preview unavailable', 'Choose a PDF, image, TXT or CSV file instead.', w, api));
       return null;
     },
@@ -9578,6 +9660,7 @@
     if (w) binWidget(w, scr && scr.id);
     if (settingsFor === id) closeSettingsPanel();
     clearSessionFile(id);
+    cameraOn.delete(id);
     // widgets shown on all screens live on another screen's list, so search every deck
     for (const d of state.decks) for (const scr2 of d.screens) scr2.widgets = scr2.widgets.filter((x) => x.id !== id);
     const inst = instances.get(id);
@@ -9988,15 +10071,23 @@
     $('#brandName').textContent = n || 'Sage Stage';
   }
 
-  function applyBackground() {
-    const bg = screen().background;
-    if (bg.type === 'color') {
-      stage.style.background = bg.value;
-    } else if (bg.type === 'image') {
-      stage.style.background = `url(${bg.value}) center / cover no-repeat`;
-    } else {
-      stage.style.background = bg.value;
+  // A background is a URL sink like any other: a template's image background
+  // hotlinks whatever it names, and the value is interpolated into a style. The
+  // scheme is checked and the url() quoted here as well as at import, because
+  // a deck saved before that check existed is still on somebody's disk.
+  // one place that turns a stored background into a CSS value, so the drawer,
+  // the dashboard wallpaper and the deck thumbnails cannot drift apart
+  function backgroundCss(bg, layer) {
+    if (!bg) return '';
+    if (bg.type === 'image') {
+      const u = SageSanitize.cssUrl(bg.value);
+      return u ? u + ' center / cover no-repeat' + (layer || '') : '';
     }
+    return SageSanitize.cssPaint(bg.value);
+  }
+
+  function applyBackground() {
+    stage.style.background = backgroundCss(screen().background) || BACKGROUNDS.gradients[0];
   }
 
   $('#prevScreen').addEventListener('click', () => setCurrent(currentIndex() - 1));
@@ -10093,11 +10184,12 @@
     // an imported deck can arrive with zero screens; a plain card beats a throw
     if (!s) { thumb.style.background = '#eef2f1'; return thumb; }
     const bg = s.background;
-    if (bg.type === 'image') {
+    const bgImg = bg.type === 'image' ? SageSanitize.imageUrl(bg.value) : '';
+    if (bgImg) {
       thumb.style.background = '#fff';
-      thumb.append(el('img', { class: 'deck-thumb-bg', src: bg.value, alt: '', loading: 'lazy', decoding: 'async' }));
+      thumb.append(el('img', { class: 'deck-thumb-bg', src: bgImg, alt: '', loading: 'lazy', decoding: 'async' }));
     } else {
-      thumb.style.background = bg.value;
+      thumb.style.background = SageSanitize.cssPaint(bg.value) || '#eef2f1';
     }
     for (const w of s.widgets) {
       const mini = el('div', { class: 'deck-mini' });
@@ -10107,9 +10199,9 @@
       mini.style.height = clamp((w.h / sh) * 100, 6, 100) + '%';
       const def = WIDGETS[w.type];
       let content = null;
-      if (w.type === 'image' && w.props && w.props.src) {
+      if (w.type === 'image' && w.props && SageSanitize.imageUrl(w.props.src)) {
         content = el('img', {
-          class: 'deck-mini-img', src: w.props.src, alt: '', loading: 'lazy', decoding: 'async',
+          class: 'deck-mini-img', src: SageSanitize.imageUrl(w.props.src), alt: '', loading: 'lazy', decoding: 'async',
           style: 'object-fit:' + (w.props.fit === 'cover' ? 'cover' : 'contain'),
         });
       } else if (w.type === 'text' && w.props && w.props.html) {
@@ -10950,11 +11042,7 @@
     const veil = bg.type === 'image'
       ? 'linear-gradient(rgba(248, 250, 250, 0.62), rgba(248, 250, 250, 0.62))'
       : 'linear-gradient(rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.42))';
-    if (bg.type === 'image') {
-      dashEl.style.background = veil + ', url(' + bg.value + ') center / cover no-repeat fixed';
-    } else {
-      dashEl.style.background = veil + ', ' + (bg.value || '#f4f7f6');
-    }
+    dashEl.style.background = veil + ', ' + (backgroundCss(bg, ' fixed') || '#f4f7f6');
   }
 
   let dashCat = 'All'; // template category filter (per-tab UI, not saved)
@@ -11375,11 +11463,53 @@
   // enters — built-in bank, community fetch, pasted file — goes through
   // sanitizeTemplate: unknown widget types are dropped, fields are coerced, and
   // any URLs inside props are collected so the teacher can vet them first.
-  const URLISH_PROPS = ['url', 'src', 'text', 'value'];
+  // The props that are live URL sinks, by the widget that reads them. Each
+  // names what that sink can safely take: a frame gets http(s) and nothing
+  // else, an <img> may also take the inline bitmap an upload produces, and the
+  // Link widget may hold a mailto: because it hands the string to the system
+  // browser rather than rendering it.
+  const URL_SINKS = {
+    embed: { url: 'frame' },
+    video: { url: 'frame' },
+    pdf: { url: 'frame' },
+    link: { url: 'link' },
+    image: { src: 'image' },
+  };
+
+  // Props that record a capability this teacher granted on this device, and so
+  // must never arrive inside a stranger's file. `auto` was the memory of
+  // someone pressing "Enable camera", and carried across it opened the
+  // recipient's camera the moment the screen rendered. The widget no longer
+  // reads it — the grant lives in `cameraOn`, in memory, for this tab only —
+  // so this is belt and braces: it stops a dead flag being carried on into the
+  // next share, and it is the place to name the next prop of this shape.
+  const IMPORTED_CAPABILITY_PROPS = { webcam: ['auto'] };
+
+  function stripImportedCapabilities(type, props) {
+    for (const k of (IMPORTED_CAPABILITY_PROPS[type] || [])) delete props[k];
+    return props;
+  }
+
+  // Every string in a props tree, however deep — top level, inside items[],
+  // inside options[]. The old pass looked only at four top-level keys, which
+  // meant a URL one level down was neither cleaned nor disclosed.
+  function walkPropStrings(value, visit, depth) {
+    if ((depth || 0) > 6) return value;
+    if (typeof value === 'string') return visit(value);
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) value[i] = walkPropStrings(value[i], visit, (depth || 0) + 1);
+    } else if (value && typeof value === 'object') {
+      for (const k of Object.keys(value)) value[k] = walkPropStrings(value[k], visit, (depth || 0) + 1);
+    }
+    return value;
+  }
+
+  const forDisplay = (u) => (u.length > 90 ? u.slice(0, 90) + '…' : u);
 
   function sanitizeTemplate(raw) {
     if (!raw || typeof raw !== 'object' || !Array.isArray(raw.screens) || !raw.screens.length) return null;
     const urls = [];
+    const rejected = [];
     const screens = [];
     for (const s of raw.screens.slice(0, 12)) {
       if (!s || typeof s !== 'object') continue;
@@ -11391,9 +11521,31 @@
         // sinks sanitize too, but a payload that is never saved cannot outlive
         // a sink this file forgets about later.
         if (typeof props.html === 'string') props.html = SageSanitize.html(props.html);
-        for (const k of URLISH_PROPS) {
-          if (typeof props[k] === 'string' && /^(https?:|data:)/i.test(props[k])) {
-            urls.push(props[k].length > 90 ? props[k].slice(0, 90) + '…' : props[k]);
+        stripImportedCapabilities(w.type, props);
+        // the live sinks first, held to what each one can actually take
+        for (const [k, kind] of Object.entries(URL_SINKS[w.type] || {})) {
+          if (typeof props[k] !== 'string' || !props[k]) continue;
+          const safe = kind === 'frame' ? SageSanitize.frameUrl(props[k])
+            : kind === 'image' ? SageSanitize.imageUrl(props[k])
+              : SageSanitize.url(props[k]);
+          if (safe) continue;
+          rejected.push(forDisplay(props[k]));
+          props[k] = '';
+        }
+        // then everything else. A hostile scheme is blanked wherever it hides,
+        // including in a prop no widget reads today — the prop a widget reads
+        // tomorrow is the same prop. A scheme in the *middle* of a string is
+        // left alone: that is a teacher's lesson text, not a link.
+        walkPropStrings(props, (str) => {
+          if (SageSanitize.hostileUrl(str)) { rejected.push(forDisplay(str)); return ''; }
+          if (/^(?:https?:|mailto:)/i.test(str)) urls.push(forDisplay(str));
+          return str;
+        });
+        // a surviving href inside cleaned rich text is a link the teacher's
+        // class can tap, so the vetting dialog has to name it too
+        if (typeof props.html === 'string' && props.html.indexOf('href') >= 0) {
+          for (const a of new DOMParser().parseFromString(props.html, 'text/html').querySelectorAll('a[href]')) {
+            urls.push(forDisplay(a.getAttribute('href')));
           }
         }
         widgets.push({
@@ -11406,10 +11558,20 @@
       }
       if (!widgets.length && !s.background) continue;
       const bt = s.background && s.background.type;
-      const bg = s.background && typeof s.background.value === 'string'
-        ? { type: bt === 'image' ? 'image' : bt === 'color' ? 'color' : 'gradient', value: s.background.value }
-        : { type: 'gradient', value: BACKGROUNDS.gradients[0] };
-      if (bg.type === 'image' && /^https?:/i.test(bg.value)) urls.push(bg.value.slice(0, 90));
+      const fallback = { type: 'gradient', value: BACKGROUNDS.gradients[0] };
+      let bg = fallback;
+      if (s.background && typeof s.background.value === 'string') {
+        const type = bt === 'image' ? 'image' : bt === 'color' ? 'color' : 'gradient';
+        // A background is painted straight into a style, so it is a URL sink
+        // like any other — and a "gradient" holding url(https://tracker/x) is
+        // the same hotlink as an image background wearing a different label.
+        const value = type === 'image'
+          ? SageSanitize.imageUrl(s.background.value)
+          : SageSanitize.cssPaint(s.background.value);
+        if (value) bg = { type, value };
+        else rejected.push(forDisplay(s.background.value));
+      }
+      if (bg.type === 'image' && /^https?:/i.test(bg.value)) urls.push(forDisplay(bg.value));
       screens.push({ name: typeof s.name === 'string' ? s.name.slice(0, 40) : '', background: bg, widgets });
     }
     if (!screens.length) return null;
@@ -11419,7 +11581,9 @@
       description: String(raw.description || '').slice(0, 200),
       category: String(raw.category || 'Community').slice(0, 40),
       author: String(raw.author || 'Unknown').slice(0, 40),
-      screens, urls,
+      screens,
+      urls: Array.from(new Set(urls)),
+      rejected: Array.from(new Set(rejected)),
     };
   }
 
@@ -11480,19 +11644,45 @@
     return deck;
   }
 
+  // What the vetting dialog is keyed on: the template's *contents*, not the id
+  // it claims. An id is chosen by whoever wrote the file, so remembering one
+  // lets a source ship something benign, have it trusted, and then serve a
+  // different payload under the same id without ever being asked about again.
+  //
+  // No SubtleCrypto — an insecure context, an old engine — means no
+  // fingerprint, and no fingerprint means the dialog shows every time. That is
+  // the right way to fail: a weak hash would be worse than none here, because
+  // FNV and its relatives are invertible, so a second preimage is easy to
+  // build and the dialog would only look like a check.
+  async function templateFingerprint(tpl) {
+    const subtle = window.crypto && window.crypto.subtle;
+    if (!subtle) return '';
+    try {
+      const json = JSON.stringify([tpl.name, tpl.author, tpl.screens]);
+      const digest = await subtle.digest('SHA-256', new TextEncoder().encode(json));
+      return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) { return ''; }
+  }
+
   // vetting step: community templates get a contents + URL preview the first time
-  function useTemplate(raw, opts) {
+  async function useTemplate(raw, opts) {
     const tpl = sanitizeTemplate(raw);
     if (!tpl) { toast("⚠️ That doesn't look like a Sage Stage template."); return; }
     const community = opts && opts.community;
-    const firstTime = !state.seenTemplates.includes(tpl.id);
-    const go = () => {
-      if (community && firstTime) { state.seenTemplates.push(tpl.id); }
+    const go = (fp) => {
+      if (fp && !state.seenTemplates.includes(fp)) {
+        state.seenTemplates.push(fp);
+        // only a "have I shown you this before" cache; an unbounded one grows
+        // the teacher's saved state for ever
+        if (state.seenTemplates.length > 200) state.seenTemplates = state.seenTemplates.slice(-200);
+      }
       const deck = instantiateTemplate(tpl);
       toast(`"${tpl.name}" added as a new deck`);
       openDeck(deck.id);
     };
-    if (!community || !firstTime) { go(); return; }
+    if (!community) { go(''); return; }
+    const fp = await templateFingerprint(tpl);
+    if (fp && state.seenTemplates.includes(fp)) { go(fp); return; }
     openModal('Check this template first', (body, finish) => {
       const counts = {};
       for (const s of tpl.screens) for (const w of s.widgets) counts[w.type] = (counts[w.type] || 0) + 1;
@@ -11500,15 +11690,32 @@
       body.append(
         el('p', {}, el('b', {}, tpl.name), ` by ${tpl.author} — ${tpl.screens.length} screen${tpl.screens.length > 1 ? 's' : ''} with: ${summary || 'no widgets'}.`),
       );
+      // a list long enough to scroll past is a list nobody reads
+      const urlList = (items, cls) => {
+        const list = el('ul', { class: 'tpl-url-list' + (cls ? ' ' + cls : '') });
+        for (const u of items.slice(0, 12)) list.append(el('li', {}, u));
+        if (items.length > 12) list.append(el('li', { class: 'hint' }, `…and ${items.length - 12} more.`));
+        return list;
+      };
       if (tpl.urls.length) {
-        const list = el('ul', { class: 'tpl-url-list' });
-        for (const u of tpl.urls) list.append(el('li', {}, u));
-        body.append(el('p', {}, el('b', {}, 'It links to these addresses:')), list);
+        body.append(el('p', {}, el('b', {}, 'It links to these addresses:')), urlList(tpl.urls));
+      }
+      // The removals matter more than the survivors. Nothing here can still
+      // run — it was blanked on the way in — but a template carrying one is a
+      // template written to attack somebody, and that is worth showing plainly
+      // so the teacher can judge the *source* rather than this one file.
+      if (tpl.rejected.length) {
+        const n = tpl.rejected.length;
+        body.append(
+          el('p', { class: 'tpl-url-warn' }, el('b', {}, `⚠️ ${n} address${n > 1 ? 'es were' : ' was'} removed — not an ordinary web link:`)),
+          urlList(tpl.rejected, 'removed'),
+          el('div', { class: 'hint' }, 'They cannot run, but a template that contains them was not built in good faith. Consider removing this source.'),
+        );
       }
       body.append(
         el('div', { class: 'hint' }, '👀 First time using this template — open it privately before showing your class (pause screen mirroring while you check it).'),
         el('div', { class: 'row' },
-          el('button', { class: 'btn', onclick: () => { finish(); go(); } }, 'Add as new deck'),
+          el('button', { class: 'btn', onclick: () => { finish(); go(fp); } }, 'Add as new deck'),
           el('button', { class: 'btn ghost', onclick: () => finish() }, 'Cancel')),
       );
     });

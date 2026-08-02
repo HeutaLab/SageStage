@@ -2870,6 +2870,21 @@ html[data-reading-font='dys'] .dash-greet-line { line-height: 1.18; }
   overflow-y: auto;
 }
 
+/* the removed-addresses block in the template vetting dialog. The colour is a
+   second cue only — the ⚠ and the bold count carry it — but these need to read
+   differently from the addresses that survived directly above them. */
+.tpl-url-warn {
+  color: #b45309;
+  margin-bottom: 0;
+}
+
+/* No inner clamp on this one. It is capped at twelve entries in script and
+   .modal-body already scrolls, so a second scroller inside it only hid the
+   tail of the list — in the one dialog whose entire job is disclosure. */
+.tpl-url-list.removed {
+  max-height: none;
+}
+
 /* ---------- Teaching clock ---------- */
 .tclock { gap: 6px; }
 .tclock-task {
