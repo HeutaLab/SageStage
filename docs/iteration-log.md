@@ -5557,3 +5557,45 @@ at sites whose behaviour is stated plainly in the surrounding code; the two that
 would most repay a hands-on check are the number-line drag and the frame-tiles
 resize, since both are pointer gestures rather than logic, and both are worth a
 minute on the board on the 12th.
+
+---
+
+## 2 August 2026 — "these are too small anyway"
+
+**The one accessibility item that had been left for a design call, answered by
+Glenn pointing at it.** `.wbtn` — Settings, ⋮ and Close — was 24×24 at 0.55
+opacity, and Close is one of the two things a child actually presses. It had
+been held back deliberately: three of those buttons sit adjacent, so giving each
+an invisible 44px hit area would have overlapped their targets and put Close
+under a finger aiming at Settings, trading an accessibility miss for a
+destructive mis-hit. That is a chrome decision, and the chrome had just been
+redesigned.
+
+The answer was that they were too small anyway, so they became **real** 44px
+buttons rather than small buttons wearing large targets — which sidesteps the
+overlap entirely, since the buttons themselves cannot overlap. The header is
+flex with no fixed height and simply grew, 34px to 54px. Resting opacity went to
+0.75 as well: small *and* faint was the complaint, and half of it was the
+faintness.
+
+**Then a second steer, which was the more interesting one.** At 44px with a
+21px glyph the icons read as too far apart — about 39px of air between them —
+because each button now carried ~11px of padding either side *plus* the header's
+6px gap. The gap is right between the title and the buttons and wrong between
+the buttons themselves, so it is cancelled between buttons only
+(`.wbtn + .wbtn { margin-left: -6px }`) and the glyph grew to 24px to fill the
+space it was given. They sit edge to edge now: 44px pitch, 20px between glyphs,
+targets adjacent but never overlapping — which was the original constraint, met
+by making the buttons bigger rather than by padding them.
+
+**The narrow-widget case was checked empirically rather than by arithmetic**,
+and the arithmetic had been wrong. Three 44px buttons plus header padding is
+170px against the 150px traffic light, which said it could not fit — but the
+title has `flex: 1`, collapses to zero first, and then the buttons shrink
+together to about 35px. No overflow anywhere, still half again the old size, and
+full 44px from 280px up, which is every other widget in the app. Left
+deliberately shrinkable and now documented as such, since it was working by
+accident.
+
+Poll vote (≈28px) and name-chip-× (18×18) are the same question and have not
+been asked yet.

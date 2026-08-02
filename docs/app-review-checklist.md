@@ -340,15 +340,22 @@ paths assume one pointer.
 - [ ] 🟠 **Child-facing hit targets far below 44px** — `.wbtn` 24×24, resize handle
   20×20 at 40% opacity, poll vote ≈28px, name-chip-× 18×18
   ([`style.css:224`](../style.css#L224)). Close and resize are core child actions.
-  **Partly done 2026-08-02** — the resize grip is 44×44 at 0.65 opacity (its
-  glyph is unchanged; only the hit area grew, outwards into the widget's own
-  corner where nothing can collide). **`.wbtn` deliberately left: it needs a
-  design call, not a patch.** Those buttons sit adjacent in the widget header, so
-  expanding each to 44px makes their targets overlap — and the neighbour of
-  Settings is Close. Enlarging the targets would trade an accessibility miss for
-  a destructive mis-hit. The real fix is bigger buttons and/or more gap, which
-  changes chrome Glenn has just redesigned. Same question for poll vote and
-  name-chip-×.
+  **Fixed 2026-08-02.** The resize grip is 44×44 at 0.65 opacity (its glyph is
+  unchanged; only the hit area grew, outwards into the widget's own corner where
+  nothing can collide). `.wbtn` was held back the same day for a design call,
+  because expanding three adjacent 24px buttons into 44px hit areas would have
+  overlapped their targets and put Close under a finger aiming at Settings —
+  trading an accessibility miss for a destructive mis-hit. Glenn's answer was
+  that they were too small anyway, so they became **real** 44px buttons: the
+  header is flex with no fixed height and simply grew 34→54px, resting opacity
+  went 0.55→0.75 (small *and* faint was the complaint), the glyph went
+  13.5→24px, and the header's 6px gap is cancelled between buttons so the three
+  sit edge to edge — 44px pitch, 20px between glyphs, adjacent but never
+  overlapping. On the narrowest widget (150px traffic light) the title collapses
+  first and the buttons shrink together to ~35px rather than overflowing; full
+  size from 280px up, which is every other widget.
+  Still open, same question, not yet asked: poll vote (≈28px) and name-chip-×
+  (18×18).
 - [x] 🟡 **Hover-only affordances invisible on touch** — agenda delete, deck kebab,
   clear-theme widget headers are `opacity:0` until `:hover` ([`style.css:738`](../style.css#L738)).
 - [x] 🟡 **`color-mix()` used with no fallback in 5 places** — pre-2023 Chromium (common
