@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sage Stage — board remote concept</title>
+<style>
+  :root {
+    --ink: #22303c;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --card: #ffffff;
+    --page: #f6f7f9;
+    --accent: #1d9e75;
+    --violet-bg: #eeedfe;
+    --violet-line: #7f77dd;
+    --violet-ink: #3c3489;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e8edf2; --muted: #94a3b8; --line: #2b3644;
+      --card: #1b2430; --page: #131a23;
+      --violet-bg: #26215c; --violet-line: #7f77dd; --violet-ink: #cecbf6;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 24px 64px;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 28px; }
+  .row { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+  .phone {
+    width: 262px; flex: none; background: var(--card);
+    border: 1px solid var(--line); border-radius: 18px; padding: 14px;
+  }
+  .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .head b { font-size: 13px; font-weight: 500; }
+  .pill { font-size: 11px; color: #0f6e56; background: #e1f5ee; padding: 3px 9px; border-radius: 99px; }
+  .lbl { font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+  .target { font-size: 13px; padding: 8px 10px; background: var(--page); border-radius: 8px; margin-bottom: 14px; }
+  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .key {
+    aspect-ratio: 1; background: var(--page); border-radius: 8px;
+    display: grid; place-items: center; font-size: 19px;
+  }
+  .key.go { background: var(--accent); color: #fff; font-size: 16px; }
+  .key.del { font-size: 14px; color: var(--muted); }
+  .readout { text-align: center; font-size: 23px; font-weight: 500; padding: 8px 0 12px; }
+  .flow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+  .flow div { padding: 11px 0; background: var(--page); border-radius: 8px; text-align: center; font-size: 12px; }
+  .talk {
+    padding: 16px 0; background: var(--violet-bg); border: 1px solid var(--violet-line);
+    border-radius: 8px; text-align: center; font-size: 13px; color: var(--violet-ink);
+  }
+  .note { font-size: 10px; color: var(--muted); text-align: center; margin-top: 7px; }
+  .why { flex: 1; min-width: 240px; }
+  .why h2 { font-size: 13px; font-weight: 500; color: var(--muted); margin: 0 0 10px; }
+  .why li { font-size: 14px; padding: 10px 0; border-bottom: 1px solid var(--line); list-style: none; }
+  .why ul { margin: 0; padding: 0; }
+  .why li:last-child { border-bottom: 0; }
+  footer { margin-top: 36px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Board remote — concept</h1>
+  <p class="sub">Phase 2 of <a href="../board-control-design.md">board-control-design.md</a> §6.4. Not a visual spec; a shape to argue with.</p>
+
+  <div class="row">
+    <div class="phone">
+      <div class="head"><b>Board remote</b><span class="pill">paired</span></div>
+
+      <div class="lbl">sending to</div>
+      <div class="target">Place value counters</div>
+
+      <div class="pad">
+        <div class="key">1</div><div class="key">2</div><div class="key">3</div>
+        <div class="key">4</div><div class="key">5</div><div class="key">6</div>
+        <div class="key">7</div><div class="key">8</div><div class="key">9</div>
+        <div class="key del">⌫</div><div class="key">0</div><div class="key go">→</div>
+      </div>
+
+      <div class="readout">348</div>
+
+      <div class="flow">
+        <div>‹ back</div>
+        <div>reveal ›</div>
+        <div>timer</div>
+        <div>pick name</div>
+      </div>
+
+      <div class="talk">hold to talk</div>
+      <div class="note">opens the laptop mic while held</div>
+    </div>
+
+    <div class="why">
+      <h2>why this shape</h2>
+      <ul>
+        <li>The number pad is silent, exact, and works in a loud room. No recognition to get wrong in front of thirty children.</li>
+        <li>Four flow buttons are thumb-findable without looking down.</li>
+        <li>Hold-to-talk is the only truly eyes-free control, so it earns the biggest target — and the phone can only ever be the <em>button</em>; the microphone is the laptop's (§6.1).</li>
+        <li>“Sending to” names the resolved widget, so a tapped or spoken number never lands somewhere surprising (§3.3).</li>
+        <li>The pad and the voice produce the <em>same intent</em>. That is the whole point of the command layer (§3.1).</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>
+    Open question §12.4: whether this needs the widget list at all, or only flow plus a
+    number pad. More surface is more to look at, and looking down is the thing being avoided.
+  </footer>
+</div>
+</body>
+</html>
