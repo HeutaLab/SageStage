@@ -22,8 +22,17 @@
        attack this release closed — a shared template naming a data:text/html
        document and getting script onto the classroom board.
 
-       Keep in step with the Tauri CSP (storage-abstraction-plan.md §7). The two
-       should say the same thing, and this is the stricter starting point. -->
+       THIS POLICY SHIPS INSIDE THE DESKTOP APP TOO. copy-dist.sh copies
+       index.html verbatim into dist/ and tauri.conf.json points frontendDist at
+       it, so in the bundle this meta is enforced *alongside*
+       app.security.csp — and a browser applies every policy it is given, so the
+       intersection wins. Anything Tauri needs and this omits is therefore
+       blocked, however permissive the Tauri config is. That is why `ipc:` and
+       `http://ipc.localhost` appear below in a policy that also runs in a plain
+       browser: they are meaningless there and load-bearing in the bundle, where
+       they are how the webview reaches Rust — which is the Documents file
+       backend. Keep the two in step directive by directive
+       (storage-abstraction-plan.md §7). -->
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' blob:;
@@ -34,7 +43,7 @@
     font-src 'self';
     media-src 'self' data: blob: https:;
     frame-src 'self' blob: https:;
-    connect-src 'self' https:;
+    connect-src 'self' ipc: http://ipc.localhost https:;
     object-src 'none';
     base-uri 'none';
     form-action 'none'" />

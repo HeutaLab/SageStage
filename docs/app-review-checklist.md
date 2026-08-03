@@ -461,10 +461,18 @@ paths assume one pointer.
 - [ ] 🟡 **A single shared `dragging` boolean breaks under multi-touch** — the first
   `pointerup` clears it, letting a ResizeObserver repaint and detach a still-active
   drag (counters [`app.js:2674`](../app.js#L2674); same in Dienes/PV/rekenrek).
-- [ ] 🟠 **Memory-pairs can get two cards permanently stuck open** — the "two open"
+- [x] 🟠 **Memory-pairs can get two cards permanently stuck open** — the "two open"
   state is persisted and relies on an in-memory timer to reset; a settings change
   or reload mid-mismatch leaves `open.length === 2` forever, after which no match
-  is ever detected ([`app.js:7215`](../app.js#L7215)).
+  is ever detected.
+  **Fixed 2026-08-01** in `e6bcaa5`, reproduced and re-verified at the time, and
+  ticked in [`click-assessment-2026-07-31.md`](click-assessment-2026-07-31.md)
+  §B — but never ticked here, so it sat in the open column for two days.
+  The mount now forgets a half-flip: `for (const c of w.props.cards) if (c.open
+  && !c.matched) c.open = false;`.
+  Filed under P3, which made it look blocked on the board. It is not a touch bug
+  and never needed hardware — worth remembering when reading a block's count as
+  "blocked".
 
 ## P4 — Accessibility
 
