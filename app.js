@@ -31,6 +31,34 @@
   };
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
+  // A ResizeObserver that only speaks when the box really changed, and at most
+  // once a frame. The raw observer fires for every sub-pixel step of a resize
+  // drag, and the callers here rebuild whole trays of DOM in response — worst
+  // on the larger mats, which is exactly where the frames are already tight.
+  // A function declaration so widget mounts far below can reach it regardless
+  // of where in this file it sits.
+  function onBoxResize(target, fn) {
+    let w = 0, h = 0, queued = false;
+    const ro = new ResizeObserver((entries) => {
+      const box = entries[0] && entries[0].contentRect;
+      if (!box) return;
+      const nw = Math.round(box.width), nh = Math.round(box.height);
+      // a rebuild can provoke another notification at the same size; that one
+      // is not work, it is a loop waiting to happen
+      if (nw === w && nh === h) return;
+      w = nw; h = nh;
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        // the widget may have been unmounted between the tick and the frame
+        if (target.isConnected) fn();
+      });
+    });
+    ro.observe(target);
+    return ro;
+  }
+
   // Search that ignores accents. A register holding "José" or "Zoë" would not
   // match a teacher typing "jose" or "zoe", which is how anyone types quickly on
   // a board — and in an international school those names are the common case,
@@ -103,9 +131,30 @@
       o.ms > 0 ? o.ms : (o.action ? 9000 : 2600));
   }
 
+  // One AudioContext for the life of the page. A fresh one per chime was both
+  // wasteful — browsers cap how many can exist at once — and unreliable in the
+  // way that actually bites in a classroom: a context created without a user
+  // gesture behind it starts *suspended*, so a timer running out five minutes
+  // after the teacher last touched anything rang silently. One context, opened
+  // on the first tap of the session and resumed if the browser parks it, is
+  // running by the time any timer needs it.
+  let sharedAudio = null;
+  function audioCtx() {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return null;
+    if (!sharedAudio) sharedAudio = new Ctor();
+    // resume() on an already-running context is a no-op that costs nothing
+    if (sharedAudio.state === 'suspended') sharedAudio.resume();
+    return sharedAudio;
+  }
+  // the gesture that opens it: the teacher's first touch anywhere, whatever it
+  // was for. Passive and once — this listener never runs a second time.
+  window.addEventListener('pointerdown', () => audioCtx(), { once: true, passive: true });
+
   function beep(times = 3) {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = audioCtx();
+      if (!ctx) return;
       for (let i = 0; i < times; i++) {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -119,7 +168,8 @@
         osc.start(t0);
         osc.stop(t0 + 0.4);
       }
-      setTimeout(() => ctx.close(), times * 500 + 400);
+      // deliberately not closed: the context is shared and outlives the chime.
+      // Each oscillator and gain is disposable and released when it stops.
     } catch (e) { /* audio unavailable */ }
   }
 
@@ -187,11 +237,13 @@
   // is opened more than most of what is already here
   const DEFAULT_PINNED = ['background', 'sketch', 'text', 'clock', 'timer', 'traffic', 'lists', 'picker', 'poll', 'sound', 'image'];
 
+  const blankScreen = () => ({ id: uid(), background: { type: 'gradient', value: BACKGROUNDS.gradients[0] }, widgets: [] });
+
   function blankDeck(name) {
     return {
       id: uid(), name: name || 'New deck', classList: null, subject: '', yearGroup: null, pinnedTop: false,
       createdAt: Date.now(), lastUsed: Date.now(), current: 0,
-      screens: [{ id: uid(), background: { type: 'gradient', value: BACKGROUNDS.gradients[0] }, widgets: [] }],
+      screens: [blankScreen()],
     };
   }
 
@@ -214,6 +266,60 @@
     };
   }
 
+  // Every screen and widget the app is about to render, checked for shape. The
+  // old pass confirmed `screens` was a non-empty array and never looked inside
+  // it, so `{decks:[{screens:[null]}]}` was accepted, written out by the
+  // already-queued save(), and then threw in applyBackground() on every boot
+  // afterwards. The teacher's app simply stopped opening, and the state doing
+  // it was by then the only copy they had.
+  //
+  // **Repair, don't reject** — wherever the repair is unambiguous. This runs
+  // over the teacher's own good data at every single load, and on cross-tab
+  // sync and backup import too; returning null from here quarantines the state
+  // and resets the app. A stricter normalize that started rejecting what it
+  // used to accept would be a worse bug than the one it fixes.
+  // Numbers and numeric strings only. The obvious `Number.isFinite(+v)` is
+  // wrong here: `+null`, `+''`, `+false` and `+[]` are all 0, and 0 is finite —
+  // so a missing coordinate would read as a deliberate zero and pin the widget
+  // to the corner instead of taking the default below.
+  const finite = (v, dflt) => {
+    const n = typeof v === 'string' ? Number(v.trim() || NaN) : v;
+    return typeof n === 'number' && Number.isFinite(n) ? n : dflt;
+  };
+
+  function normalizeScreen(s) {
+    if (!s || typeof s !== 'object' || Array.isArray(s)) return null;
+    if (typeof s.id !== 'string' || !s.id) s.id = uid();
+    if (typeof s.name !== 'string') s.name = '';
+    if (!s.background || typeof s.background !== 'object' || typeof s.background.value !== 'string') {
+      s.background = { type: 'gradient', value: BACKGROUNDS.gradients[0] };
+    }
+    if (!Array.isArray(s.ink)) s.ink = [];
+    s.widgets = (Array.isArray(s.widgets) ? s.widgets : [])
+      .filter((w) => w && typeof w === 'object' && !Array.isArray(w) && typeof w.type === 'string');
+    for (const w of s.widgets) {
+      if (typeof w.id !== 'string' || !w.id) w.id = uid();
+      // An unrecognised type is left alone on purpose. mountWidget() already
+      // skips it, so it cannot crash anything — and dropping it here would
+      // delete a teacher's work the first time a widget is renamed, or a deck
+      // from a newer build is opened in an older one.
+      //
+      // The fallback sizes are generic rather than the widget's own defaults,
+      // because WIDGETS is declared hundreds of lines below this and load()
+      // runs first: reaching for it here is a temporal-dead-zone ReferenceError,
+      // and load()'s catch would turn that into a quarantined state and a reset
+      // app. Only geometry that was *already* unreadable uses these, and
+      // fitToWindow() sizes it sensibly at mount anyway.
+      w.x = finite(w.x, 40);
+      w.y = finite(w.y, 80);
+      w.w = Math.max(40, finite(w.w, 320));
+      w.h = Math.max(40, finite(w.h, 240));
+      w.z = finite(w.z, 10);
+      if (!w.props || typeof w.props !== 'object' || Array.isArray(w.props)) w.props = {};
+    }
+    return s;
+  }
+
   // One normalizer for every way data enters: load(), backup import, storage sync.
   // Accepts both the old flat shape (v1: screens/current/deckName at the top level)
   // and the deck shape (v2), returns a valid v2 state or null.
@@ -231,7 +337,7 @@
       delete data.screens; delete data.current; delete data.deckName;
     }
     data.version = 2;
-    data.decks = data.decks.filter((d) => d && Array.isArray(d.screens) && d.screens.length);
+    data.decks = data.decks.filter((d) => d && typeof d === 'object' && !Array.isArray(d));
     if (!data.decks.length) return null;
     for (const d of data.decks) {
       if (!d.id) d.id = uid();
@@ -240,7 +346,15 @@
       if (typeof d.classList !== 'string') d.classList = null;
       if (typeof d.createdAt !== 'number') d.createdAt = Date.now();
       if (typeof d.lastUsed !== 'number') d.lastUsed = d.createdAt;
-      d.current = clamp(d.current || 0, 0, d.screens.length - 1);
+      const screens = (Array.isArray(d.screens) ? d.screens : []).map(normalizeScreen).filter(Boolean);
+      // A deck whose screens were all unreadable keeps its name, its id and its
+      // place on the dashboard, and gets somewhere to work. The old pass
+      // dropped the deck outright — and dropped the *state* if that emptied
+      // the list, which is the reset this whole function exists to avoid.
+      d.screens = screens.length ? screens : [blankScreen()];
+      // floored, because clamp() alone leaves 2.7 as 2.7 and screens[2.7] is
+      // undefined — the same crash by a quieter route
+      d.current = clamp(Math.floor(finite(d.current, 0)), 0, d.screens.length - 1);
       d.pinnedTop = !!d.pinnedTop;
     }
     if (!data.decks.some((d) => d.id === data.activeDeck)) data.activeDeck = data.decks[0].id;
@@ -1084,10 +1198,18 @@
         const size = Math.min(cvWrap.clientWidth, cvWrap.clientHeight) - 6;
         if (size < 40) return;
         const dpr = window.devicePixelRatio || 1;
-        cv.width = size * dpr; cv.height = size * dpr;
-        cv.style.width = cv.style.height = size + 'px';
+        // Assigning canvas.width reallocates the backing store, and this runs
+        // on every paintAll — which means every pointermove of a drag. Only
+        // resize when the size really changed; the assignment used to clear the
+        // canvas as a side effect, so an explicit clear takes over that job.
+        const px = Math.round(size * dpr);
+        if (cv.width !== px || cv.height !== px) {
+          cv.width = px; cv.height = px;
+          cv.style.width = cv.style.height = size + 'px';
+        }
         const c = ctx;
         c.setTransform(dpr, 0, 0, dpr, 0, 0);
+        c.clearRect(0, 0, size, size);
         const r = size / 2;
         c.translate(r, r);
         const t = cur();
@@ -1857,7 +1979,7 @@
       }
 
       paintAll();
-      const ro = new ResizeObserver(() => matApi.relayout());
+      const ro = onBoxResize(mat, () => matApi.relayout());
       ro.observe(mat);
       return () => { clearTimeout(wrongTimer); ro.disconnect(); matApi.cleanup(); };
     },
@@ -2043,7 +2165,7 @@
       }
 
       paintAll();
-      const ro = new ResizeObserver(() => matApi.relayout());
+      const ro = onBoxResize(mat, () => matApi.relayout());
       ro.observe(mat);
       return () => { clearTimeout(flashTimer); ro.disconnect(); matApi.cleanup(); };
     },
@@ -8673,9 +8795,24 @@
           });
           return;
         }
+        // CSS anchors a 0deg repeating-linear-gradient's 0% at the BOTTOM edge
+        // of the box — 0deg points up, so the stops walk upward from the floor.
+        // Walking down from the top, which is what this did, puts every
+        // horizontal paper out of register by up to a whole cycle, and by a
+        // different amount at every canvas height. Measured on a 140px box:
+        // ruled landed 27px out, grid 19px, and the music stave somewhere else
+        // entirely. A child writes between the handwriting guides and the
+        // export puts the guides through the letters, which reads worse than
+        // no paper at all because it looks deliberate.
         const hlines = (offsets, cycle, color) => {
           c.fillStyle = color;
-          for (let y = 0; y < ih; y += cycle) for (const o of offsets) c.fillRect(0, y + o, iw, 1);
+          const maxOff = Math.max(...offsets);
+          for (let base = ih - 1; base > -cycle - maxOff; base -= cycle) {
+            for (const o of offsets) {
+              const y = base - o;
+              if (y >= 0 && y < ih) c.fillRect(0, y, iw, 1);
+            }
+          }
         };
         const vlines = (gap, color) => {
           c.fillStyle = color;
@@ -8683,13 +8820,21 @@
         };
         const diag = (deg, gap, color) => {
           // one stripe family of a repeating-linear-gradient(deg): lines
-          // perpendicular to the gradient axis, `gap` apart along it
+          // perpendicular to the gradient axis, `gap` apart along it.
+          // The phase is anchored where CSS anchors it — one end of the
+          // gradient line, which runs through the box centre with length
+          // |W·sinθ| + |H·cosθ| — not at the centre itself. Same class of
+          // error as hlines() above, and it is why iso was doubly out.
+          const rad = (deg * Math.PI) / 180;
           c.save();
           c.translate(iw / 2, ih / 2);
-          c.rotate((deg * Math.PI) / 180);
+          c.rotate(rad);
           c.fillStyle = color;
           const R = Math.hypot(iw, ih) / 2 + gap;
-          for (let y = -R; y < R; y += gap) c.fillRect(-R, y, R * 2, 1);
+          const half = (Math.abs(iw * Math.sin(rad)) + Math.abs(ih * Math.cos(rad))) / 2;
+          let y0 = -half;
+          while (y0 > -R) y0 -= gap;                 // keep the phase, cover the box
+          for (let y = y0; y < R; y += gap) c.fillRect(-R, y, R * 2, 1);
           c.restore();
         };
         if (key === 'ruled') hlines([27], 28, 'rgba(37,99,235,0.28)');
@@ -9148,6 +9293,11 @@
         } else if (lasso) {
           finishLasso();
         } else if (drag) {
+          // A move, rotate or resize leaves raw pointer floats on every stroke
+          // it touched. New strokes are rounded above at finish; these were not
+          // rounded anywhere, so dragging the same shape around a lesson grew
+          // the saved deck each time without adding anything to it.
+          for (const s of sel) roundStroke(s);
           drag = null;
           syncSel(); repaint(); save();
         }
@@ -9200,6 +9350,17 @@
       return () => {
         ro.disconnect();
         document.removeEventListener('pointerdown', outsideDown, true);
+        // The document listener above was always removed; this one was not, and
+        // it is the one that leaks. `remount()` recycles the same .widget-body
+        // node — it clears innerHTML rather than building a fresh div — so a
+        // listener bound directly to `body` outlives the mount that added it,
+        // and each api.refresh() (every paper swatch, every setting) stacks
+        // another. Each stale copy retains its whole mount scope: the detached
+        // canvas and up to sixty JSON snapshots of undo history. The sketch pad
+        // is the only widget in the app that binds to `body` at all.
+        body.removeEventListener('pointerdown', activatePad, true);
+        // left alone deliberately: the identity guard stops pad A's unmount
+        // stealing the keyboard from a pad B the teacher has since activated
         if (sketchKeyHook === myKeys) sketchKeyHook = null;
         if (editor) commitEditor();
       };
@@ -9253,13 +9414,33 @@
       const file = input.files[0];
       if (!file) return;
       const reader = new FileReader();
+      // A file the engine will not decode used to end the flow in silence: no
+      // callback, no toast, nothing. The teacher taps "Choose image…", the OS
+      // picker closes, and the app does exactly what it does when they press
+      // Cancel — so the honest reading is "it's broken". Chromium declines HEIC
+      // outright, which is the default for an iPhone photo, and truncated or
+      // zero-byte files fail everywhere.
+      // `cb` is deliberately NOT called on failure. Four callers write its
+      // argument straight into state (mascot, money images, image widget,
+      // background), so a null would wipe an existing picture on a failed
+      // replace. Saying so and changing nothing is the right outcome.
+      const failed = () => toast('⚠️ That picture could not be opened. Try a JPEG or PNG — photos straight from an iPhone are often HEIC.', { ms: 7000 });
+      reader.onerror = failed;
       reader.onload = () => {
         // downscale large images so localStorage stays healthy
         const img = new Image();
+        img.onerror = failed;
         img.onload = () => {
           const limit = maxW || 1600;
           if (img.width <= limit && file.size < 400_000) { cb(reader.result); return; }
-          const scale = Math.min(1, limit / img.width);
+          // Width alone is not enough of a limiter. A 1000×20000 scan is under
+          // any width cap and still asks for a 20M-pixel canvas — over WebKit's
+          // 16,777,216 ceiling, so on the Tauri build the canvas fails and
+          // toDataURL hands back a degenerate string. Cap the area as well.
+          const MAX_PX = 12e6;
+          const byWidth = Math.min(1, limit / img.width);
+          const byArea = Math.sqrt(MAX_PX / Math.max(1, img.width * img.height));
+          const scale = Math.min(byWidth, byArea);
           const cv = document.createElement('canvas');
           cv.width = Math.round(img.width * scale);
           cv.height = Math.round(img.height * scale);
@@ -9860,8 +10041,17 @@
   // looks: children navigate this app by remembering where things are, so a
   // layout opened on the display it was built for must not shuffle itself.
   function fitToWindow(w) {
-    const x = clamp(w.x, -w.w + 60, window.innerWidth - 60);
-    const y = clamp(w.y, 0, window.innerHeight - 40);
+    // A hidden, minimised or not-yet-laid-out window reports 0×0, and clamping
+    // against that collapses every widget on the screen to (-60, 0) — the max
+    // ends up below the min, so clamp() returns the min for all of them — and
+    // the next save writes it down. A teacher who minimises the app mid-lesson
+    // would come back to a screen with the whole layout stacked in one corner.
+    // deckThumb already guards the same 0×0 report; this is the path that
+    // actually mutates the deck, so it needs the guard more, not less.
+    const vw = window.innerWidth, vh = window.innerHeight;
+    if (vw < 200 || vh < 200) return false;
+    const x = clamp(w.x, -w.w + 60, vw - 60);
+    const y = clamp(w.y, 0, vh - 40);
     if (x === w.x && y === w.y) return false;
     w.x = x; w.y = y;
     return true;
@@ -9971,19 +10161,36 @@
       e.preventDefault();
       const startX = e.clientX - w.x;
       const startY = e.clientY - w.y;
+      // The committed left/top stay put for the length of the drag and the
+      // movement rides on a transform. Writing left/top every pointermove
+      // relayouts and repaints the stage each frame, and with backdrop-filter
+      // on the panels and the dock, every one of those frames re-blurs them —
+      // the primary jank source on the boards this ships to. A transform moves
+      // an already-composited layer instead, and looks identical doing it.
+      const baseX = w.x, baseY = w.y;
+      widgetEl.style.willChange = 'transform';
       const move = (ev) => {
         w.x = clamp(ev.clientX - startX, -w.w + 60, window.innerWidth - 60);
         w.y = clamp(ev.clientY - startY, 0, window.innerHeight - 40);
+        widgetEl.style.transform = `translate3d(${w.x - baseX}px, ${w.y - baseY}px, 0)`;
+      };
+      // will-change is set for the drag only. Leaving it on forty widgets would
+      // hold a compositor layer for each and cost more than it ever saved.
+      const settle = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', settle);
+        widgetEl.style.transform = '';
+        widgetEl.style.willChange = '';
         widgetEl.style.left = w.x + 'px';
         widgetEl.style.top = w.y + 'px';
       };
-      const up = () => {
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', up);
-        save();
-      };
+      const up = () => { settle(); save(); };
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
+      // a cancelled pointer must still hand the offset back to left/top, or the
+      // element keeps a transform that the next render knows nothing about
+      window.addEventListener('pointercancel', settle);
     });
 
     // resize
@@ -10077,11 +10284,11 @@
   // a deck saved before that check existed is still on somebody's disk.
   // one place that turns a stored background into a CSS value, so the drawer,
   // the dashboard wallpaper and the deck thumbnails cannot drift apart
-  function backgroundCss(bg, layer) {
+  function backgroundCss(bg) {
     if (!bg) return '';
     if (bg.type === 'image') {
       const u = SageSanitize.cssUrl(bg.value);
-      return u ? u + ' center / cover no-repeat' + (layer || '') : '';
+      return u ? u + ' center / cover no-repeat' : '';
     }
     return SageSanitize.cssPaint(bg.value);
   }
@@ -11042,7 +11249,11 @@
     const veil = bg.type === 'image'
       ? 'linear-gradient(rgba(248, 250, 250, 0.62), rgba(248, 250, 250, 0.62))'
       : 'linear-gradient(rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.42))';
-    dashEl.style.background = veil + ', ' + (backgroundCss(bg, ' fixed') || '#f4f7f6');
+    // Painted on .dashboard::before, a fixed layer of its own — see the note
+    // there. Handing it over as a variable keeps the compositing decision in
+    // the stylesheet instead of in a style attribute, and the layer being fixed
+    // is what replaces the `background-attachment: fixed` this used to carry.
+    dashEl.style.setProperty('--dash-bg', veil + ', ' + (backgroundCss(bg) || '#f4f7f6'));
   }
 
   let dashCat = 'All'; // template category filter (per-tab UI, not saved)
@@ -12999,7 +13210,12 @@
       body.append(snapBox);
       if (window.SageSnapshots) paintSnapshots(snapBox, finish);
 
-      body.append(
+      // Spread through a filter, the way every other conditional append in this
+      // file does it. `append()` is not `el()`: it stringifies a null child into
+      // the visible text "null", and the three `kind !== 'file' ? null :` rows
+      // below meant the browser build — the one the first testers run — printed
+      // a bare "null" in the middle of the backup panel.
+      body.append(...[
         el('p', {}, SageStorage.kind === 'file'
           ? 'Everything you see lives in one file on this computer — no account, no server, no tracking. Back it up or move it between devices any time:'
           : 'Everything you see lives only in this browser — no account, no server, no tracking. Back it up or move it between devices any time:'),
@@ -13099,7 +13315,7 @@
             }, { label: 'Erase' });
           },
         }, 'Erase all local data'),
-      );
+      ].filter(Boolean));
     });
   });
 
@@ -13796,11 +14012,33 @@
     }
     queueBlit();
   });
-  const roundStroke = (s) => {
-    if (s.pts) s.pts = s.pts.map(([x, y]) => [Math.round(x), Math.round(y)]);
-    else { s.x0 = Math.round(s.x0); s.y0 = Math.round(s.y0); s.x1 = Math.round(s.x1); s.y1 = Math.round(s.y1); }
+  // Persisted coordinates are rounded, because a stroke otherwise stores raw
+  // pointer floats: "78.33984375" is eighteen characters where "78" is two, and
+  // a well-annotated board holds thousands of points inside a ~5 MB budget with
+  // no accounting. Sub-pixel precision buys nothing — the canvas is painted in
+  // CSS pixels either way.
+  // A function declaration, not a const: the draw-pad widget calls this from a
+  // pointerup handler hundreds of lines above, and hoisting means the binding
+  // cannot depend on where in this file the two sites happen to sit.
+  function roundStroke(s) {
+    if (s.pts) {
+      s.pts = s.pts.map(([x, y]) => [Math.round(x), Math.round(y)]);
+    } else if (s.tool === 'text') {
+      // A text object carries x/y (and w/h once measured), not the x0..y1 of a
+      // shape. The old version rounded the wrong four keys, so every drag of a
+      // text annotation both left its real coordinates at full float precision
+      // and wrote four NaNs into storage alongside them.
+      s.x = Math.round(s.x); s.y = Math.round(s.y);
+      if (typeof s.w === 'number') s.w = Math.round(s.w);
+      if (typeof s.h === 'number') s.h = Math.round(s.h);
+    } else {
+      s.x0 = Math.round(s.x0); s.y0 = Math.round(s.y0);
+      s.x1 = Math.round(s.x1); s.y1 = Math.round(s.y1);
+    }
+    // radians, and four places is finer than a pixel at any plausible length
+    if (typeof s.rot === 'number') s.rot = Math.round(s.rot * 1e4) / 1e4;
     return s;
-  };
+  }
   const finishStroke = (e) => {
     if (dragState && e.isPrimary) {
       if (dragState.moved && selected) { roundStroke(selected.s); save(); }

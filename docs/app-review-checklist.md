@@ -308,9 +308,33 @@ origin, or leaks data off-device, breaks the product's headline promise.
   deck on a small laptop doesn't overwrite its big-board geometry, but any
   interaction persists the clamp. A proportional re-fit (as `demo.js` does for
   the taster) or per-display geometry is a design decision, not a bug fix.
-- [ ] 🟡 **`normalize()` only shallow-validates** — `{decks:[{screens:[null]}]}`
-  passes, is persisted by the already-queued `save()`, then crashes every boot
-  ([`app.js:143`](../app.js#L143)). Validate screen/widget shape; floor `d.current`.
+- [x] 🟡 **`normalize()` only shallow-validates** — `{decks:[{screens:[null]}]}`
+  passes, is persisted by the already-queued `save()`, then crashes every boot.
+  **Fixed 2026-08-02** — a `normalizeScreen()` pass over every screen and widget.
+  The governing rule is **repair, don't reject**: this runs over the teacher's
+  own good data at every load, and on cross-tab sync and backup import, and
+  returning null quarantines the state and resets the app — so a stricter
+  normalize that started rejecting what it used to accept would be a worse bug
+  than the one it fixes. A deck whose screens are all unreadable now keeps its
+  name, its id and its place on the dashboard and gets one blank screen, where
+  the old pass dropped the deck and, if that emptied the list, the whole state.
+  An **unrecognised widget type is deliberately kept** — `mountWidget()` already
+  skips it, so it cannot crash anything, and dropping it would delete a
+  teacher's work the first time a widget is renamed. `d.current` is floored as
+  well as clamped, because `screens[2.7]` is undefined and crashes by a quieter
+  route. Verified against twelve malformed states, each written to storage and
+  booted: all twelve start, none quarantine, and the unknown widget survives
+  with its geometry.
+  **Two bugs found while building it, both mine, both worth recording.** The
+  first version reached for `WIDGETS[w.type]` to pick per-widget fallback sizes
+  — but `WIDGETS` is declared hundreds of lines below `load()`, so that was a
+  temporal-dead-zone `ReferenceError`, and `load()`'s catch turned it into a
+  quarantined state and a reset app. It cost the test machine its decks, which
+  the quarantine copy then gave straight back — yesterday's salvage fix earning
+  its keep on the day after it shipped. The second: the geometry guard was
+  `Number.isFinite(+v)`, and `+null`, `+''`, `+false` and `+[]` are all `0`,
+  which is finite — so a missing coordinate read as a deliberate zero and pinned
+  the widget to the corner instead of taking the default.
 - [x] 🟡 **`uid()` is weak and can emit < 8 chars** —
   `Math.random().toString(36).slice(2,10)`. Screen ids are global routing keys
   (`#s=`) and `removeWidget` deletes the id from **every** deck, so a collision
@@ -332,6 +356,22 @@ origin, or leaks data off-device, breaks the product's headline promise.
   any move/resize), pad strokes and pad-templates all share one key with only the
   quota-exceeded toast as a backstop. Round persisted stroke coords; add a size
   readout / eviction path.
+  **Two of the three done 2026-08-02; left open for the third.**
+  - _Size readout_ — **already shipped**, and better than this item asks for: the
+    💾 panel reports measured size and *probes* real headroom rather than quoting
+    a ceiling that varies from 5 MB to 50 M chars between browsers. This half of
+    the finding was stale.
+  - _Coordinate rounding_ — **done**, and the finding was right that move/resize
+    was the leak. New strokes were already rounded on finish; nothing rounded
+    them again afterwards, so dragging the same shape around a lesson regrew it
+    each time. The draw-pad's drag path had no rounding at all, and the shared
+    `roundStroke()` mishandled the one shape that is not a pen stroke: a **text**
+    annotation carries `x`/`y`, not `x0..y1`, so every drag of one left its real
+    coordinates at full float precision *and* wrote four NaNs into storage beside
+    them. Measured: 63% smaller for the strokes affected.
+  - _Eviction path_ — **not done, and deliberately not decided.** What to throw
+    away when a teacher's board is full is a product judgement (oldest ink?
+    largest images? ask them?), not a defect with a right answer.
 - [ ] ⚪ **Annotation eraser grows storage instead of shrinking it** — eraser strokes
   are stored and composited `destination-out`; the underlying pen strokes are
   never removed ([`app.js:11356`](../app.js#L11356)), so draw-then-erase only ever
@@ -473,21 +513,76 @@ paths assume one pointer.
 
 ## P5 — Rendering & performance (weak school GPUs)
 
-- [ ] 🟠 **`backdrop-filter: blur(12px)` on 14 surfaces + 30px shadows, with drags
-  updating `left/top` per frame and no `will-change`/transform path**
-  ([`style.css:176`](../style.css#L176)). Dragging a widget over an image
-  wallpaper forces continuous re-blurring — the primary jank source on target
-  hardware.
-- [ ] 🟡 **Teaching-clock canvas backing store is reallocated every `paintAll`** (i.e.
-  every drag `pointermove`) ([`app.js:772`](../app.js#L772)).
-- [ ] 🟡 **Money-tray / frame-tiles rebuild the entire tray + all pieces on every
-  ResizeObserver tick** ([`app.js:1545`](../app.js#L1545), `:2294`) — worst on the
-  larger mats.
-- [ ] 🟡 **Dashboard wallpaper uses `background-attachment: fixed` on a scrolling
-  container** ([`app.js:9697`](../app.js#L9697)) — disables composited scrolling.
-- [ ] 🟡 **`beep()` constructs a fresh `AudioContext` per call and never pools it**
-  ([`app.js:46`](../app.js#L46)). Browsers cap concurrent contexts (~6), so timer
-  and game chimes can silently die over a full teaching day. Use one shared context.
+- [x] 🟠 **`backdrop-filter: blur(12px)` on 14 surfaces + 30px shadows, with drags
+  updating `left/top` per frame and no `will-change`/transform path.** Dragging a
+  widget over an image wallpaper forces continuous re-blurring — the primary jank
+  source on target hardware. **Fixed 2026-08-03** — the drag moves the widget on
+  `translate3d` instead. The committed `left/top` stay put for the length of the
+  drag, so no frame relayouts the stage or asks the panels beneath to re-blur on
+  the main thread; the offset is handed back to `left/top` in one write on drop.
+  `will-change: transform` is set for the drag only — leaving it on forty widgets
+  would hold a compositor layer for each and cost more than it saved. The blur
+  itself is untouched: this is a compositing change, not a design change, and it
+  looks identical. Browser-verified: mid-drag `left` is unchanged with
+  `transform: translate3d(36px, 21px, 0)` applied, and on drop both transform and
+  will-change are cleared with the position committed and saved exactly.
+- [x] 🟡 **Teaching-clock canvas backing store is reallocated every `paintAll`** (i.e.
+  every drag `pointermove`). **Fixed 2026-08-03** — `cv.width`/`cv.height` are only
+  assigned when the square really changed size. Assigning them also *clears* the
+  canvas, which the old code was relying on without saying so, so an explicit
+  `clearRect` took that job over. Verified the clock still renders correctly at
+  several sizes and after reloads, with no stale pixels; the reallocation count
+  itself was not measured in situ — several attempts to drive the repaint path
+  synthetically failed to reach it, and the guard is four lines of arithmetic.
+- [x] 🟡 **Money-tray / frame-tiles rebuild the entire tray + all pieces on every
+  ResizeObserver tick** — worst on the larger mats. **Fixed 2026-08-03** — both go
+  through a shared `onBoxResize()` that drops ticks where the box came back the
+  same size and coalesces the rest to one rebuild per frame. It also guards a
+  loop the raw observer invited: a rebuild can itself provoke another
+  notification. Not exercised interactively — the two mats were not driven through
+  a resize drag, only the code path swapped.
+- [x] 🟡 **Dashboard wallpaper uses `background-attachment: fixed` on a scrolling
+  container** — disables composited scrolling. **Fixed 2026-08-03** — the wallpaper
+  moved to `.dashboard::before`, a `position: fixed` layer of its own, with
+  `applyDashBg()` handing it over as a `--dash-bg` variable. Same still image, and
+  the scroller is back to `background-attachment: scroll` with no background image
+  at all. Browser-verified with a photo wallpaper: the pseudo-element is `fixed`,
+  the scroller carries no image, and the dashboard still scrolls its full height.
+- [x] 🟡 **`beep()` constructs a fresh `AudioContext` per call and never pools it.**
+  Browsers cap concurrent contexts (~6), so timer and game chimes can silently die
+  over a full teaching day. **Fixed 2026-08-03**, and the real failure is worse
+  than the finding says. It is not only the cap: a context built with no user
+  gesture behind it starts **suspended**, so a timer running out five minutes
+  after the teacher last touched anything rang *silently* — the commonest use of
+  the commonest widget. One shared context now opens on the first tap of the
+  session and resumes if the browser parks it. Verified end to end on the real
+  path: one context ever created, `state: "running"` at the moment the timer hit
+  zero, and four oscillators through it for `beep(4)`.
+  _(A first attempt reported zero oscillators and looked like a failure; the
+  instrumentation had gone on after the timer already fired. Patching the
+  prototype rather than the instance settled it.)_
+
+### Found while doing P5, not from the review
+
+- [x] 🟠 **`fitToWindow()` collapses every widget when the window reports 0×0.**
+  A hidden, minimised or not-yet-laid-out window returns `innerWidth: 0`, and the
+  clamp is `clamp(x, -w.w + 60, innerWidth - 60)` — with the max below the min,
+  `clamp()` returns the min, so *every widget on the mounted screen* lands on
+  (-60, 0) and the next save writes it down. A teacher who minimises the app
+  mid-lesson could come back to a screen with the entire layout stacked in one
+  corner. `deckThumb` already guards the same 0×0 report for a cosmetic reason;
+  this is the path that mutates the deck.
+  **Found the hard way**, which is why it is in this document at all: it happened
+  to the test machine during a probe that left the browser pane hidden, wrecking
+  the first screen of two decks. **Fixed 2026-08-03** — `fitToWindow` returns
+  false below a 200px viewport. Verified by booting with `innerWidth`/
+  `innerHeight` stubbed to 0 and confirming the geometry came through untouched.
+- [x] 🟡 **The Your data panel printed a literal "null"** on the browser build.
+  `body.append()` is not `el()` — it stringifies a null child into visible text —
+  and the panel has three `kind !== 'file' ? null :` rows, so the browser build
+  showed a bare "null" in the middle of the backup panel. Every other conditional
+  append in the file spreads through `.filter(Boolean)`; this one did not.
+  **Fixed 2026-08-03**, the same way as the rest.
 
 ## P6 — Robustness & housekeeping
 
@@ -510,19 +605,57 @@ paths assume one pointer.
   **Fixed 2026-08-02** — capped at 120 slides (generous: a real lesson deck is
   tens, not hundreds), and the dropped count is reported in the existing
   post-import problems list rather than truncating in silence.
-- [ ] 🟡 **`pickImage` has no `onerror`, caps only width, and ignores EXIF orientation** ([`app.js:8593`](../app.js#L8593)) — a HEIC/broken file silently does nothing; a tall image can still overflow quota; portrait phone photos render sideways.
-- [ ] 🟡 **Repeating timer bursts a volley of chimes after tab-suspend** — it advances one cycle per paint tick and beeps each ([`app.js:5543`](../app.js#L5543)).
+- [x] 🟡 **`pickImage` has no `onerror`, caps only width, and ignores EXIF orientation** — a HEIC/broken file silently does nothing; a tall image can still overflow quota; portrait phone photos render sideways. **Two-thirds true; fixed 2026-08-03.**
+  - _No failure path_ — **true, and the worst of the three.** No `img.onerror`,
+    no `reader.onerror`: a file the engine declines to decode ended the flow in
+    silence, so a failed pick and a cancelled pick looked identical. Chromium
+    declines HEIC outright, which is the default for an iPhone photo. Now both
+    handlers fire a toast that names HEIC. **`cb` is deliberately still not
+    called on failure** — four callers write its argument straight into state
+    (mascot, money images, image widget, background), so passing null would wipe
+    an existing picture on a failed *replace*.
+  - _Caps only width_ — true, but the sharp version is a canvas ceiling, not the
+    quota: a 1000×20000 scan passes any width cap and asks for a 20M-pixel
+    canvas, over WebKit's 16,777,216 limit — so on the Tauri build the canvas
+    fails and `toDataURL` returns a degenerate string. Now capped by area as
+    well as width.
+  - _EXIF_ — **a phantom, and dangerous to "fix".** Browsers already honour EXIF
+    orientation; adding rotation would double-rotate every portrait photo a
+    teacher uploads, turning a non-bug into a visible one. Deliberately untouched.
+- [x] 🟡 **Repeating timer bursts a volley of chimes after tab-suspend** — it advances one cycle per paint tick and beeps each. **Wrong about its cause; closed 2026-08-03 without a code change.** There is no volley: a teacher who backgrounds the tab with a repeating timer gets **one** chime on return, not a burst, so the class is never blasted. The residual is that repeat rings arrive late and the lateness accumulates over a lesson — real, but a different and much smaller defect than the one written down. Explicitly re-checked against the shared `AudioContext` landed the same day, which would have made a genuine volley louder rather than quieter: it does not, because the volley does not happen.
 - [x] 🟡 **Clipboard PNG copy is dead on WebKit (the Tauri v2 target)** — `clipboard.write` inside the async `toBlob` callback loses user activation ([`app.js:8104`](../app.js#L8104)). Pass a promise-of-blob to `ClipboardItem` synchronously.
   **Fixed 2026-08-02** — `ClipboardItem` receives a *promise* of the blob, so the
   write stays synchronous with the click and the user activation survives. One
   path for WebKit and Chromium both.
-- [ ] 🟡 **Draw-pad PNG export omits the paper background** — grid/number-line/fraction-bar papers are CSS on `wrap` and never drawn, so marks export floating on white ([`app.js:8063`](../app.js#L8063)).
-- [ ] 🟡 **Each draw-pad remount leaks the previous canvas + undo history** — a `body` capture listener is added every mount and never removed ([`app.js:8520`](../app.js#L8520)).
+- [x] 🟡 **Draw-pad PNG export omits the paper background** — grid/number-line/fraction-bar papers are CSS on `wrap` and never drawn, so marks export floating on white. **The omission was already fixed by `paintPaper`; the fix itself was mis-registered. Corrected 2026-08-03.**
+  This one nearly got ticked off. A first pass read `paintPaper` and closed it as
+  stale; an adversarial second pass **measured the output pixel row by pixel row
+  in headless Chrome** and found the paper is drawn in the wrong place on every
+  horizontal family — `ruled`, `writing`, `grid`, `iso`, `coord`, `music`.
+  Cause: CSS anchors a `0deg` repeating-linear-gradient's 0% at the **bottom**
+  edge (0deg points up), while `hlines()` walked down from the top. On a 140px
+  box, ruled landed 27px out of a 28px cycle, grid 19px of 24, and the music
+  stave somewhere else entirely. The error changed with every resize, so
+  alignment was a roughly 1-in-cycle accident. `diag()` had a second, separate
+  phase error: centre-anchored against corner-anchored CSS, which is why `iso`
+  was doubly out.
+  This is worse than the defect originally reported. A child writes on the
+  handwriting guide and the export puts the guide *through* the letters — which
+  reads as deliberate, where bare white reads as a missing feature.
+  Fixed by walking up from the bottom and anchoring `diag()` at the end of the
+  gradient line. Verified against the browser-measured CSS rows: exact match on
+  ruled, grid and music, and the bottom gap now holds constant at every canvas
+  height where the old code wandered between 0 and 27px.
+  Also confirmed while here: the SVG-backed papers (`numline`, `hundred`,
+  `fractions`, `placevalue`, `story`) still load under the CSP added the day
+  before — `img-src` covers `data:`, no violations.
+- [x] 🟡 **Each draw-pad remount leaks the previous canvas + undo history** — a `body` capture listener is added every mount and never removed. **Right about the leak, wrong about which listener; fixed 2026-08-03.** The *document*-level capture listener the finding describes was always removed properly. The one that leaks is bound to the widget's own `body` element — and it leaks because `remount()` recycles the same `.widget-body` node (`body.innerHTML = ''`) instead of building a fresh one, so anything bound directly to `body` outlives the mount that bound it. Each `api.refresh()` — every paper swatch, every setting — stacked another copy, each retaining a detached canvas and up to sixty JSON snapshots of undo history. The sketch pad is the only widget in the app that binds to `body` at all. One line in the cleanup. Bounded and invisible to teachers, but the sharp edge is in the shared lifecycle, which is worth knowing.
+  _Verified by source symmetry (same function reference, same capture flag, cleanup runs before the next mount), not by a listener count — the pad's paper menu could not be driven reliably from an automated pass._
 - [x] 🟡 **No `hashchange` handling** — Back in a pinned `#s=` tab desyncs the URL from the view until reload ([`app.js:215`](../app.js#L215)).
   **Fixed 2026-08-02** — a `hashchange` listener re-reads `#s=` and re-renders,
   guarded against the re-entry `setCurrent()` causes by assigning the hash
   itself. Verified: pin → change screen → Back restores hash *and* widgets.
-- [ ] ⚪ **Widget delete via Backspace has no confirm/undo** (screens do) ([`app.js:8892`](../app.js#L8892)).
+- [x] ⚪ **Widget delete via Backspace has no confirm/undo** (screens do). **Already fixed; closed as stale 2026-08-03.** Bare Backspace on a focused widget deletes nothing and raises a toast explaining the shortcut. `⌘/Ctrl+Backspace` on a widget holding work raises a confirm with Cancel focused, and everything closed goes to the 30-day bin regardless.
 - [x] ⚪ **`deleteList` leaves dangling `w.props.list` references** (unlike `renameList`) ([`app.js:9443`](../app.js#L9443)).
   **Fixed 2026-08-02** — follows the reference into widget props, as `renameList`
   always has.
@@ -534,7 +667,7 @@ paths assume one pointer.
 - [x] ⚪ **`this._rerender = render` is a dead store that aliases the shared registry object** and pins a closed widget's DOM in memory ([`app.js:357`](../app.js#L357)).
   **Fixed 2026-08-02** — removed. `this` was the shared registry object, so
   nothing ever read it, and it pinned the last instance's DOM for the page's life.
-- [ ] ⚪ **No `@media print`** — printing an agenda emits the fixed toolbar soup ([`style.css`](../style.css)).
+- [ ] ⚪ **No `@media print`** — printing an agenda emits the fixed toolbar soup. **Confirmed 2026-08-03, and it is Glenn's call whether to fix it.** Browser only: `print.js` builds its own print root for every in-app print path, so the desktop app is unaffected and so is every deliberate print. What is left is a teacher hitting `Cmd+P` out of habit in the browser build and getting pages of chrome. Wasted paper, no data at risk. The question is whether the browser build is a supported print surface at all — if the 13 Aug testers run the desktop app, this is worth nothing.
 - [x] ⚪ **Dashboard search isn't diacritic-folded** ("José" ≠ "jose") ([`app.js:9581`](../app.js#L9581)); list add/remove does a full re-render that drops input focus ([`app.js:9639`](../app.js#L9639)).
 
 ---

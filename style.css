@@ -2271,9 +2271,20 @@ a.deck-menu-item { text-decoration: none; color: inherit; }
   position: fixed;
   inset: 0;
   z-index: 4900; /* above panels & deck sidebar, below modals (5000) and toast */
-  background: var(--surface-page);
   overflow-y: auto;
   animation: dash-in 0.2s ease;
+}
+/* The wallpaper lives on its own fixed layer instead of on the scroller with
+   `background-attachment: fixed`, which takes the whole panel off the
+   compositor and repaints it on every scroll frame — expensive exactly where
+   the GPUs are weakest. Identical still image, composited scrolling back.
+   applyDashBg() sets --dash-bg; the fallback covers the frame before it runs. */
+.dashboard::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--dash-bg, var(--surface-page));
 }
 @keyframes dash-in {
   from { opacity: 0; transform: translateY(10px); }
