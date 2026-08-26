@@ -1,0 +1,21 @@
+# Shell scripts must keep LF endings even when cloned on Windows. Git's default
+# there is core.autocrlf=true, which rewrites them to CRLF on checkout — and a
+# shell then fails on the trailing \r with an error that names a line rather
+# than the cause ("$'\r': command not found"). copy-dist.sh runs as
+# beforeBuildCommand, so this breaks the desktop build itself, not just tooling.
+*.sh text eol=lf
+
+# The frontend is served byte-for-byte to a webview; keep it stable across
+# platforms so a Windows checkout builds the same bytes a mac one does.
+*.js  text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.md  text eol=lf
+
+# Binary, never touched.
+*.png binary
+*.ico binary
+*.icns binary
+*.woff2 binary
+*.pptx binary

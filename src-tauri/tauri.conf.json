@@ -11,7 +11,7 @@
       "cwd": ".."
     },
     "beforeBuildCommand": {
-      "script": "sh copy-dist.sh",
+      "script": "node copy-dist.mjs",
       "cwd": ".."
     }
   },
