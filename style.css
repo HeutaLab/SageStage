@@ -1604,6 +1604,12 @@ body.helping, body.helping * { cursor: help !important; }
 .confirm-modal { width: min(380px, calc(100vw - 40px)); }
 .confirm-modal .modal-body { padding-top: 20px; }
 
+/* The HEIC refusal is three numbered steps, not a one-line question, and at the
+   confirm width they stack into a narrow column. Its own modifier rather than a
+   wider .confirm-modal: every confirm and prompt in the app shares that class,
+   and they are short by design. */
+.heic-modal { width: min(460px, calc(100vw - 40px)); }
+
 .lists-cols { display: grid; grid-template-columns: 180px 1fr; gap: 14px; min-height: 260px; }
 .lists-side { display: flex; flex-direction: column; gap: 4px; }
 .lists-side button {

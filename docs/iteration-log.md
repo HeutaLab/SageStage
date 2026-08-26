@@ -6140,3 +6140,115 @@ about whether the browser build is a supported print surface at all (`print.js`
 builds its own root, so every deliberate print is already fine; this is only
 `Cmd+P` out of habit). And the export 🟠, which needs someone to watch a real
 30-screen export on the actual target.
+
+---
+
+## 26 August 2026 — HEIC gets a door, and it is a dialog
+
+First outside feedback on the app arrived as a question about content: can a
+teacher keep their own images — pupil photos, maths pictures the app doesn't
+have — in folders, the way they do in SMART? That opened out into a media
+library discussion (link a folder? a OneDrive folder?), and the answer landing
+in a design doc rather than in code: **link the folder for browsing, copy on
+use**, so a lesson is self-contained the moment a picture is placed on it and
+cannot break at 8:55 because someone tidied the shared drive in July.
+
+What got built today is the one piece of that which could not wait for the
+library: HEIC.
+
+### Why this and not conversion
+
+HEIC is not an edge case for this audience. It is the default on every iPad in
+the building, and the school Glenn's tester teaches at already *trains staff on
+it* because it is a known break for blog posts and emails home. So the teacher
+has met this failure before and has a name for it — which is the whole reason a
+message can work here instead of a decoder.
+
+The decoder was priced and declined. It means libheif with its LGPL and HEVC
+baggage, a Rust path per platform, and real bundle weight — for a format the
+teacher switches off on the iPad in three taps. The decision is: **refuse, and
+say the fix**.
+
+### The bug that fell out of the decision
+
+Refusing *uniformly* turned out to close a latent cross-platform trap nobody
+had noticed.
+
+Chromium — the Windows build and every browser build — declines HEIC outright,
+which is what the old comment in `pickImage()` said. But WKWebView, the mac
+build, leans on the system ImageIO decoder and will very likely render one.
+That is the *worse* outcome, because of the small-file fast path:
+
+```js
+if (img.width <= limit && file.size < 400_000) { cb(reader.result); return; }
+```
+
+A HEIC under 400 KB that decoded on a Mac would be stored **verbatim**, in
+HEIC, inside the lesson — and that lesson then opens blank on Windows or in the
+browser. A teacher would read that as the app corrupting their work. Refusing
+before the decoder, on every platform, means the fast path can no longer leak a
+mac-only image into a file that travels.
+
+### The sniff
+
+Three signals, cheapest first: `file.type`, then the extension, then the bytes.
+The byte check is the one that matters — a photo pulled off a camera or renamed
+by a sync client arrives with an empty type and no extension. ISO-BMFF puts
+`ftyp` at bytes 4–8 and the brand at 8–12, and 24 base64 characters off the
+data-URL is 18 bytes and stays on the boundary `atob` wants, so no second read
+of the file is needed.
+
+It matches the **brand**, not just `ftyp`. AVIF is an `ftyp` box too and both
+Chromium and Safari decode it, so a blanket check would have refused a picture
+that works perfectly well. Nine cases run in node against a real `sips`-made
+HEIC, including HEIC-renamed-`.jpg`-with-no-type (caught, by bytes) and AVIF
+(passed through).
+
+### The dialog
+
+A toast was the wrong shape. It times out while the teacher is still reading,
+and the answer is three steps they need to keep on screen. So: a dialog, in
+`confirmDialog`'s mould rather than `openModal`'s — deliberately, because
+`openModal` calls `closePanels()` and `pickImage` is also called from *inside*
+the background drawer. Routing this through the singleton would have closed the
+panel the teacher was halfway through. Verified stacked over an open
+`.bg-drawer` with the drawer still there behind it.
+
+Copy leads with the built-in, offline fix and keeps the online converter as the
+fallback — which is a reversal of the instruction it came from, for one reason:
+the use case that started all of this is **photographs of children**, and
+"upload it to zamzar.com" means sending a pupil's face to a third party with no
+DPA behind it. An international school's DPO would call that an incident. The
+Mac route (Finder → right-click → Quick Actions → Convert Image → JPEG) is
+free, offline, batches a whole folder, and is faster than uploading anyway — and
+it happens to be the platform the pupil-photo case actually lives on, since the
+photos come off an iPad and the teacher is on a Mac. So the safeguarding line
+and the practical advice point the same way. The converter is still named, and
+still linked; it is just not the first thing offered, and the dialog says
+plainly not to put children through it.
+
+The link is a plain `https` anchor on purpose — the delegate at the foot of
+`app.js` sends it to the system browser under Tauri, where `target="_blank"` is
+a dead no-op, and leaves the browser build's new tab alone.
+
+### Verified
+
+Driven in the real app, not asserted: HEIC by bytes alone (no type, no
+extension) raises the dialog; the widget stays empty and the screen background
+is unchanged, because `cb` is never called; Esc closes it; focus lands on "Got
+it"; a real JPEG still goes straight through to the widget as a data-URL; no
+console errors; clean boot after reload.
+
+### Still open
+
+The media library itself. `docs/storage-abstraction-plan.md` §8 already reserved
+the `assets/` convention and the `resolveImageSrc()` resolver for exactly this,
+and the case for building it is now stronger than the tester's request alone:
+data-URLs live inside the one state JSON that is rewritten and fsynced on every
+save and copied into daily backups, so thirty class photos would make every
+autosave churn several MB.
+
+Two decisions block the spec. Whether pupil photos belong in the general image
+library at all or attached to a roster with an end-of-year purge that genuinely
+deletes — and whether export keeps inlining images, because as it stands that
+would put children's faces inside a JSON teachers email around.

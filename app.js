@@ -9408,6 +9408,79 @@
   function colorInput(value, onChange) {
     return el('input', { type: 'color', value, onchange: (e) => onChange(e.target.value) });
   }
+  // ------------------------------------------------------------------- HEIC
+  // iPads and iPhones save photos as HEIC by default and the webview will not
+  // show one. Chromium — the Windows build and every browser build — refuses
+  // outright. WKWebView, the mac build, leans on the system decoder and may
+  // well render it, which is the worse outcome of the two: the photo goes into
+  // the lesson in a format that same lesson cannot show on Windows or in a
+  // browser, and the small-file fast path below stores it verbatim. So HEIC is
+  // refused everywhere, at the door, before anything is decoded or stored —
+  // one behaviour on every platform, and the fast path can no longer leak a
+  // mac-only image into a file that travels.
+  //
+  // We deliberately do NOT convert. A bundled decoder means libheif with its
+  // LGPL and HEVC baggage plus a per-platform path, for a format the teacher
+  // turns off on the iPad in three taps. What ships instead is the fix, in the
+  // words the school already uses for it — this is the same break that eats
+  // blog posts and emails home, so the teacher has met it before.
+  const HEIC_BRANDS = /^(heic|heix|heim|heis|hevc|hevx|hevm|hevs|mif1|msf1)$/;
+  function isHeic(file, dataUrl) {
+    const type = String((file && file.type) || '').toLowerCase();
+    if (/^image\/(heic|heif)/.test(type)) return true;
+    if (/\.(heic|heif|hif)$/i.test((file && file.name) || '')) return true;
+    // Neither of those is guaranteed: a photo pulled off a camera or renamed by
+    // a sync client can arrive with an empty type and no extension. Read the
+    // box header instead — ISO-BMFF puts 'ftyp' at bytes 4-8 and the brand at
+    // 8-12. 24 base64 characters is 18 bytes and stays on the 4-character
+    // boundary atob wants.
+    const comma = String(dataUrl).indexOf(',');
+    if (comma < 0) return false;
+    let head;
+    try { head = atob(String(dataUrl).slice(comma + 1, comma + 25)); } catch (e) { return false; }
+    // Match the brand, not just 'ftyp': AVIF is an ftyp box too and both
+    // Chromium and Safari decode it, so a blanket check would refuse a picture
+    // that works perfectly well.
+    return head.length >= 12 && head.slice(4, 8) === 'ftyp' && HEIC_BRANDS.test(head.slice(8, 12));
+  }
+
+  // A toast was the wrong shape for this: it times out while the teacher is
+  // still reading, and the answer is three steps they need to keep on screen.
+  // Stands alone rather than going through openModal because pickImage is
+  // called from inside the background chooser, which IS the `modal` singleton —
+  // taking that over would close the panel they are halfway through. Same
+  // reasoning and the same shape as confirmDialog.
+  function heicDialog() {
+    const mac = /Mac/i.test(navigator.userAgent || '');
+    const backdrop = el('div', {
+      class: 'modal-backdrop',
+      onclick: (e) => { if (e.target === backdrop) close(); },
+    });
+    let restore = null;
+    const close = () => { backdrop.remove(); if (restore) { restore(); restore = null; } };
+    const okBtn = el('button', { class: 'btn', onclick: () => close() }, 'Got it');
+    const step = (where, how) => el('p', {}, el('b', {}, where), ' ' + how);
+    backdrop.append(el('div', { class: 'modal confirm-modal heic-modal' },
+      el('div', { class: 'modal-body' },
+        el('h3', {}, 'That photo is a HEIC'),
+        el('p', {}, 'iPads and iPhones save photos as HEIC, which Sage Stage cannot open. It is the same thing that breaks blog posts and emails home.'),
+        mac
+          ? step('On this Mac:', 'select the photos in Finder, right-click → Quick Actions → Convert Image → JPEG. It will do a whole folder at once.')
+          : step('On this PC:', 'Windows needs the HEIF Image Extensions from the Microsoft Store before it can open one at all, so the converter below is usually quicker.'),
+        step('On the iPad or iPhone:', 'Settings → Camera → Formats → Most Compatible. Photos taken from then on are JPEGs. Ones already in the camera roll stay HEIC.'),
+        // A plain https anchor on purpose: the delegate near the foot of this
+        // file routes it to the system browser under Tauri, where target=_blank
+        // is a dead no-op, and leaves the browser build's new tab alone.
+        el('p', {},
+          'A free converter such as ',
+          el('a', { href: 'https://www.zamzar.com/', target: '_blank', rel: 'noopener' }, 'zamzar.com'),
+          ' will also do it.'),
+        el('div', { class: 'hint' }, 'Please don’t upload photographs of children to a converter website — those files go to someone else’s server. Use the steps above for anything with a pupil in it.'),
+        el('div', { class: 'row', style: 'justify-content:flex-end;flex-wrap:wrap;' }, okBtn))));
+    document.body.append(backdrop);
+    restore = wireDialog(backdrop, close, { label: 'That photo is a HEIC', focus: okBtn });
+  }
+
   function pickImage(cb, maxW) {
     const input = el('input', { type: 'file', accept: 'image/*' });
     input.addEventListener('change', () => {
@@ -9417,16 +9490,18 @@
       // A file the engine will not decode used to end the flow in silence: no
       // callback, no toast, nothing. The teacher taps "Choose image…", the OS
       // picker closes, and the app does exactly what it does when they press
-      // Cancel — so the honest reading is "it's broken". Chromium declines HEIC
-      // outright, which is the default for an iPhone photo, and truncated or
-      // zero-byte files fail everywhere.
+      // Cancel — so the honest reading is "it's broken". Truncated and
+      // zero-byte files fail everywhere; HEIC is caught above, by name, so this
+      // message no longer has to guess which of the two it was.
       // `cb` is deliberately NOT called on failure. Four callers write its
       // argument straight into state (mascot, money images, image widget,
       // background), so a null would wipe an existing picture on a failed
       // replace. Saying so and changing nothing is the right outcome.
-      const failed = () => toast('⚠️ That picture could not be opened. Try a JPEG or PNG — photos straight from an iPhone are often HEIC.', { ms: 7000 });
+      const failed = () => toast('⚠️ That picture could not be opened — the file may be damaged. Try a JPEG or PNG.', { ms: 7000 });
       reader.onerror = failed;
       reader.onload = () => {
+        // Refused before the decoder, not on its failure: see the HEIC note above.
+        if (isHeic(file, reader.result)) { heicDialog(); return; }
         // downscale large images so localStorage stays healthy
         const img = new Image();
         img.onerror = failed;
