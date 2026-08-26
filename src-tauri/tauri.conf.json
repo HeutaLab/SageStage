@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:8642",
     "beforeDevCommand": {
-      "script": "sh serve-dev.sh",
+      "script": "node serve-dev.mjs",
       "cwd": ".."
     },
     "beforeBuildCommand": {
