@@ -6,7 +6,7 @@
 <title>The timer gap — what Pat described vs what we ship</title>
 <link rel="stylesheet" href="../../vendor/fonts/fonts.css">
 <style>
-  /* Values copied verbatim from style.css tokens, 2026-08-02. Nothing themed at runtime. */
+  /* Values copied verbatim from style.css tokens, 2026-08-03. Nothing themed at runtime. */
   :root {
     --ink: #22303c; --ink-soft: #5b6b7b; --accent: #0f766e; --accent-soft: #ccfbf1;
     --panel-solid: #fff; --panel-border: rgba(34,48,60,0.08); --danger: #dc2626;
@@ -135,11 +135,11 @@
 <div class="wrap">
 
   <h1>The timer gap</h1>
-  <p class="sub"><b>What Pat described, next to what Sage Stage actually ships — 2 August 2026.</b>
+  <p class="sub"><b>What Pat described, next to what Sage Stage actually ships — 3 August 2026.</b>
   The right-hand widgets are rebuilt from the shipped markup, the shipped tokens and the vendored
   Lexend/Quicksand, frozen at the state I actually paused the running app at (<b>00:08 of 1:00</b>) —
   faithful to the code, but drawn on a neutral swatch, so your own stage background will differ. The
-  red sound button is a byte-faithful reproduction of <code>beep(4)</code> from app.js:63 — the only
+  red sound button is a byte-faithful reproduction of <code>beep(4)</code> from app.js:154 — the only
   sound <em>our timers</em> can make. (App-wide, Video and Embed do pipe third-party audio through the
   classroom speakers; the timers do not.)</p>
   <p class="sub" style="margin-top:8px"><b>Sample size: one.</b> This is a single teacher after a
@@ -268,8 +268,9 @@
     <div class="side ours" style="border-color:rgba(220,38,38,0.25)">
       <span class="badge us" style="background:var(--tint-pink);color:#a13b4b">what we ship</span>
       <h3>One voice — but a chosen one</h3>
-      <p class="lede">app.js:63 — a sine, not a square, with a shaped envelope: 20 ms attack, 0.35 s
-      decay, four rings 0.45 s apart, and the audio context closed afterwards so nothing idles.
+      <p class="lede">app.js:154 — a sine, not a square, with a shaped envelope: 20 ms attack, 0.35 s
+      decay, four rings 0.45 s apart, through one shared audio context opened on the session's first
+      tap — which, since this morning's fix, is the reason it rings at all.
       Somebody picked that. And the timers <em>are</em> configurable in other ways — any duration to
       the second, plus Repeat for interval ringing at 10, 20, 30 minutes. The gap is
       <b>no choice of sound</b>, which is narrower and fairer than "no customisation".</p>
@@ -449,7 +450,7 @@
   right-hand widgets are rebuilt from the shipped markup and tokens with the vendored Lexend/Quicksand,
   frozen at the state the running app was paused at (00:08 of 1:00) — faithful to the code, drawn on a
   neutral swatch, so your own stage background will differ. The red button reproduces
-  <code>beep(4)</code> from app.js:63 exactly, at its real peak gain of 0.4; the other sounds are 2–6 s
+  <code>beep(4)</code> from app.js:154 exactly, at its real peak gain of 0.4; the other sounds are 2–6 s
   synthesized sketches at ≤0.25, so they are quieter than the real thing, not sweeter. Left-hand timer
   drawings are generic representations of the category, not copies of any product's artwork; the
   sixty-plus figure and the races observation come from a read of the site Pat linked ·
@@ -464,7 +465,7 @@
 let AC = null;
 function ctx(){ try { AC = AC || new (window.AudioContext||window.webkitAudioContext)(); AC.resume(); return AC; } catch(e){ return null; } }
 
-/* Verbatim reproduction of app.js:63 beep() — sine, 880Hz, gain 0.4, 0.45s spacing, 4 rings. */
+/* Verbatim reproduction of app.js:154 beep() — sine, 880Hz, gain 0.4, 0.45s spacing, 4 rings. */
 function ourBeep(){
   const ac = ctx(); if (!ac) return;
   const times = 4;

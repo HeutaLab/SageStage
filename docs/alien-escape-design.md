@@ -2,16 +2,16 @@
 
 **Status:** Design for review — no implementation scheduled; sequenced after the
 timer sound slices ([timer design §14](timer-design.md)). Art register decided
-2026-08-02 with Glenn live on the board: **teacher's pen, rendered by rough.js**
+2026-08-03 with Glenn live on the board: **teacher's pen, rendered by rough.js**
 (MIT, ~9 KB, one vendored file) — the timer faces take the toy register instead.
-**Origin:** A teaching colleague's idea, 2026-08-02, delivered fully formed: *"I call
+**Origin:** A teaching colleague's idea, 2026-08-03, delivered fully formed: *"I call
 it alien escape and draw an alien getting away… every time they get a letter wrong, a
 part of the picture is added and then the final error gets colour added and the
 animation begins."* They even prototyped the staged reveal by doodling eight frames
 in the Draw Pad. The best feature requests arrive with the spec attached.
 **Companion documents:** [Timer moods](timer-design.md) ·
 [Word Bank build spec](word-bank-design.md) · [Help system](help-system-design.md)
-**Date:** 2026-08-02
+**Date:** 2026-08-03
 
 ---
 

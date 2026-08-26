@@ -4997,7 +4997,7 @@ help pages and the sagestage.app landing. Everything verified in local serves;
 nothing deployed, nothing committed — the deploys stay Glenn's deliberate acts, and
 the avatar uploads are console steps only he can do.
 
-## 2026-08-02 — First outside feedback: the timer grows moods, hangman loses the gallows
+## 2026-08-03 — First outside feedback: the timer grows moods, hangman loses the gallows
 
 **A colleague sent field notes.** A teaching mate tried Sage Stage in a phone browser
 at a friend's place and sent seven messages of the kind you frame: "a more practical

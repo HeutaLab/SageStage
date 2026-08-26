@@ -1,15 +1,15 @@
 # Sage Stage — Timer moods: sounds and faces for the two timers
 
 **Status:** Design for review — no implementation scheduled. Art register decided
-2026-08-02 with Glenn live on the board: **faces are bespoke Soft Daylight vector, no
+2026-08-03 with Glenn live on the board: **faces are bespoke Soft Daylight vector, no
 library** (the game takes the pen register — see the Escape! spec). Face line-up and
 sound picks stay open on the [direction board](design/timer-faces-directions.html);
 Glenn crops what he likes.
-**Origin:** First outside feedback, 2026-08-02 — a teaching colleague's field notes
+**Origin:** First outside feedback, 2026-08-03 — a teaching colleague's field notes
 (selectable end sounds, themed visual timers, tension music for tidy-up races).
 **Companion documents:** [Alien Escape](alien-escape-design.md) ·
 [Help system](help-system-design.md) · [App review checklist](app-review-checklist.md)
-**Date:** 2026-08-02
+**Date:** 2026-08-03
 
 ---
 
@@ -39,7 +39,7 @@ Two timers, one audio primitive:
   pulses the digits red (`style.css:762`). Repeat prop re-rings at intervals.
 - **Visual timer** (`app.js:6738`) — canvas depleting disc, same presets, same
   `beep(4)`, own `color` prop. **It is already a de facto face of the same clock.**
-- **`beep(times)`** (`app.js:63`) — pure Web Audio, 880 Hz sine, no files, whole body
+- **`beep(times)`** (`app.js:154`) — pure Web Audio, 880 Hz sine, no files, whole body
   try/catch-wrapped. There are no audio assets anywhere in the app, and no global
   mute; per-widget `sound` checkboxes are the only control.
 
