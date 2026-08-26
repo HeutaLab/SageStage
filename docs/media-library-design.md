@@ -305,30 +305,98 @@ teacher wants deleted from their library.
 
 ---
 
-## 7. The picker
+## 7. The two surfaces
 
-One surface, reached from every existing `pickImage()` call site, replacing the
-raw OS picker as the default (with "Browse my computer…" still there for a
-one-off file that isn't in any linked folder).
+One source — the linked folders of §6 — shown two different ways. They are not
+the same feature and the difference between them is the design:
 
-- **Left:** the folder tree — linked roots and their subfolders, as they are on
+- **The Pictures drawer** is a *tool*: the teacher's way of getting an image
+  from their folders onto a board. Its output is a copy (§2.3).
+- **The gallery widget** is a *view*: a live mirror of a folder, sitting on the
+  board where the class can see it. It owns nothing and copies nothing.
+
+### 7.1 The Pictures drawer
+
+Not a modal picker. The app already has exactly one right-hand drawer —
+`.bg-drawer`, the background chooser at [style.css:1537](../style.css) — and
+Pictures belongs in that family, for one reason: **a drawer can be left open
+while you work.** A modal that closes on every pick is a different, worse tool,
+and "leave it open and pull things out of it" is what SMART's Gallery tab
+actually feels like in use.
+
+Opened from the dock, alongside Background. Contents:
+
+- **Top:** the folder tree — linked roots and their subfolders, as they are on
   disk. Not a tag system, not a database. The teacher's filing *is* the
-  organisation; the app does not get an opinion about it. This is the same
-  instinct as the spatial-stability rule for boards: the layout is the craft,
-  and rearranging someone's material is a hostile act.
-- **Right:** a thumbnail grid, lazily rendered.
+  organisation and the app does not get an opinion about it. Same instinct as
+  the spatial-stability rule for boards: the layout is the craft, and
+  rearranging someone's material is a hostile act.
+- **Below:** a thumbnail grid, lazily rendered.
 - **Recently used** as the default view, because the request began with "images
   I would use often".
 - **Search** across filenames only, at first. Anything cleverer is a feature
   with a maintenance cost and no evidence behind it yet.
+- **"Browse my computer…"** stays, for the one-off file that lives in no linked
+  folder.
+
+**Every `pickImage()` call site opens this same drawer, scoped.** "Replace
+image…" in the Image panel, the screen background, the dashboard wallpaper, the
+mascot face — all of them open Pictures in a "pick one for this" mode rather
+than growing a second grid of their own. The Image settings panel is ~380px
+wide; a thumbnail grid inside it would give four cramped columns and a second
+piece of UI to keep in sync with the first. One component, every entry point.
 
 Thumbnails are cached in the asset store's own thumbnail directory, keyed by
 path + mtime + size, so a large folder is slow exactly once. Cloud placeholders
 (§3) show a distinct "not downloaded" state rather than a spinner that never
 resolves.
 
-**Drag from Finder onto the board** is the gesture a SMART user will reach for
-first, and it is a spike, not a given — see §12#1.
+**Drag-to-place does not exist in this app yet.** Widgets arrive by clicking a
+dock button and files arrive by dropping on the window; the only `draggable` in
+`app.js` is a `'false'` on a money note. Dragging a thumbnail out of the drawer
+onto the board is new interaction code — not exotic, but not free, and it should
+not be promised as though the machinery were already there. Clicking a thumbnail
+to place it must work first and on its own.
+
+### 7.2 The gallery widget — a window, not content
+
+A widget that mirrors a folder, showing its images as thumbnails, live.
+
+This looks like a variation on the drawer and it is a different thing, because
+**it is a view onto a folder rather than a picture on a board.** That
+distinction resolves what would otherwise be a contradiction with §2.3: a
+mirroring widget cannot copy, or it stops mirroring. It does not need to. Being
+a window *is* the feature — "show me what is in that folder right now" is the
+whole request — and so this is the one place in the design where a live link is
+correct, and where a folder that has gone missing showing *"that folder isn't
+there any more"* is honest rather than broken. Drag an image **out** of it onto
+the board and that copies, exactly as §2.3 says. Window and content, cleanly
+separated.
+
+**It also hands §8 a deletion story for free.** A gallery widget pointed at the
+class photos folder leaves no copies anywhere: delete the photo from the folder
+and it leaves the board. That is the guarantee §8 works hardest to construct,
+obtained by the widget simply not owning anything.
+
+Three constraints it inherits rather than chooses:
+
+- **Stable ordering is not optional.** Spatial stability applies to a widget's
+  *contents*, not only its position on the screen — a class navigating by memory
+  will learn where the volcano picture sits in the grid. Sort by name, never by
+  date, and land new files at the end so nothing already placed moves under
+  them.
+- **Cap it and say so.** A real photo folder is 500 files at 4000×3000. Render
+  on scroll, and print "showing the first 200" rather than truncating in
+  silence — the no-silent-caps rule.
+- **Desktop only**, like everything folder-shaped (§11). In the browser build it
+  shows the taster's "this needs the desktop app" state rather than
+  half-existing.
+
+Open question for the build, not answerable from here: **what does tapping a
+thumbnail do?** Enlarge in place is the obvious classroom answer ("everyone look
+at this one"), sending it to a chosen image widget is the obvious authoring
+answer, and they may both be wanted. Worth watching a teacher use the drawer
+first before deciding.
 
 ---
 
@@ -350,6 +418,13 @@ same:
 - Under the export-inlines invariant (§4.4), they would end up **inside a JSON
   file teachers email to each other**. That is the single worst outcome
   available in this design, and it is currently the default behaviour.
+
+Note what §7.2 does to this. A gallery widget mirroring the class photos folder
+holds no copies at all, so "delete the photo" is answered by deleting the photo.
+That does not settle the fork below — a mirror cannot bind a face to a name, and
+the widgets that want photos want *this child's picture* — but it does mean the
+**displaying** of pupil photos and the **owning** of them can be separated, and
+only the second one carries the hard obligations.
 
 Two candidate shapes:
 
@@ -478,6 +553,11 @@ direction breaks; §14#2 is about whether the outward direction should be
    throw, or return empty. The UI in §7 depends on the answer.
 5. **Thumbnail cost on a real folder.** A teacher's actual photo folder, not a
    synthetic one: 500 images, 4000×3000, off an iPad.
+6. **Drag-to-place, at all.** There is no internal drag-and-drop in the app
+   today (§7.1). Before the drawer's interaction is designed around dragging,
+   prove a thumbnail can be dragged onto the board *and* that doing so does not
+   collide with the window-level file-drop handler or with widget dragging,
+   both of which already own the pointer in that area.
 
 ---
 
@@ -489,13 +569,19 @@ direction breaks; §14#2 is about whether the outward direction should be
 file backend. **No visible feature ships**, and the state file stops carrying
 pictures. This is the part §5 says is not optional.
 
-**P2 — linked folders and the picker.** §6 and §7. This is what the tester
-asked for and the point at which it is worth telling them.
+**P2 — linked folders and the Pictures drawer.** §6 and §7.1, click-to-place
+only. This is what the tester asked for and the point at which it is worth
+telling them.
 
-**P3 — copy-on-use polish.** Refcounting, an "unused pictures" cleanup, the
-"where did this come from" affordance.
+**P3 — the gallery widget.** §7.2. Depends on nothing in P2 but the linked
+folders, and is the piece that makes a folder visible *to the class* rather than
+only to the teacher.
 
-**P4 — photos on the class list.** Separate design, per §8. Not scheduled by
+**P4 — copy-on-use polish.** Refcounting, an "unused pictures" cleanup, the
+"where did this come from" affordance, and drag-to-place if §12#6 says it is
+sound.
+
+**P5 — photos on the class list.** Separate design, per §8. Not scheduled by
 this document.
 
 P1 is genuinely independent of P2 and pays for itself. If the library is never
