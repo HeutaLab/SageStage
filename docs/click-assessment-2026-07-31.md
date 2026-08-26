@@ -96,6 +96,31 @@ code read (UI too pointer-heavy to script) · 📝 noted, deliberately not chang
   carries the same one. (Found live in the harness; export then produced a
   real 46 KB PDF through the native save panel.)
 
+### Added 26 Aug (found reviewing the pop-out work before the first build since 1 August)
+
+- [x] ✔ **The ✕ on a popped-out window was a no-op in the desktop build.**
+  `closeThisWindow()` calls `getCurrentWindow().close()`, which the ACL routes
+  through `core:window:allow-close`. `capabilities/default.json` granted
+  `allow-destroy`, `allow-set-focus`, `allow-set-fullscreen` and
+  `allow-is-fullscreen` — the mutating window commands, added one at a time as
+  each was needed — and never `close`. `core:window:default` does not carry it
+  (28 entries; the only close-adjacent members are `allow-is-focused` and
+  `allow-is-closable`). So the call rejected on a permission denial, and
+  `closeThisWindow`'s `catch` swallowed it: the window simply sat there.
+  Browser-correct, desktop-silent — the same shape as every other item in this
+  section, and reached by the same route, a feature tested where it works.
+  **Fix:** grant `core:window:allow-close` (54721b4), strictly weaker than the
+  `allow-destroy` already granted since it fires `onCloseRequested` and so runs
+  the flush hook; and make the failure speak (ea26733 — `closeThisWindow`
+  returns a result, the caller toasts on false, the console names the missing
+  permission).
+  **Marked ✔ and not ✅ deliberately: the harness cannot reach Tauri's
+  permission layer at all.** The mock proves the JS calls the right command with
+  the right arguments and reports a refusal loudly; it cannot prove the ACL
+  permits it, because it stands in for `__TAURI__`, which sits *above* the ACL.
+  A third layer this audit had not previously had to separate — JS correctness,
+  ACL grant, OS behaviour — and only the first is scriptable here. See F.
+
 ## B. Logic bugs in every build
 
 - [x] ✔ **Base 10: the "10 ⇄ 1" exchange chip rendered but dead above hundreds**
@@ -227,3 +252,31 @@ help sheet. Boot from a real `Documents/Sage Stage` file in the real binary.
   CSP, so the browser-visible dev app can't prove them).
 - [ ] One on-device pass over the 📝 items above, plus a real print to paper
   from the bundled app (the native-print route is new).
+
+### Added 26 Aug
+
+- [ ] **Confirm the pop-out ✕ actually closes a window in the bundled app.**
+  Granted at build time — `gen/schemas/capabilities.json`, the build's own
+  resolution of the capability, carries `core:window:allow-close` for
+  `windows: ["*"]` — and never once invoked against the real ACL. One click
+  closes the gap and nothing short of the binary can.
+  *Dead end recorded so it isn't repeated:* grepping the shipped binary for
+  `allow-close` finds it, and proves nothing. The control settles it —
+  `allow-minimize`, `allow-set-title`, `allow-hide`, `allow-center`,
+  `allow-start-dragging` all appear at the same counts and none of them are
+  granted. The binary embeds the manifest of *available* permissions regardless
+  of the grant. A test that cannot fail is not a test.
+
+- [ ] **A build is a snapshot of the working tree, not of the commit graph** —
+  and in a shared worktree that is a real way to ship something you believe you
+  tested. `beforeBuildCommand` runs `copy-dist.sh`, which copies **live files**
+  off disk; `dist/` is gitignored, so nothing anywhere flags the drift.
+  Observed 26 Aug with two sessions in one worktree: a build's copy-dist ran at
+  15:05, a commit landed at 15:07, and the resulting binary lacked that commit
+  while `git log` showed it present and `git status` showed the tree clean. The
+  build was not wrong about anything; it simply answered a question asked two
+  minutes earlier.
+  **Before any build that matters, record what it was made from** — `git
+  rev-parse HEAD` and `git status --porcelain` at build time, not after — and
+  where a specific change is expected, grep `dist/` for it once copy-dist has
+  run. That is what caught this one.
