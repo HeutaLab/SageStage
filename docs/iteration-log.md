@@ -6252,3 +6252,81 @@ Two decisions block the spec. Whether pupil photos belong in the general image
 library at all or attached to a roster with an end-of-year purge that genuinely
 deletes — and whether export keeps inlining images, because as it stands that
 would put children's faces inside a JSON teachers email around.
+
+---
+
+## 26 August 2026 (later) — the media library, written down
+
+The HEIC dialog was the piece that couldn't wait. This is the rest of it:
+`docs/media-library-design.md`, 540 lines, no code.
+
+Three things the writing changed.
+
+### The tester asked for two features, not one
+
+"Maths images that are not currently on your app" and "the students' photos"
+sound like one request for a picture library. They aren't. The second is
+personal data about children, held under a school retention policy the app
+knows nothing about, turning over every September, needing a deletion story a
+DPO would accept.
+
+The doc recommends binding photos to the **class list** — `state.lists` already
+exists — rather than letting them float as library items. The argument is that
+every hard question gets an obvious answer once a photo belongs to a *child*
+instead of a *filename*: what is it, who is it of, when does it expire, prove it
+was deleted. It also matches how the widgets that want photos actually want
+them — the name picker wants *this child's picture*, not *a picture*.
+
+So the media library ships (low risk, it's what was asked for) and photos on the
+class list becomes its own design with its own safeguarding review.
+
+### The storage plan's §8 has a gap
+
+§8 reserved the `assets/` convention and specified `resolveImageSrc()` — data
+and https pass through, `assets/<uid>` becomes a `convertFileSrc()` URL. Right,
+and not sufficient.
+
+Every image sink in the app already sits behind `SageSanitize.imageUrl()`, which
+is a strict allow-list of `http(s):` and `data:image/…`. An `assets/…` reference
+matches neither, so **it would have been silently blanked** and the widget would
+have rendered as though the teacher deleted the picture. The deny-list backing
+the template importer's sweep names `blob:` and `file:` explicitly, so both
+obvious workarounds are already refused — correctly, since those are what a
+hostile imported template would reach for.
+
+The fix is one anchored content-addressed pattern added to the sanitiser
+(`assets/<2 hex>/<64 hex>.<ext>`, a closed vocabulary with no traversal), with
+the resolver running strictly *after* the gate, never before. Cheap, but only if
+it's known before the schema is fixed rather than discovered when the first
+asset renders blank.
+
+### The store is mandatory even if the library never ships
+
+The numbers, which are worse than they look:
+
+- A 1600px JPEG at the app's own quality is ~250 KB; base64 makes it ~333 KB
+  inside state. One class of thirty ≈ **10 MB in `sage-stage.json`** — a file
+  serialized and fsynced whole on a debounce after every change. Dragging a
+  widget would rewrite ten megabytes.
+- `KEEP_DAILY = 14`, and `maybeDailyBackup()` copies the entire file. **≈140 MB
+  of backups.**
+- `weighWidget()` weighs a non-page widget as `JSON.stringify(props).length` —
+  the full base64 string — against `TOTAL_BUDGET` of 250 MB. Photo-bearing deck
+  snapshots would start **evicting real undo history**.
+
+So P1 is the asset store with no visible feature attached, and it pays for
+itself whether or not P2 is ever built.
+
+### Blocked on
+
+Four decisions in §14, two of which need answering before P1's schema is fixed:
+the pupil-photo fork above, and whether export still inlines images — because as
+it stands, the self-contained-backup invariant would put children's faces inside
+a JSON file teachers email to each other. That is the worst outcome available in
+the design and it is currently the default.
+
+Five spikes in §12, the sharpest being whether drag-from-Finder yields usable
+bytes at all: `dragDropEnabled` is `false` in both the window config and the
+second-window creation, deliberately, so wry's OS-level interception doesn't eat
+the `.pptx` and register drop routes. The picker's most natural gesture is built
+on the answer.
