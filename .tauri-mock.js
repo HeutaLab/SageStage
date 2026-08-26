@@ -84,12 +84,27 @@
     async listen(name, fn) { (listeners[name] = listeners[name] || []).push(fn); return () => {}; },
   };
 
-  const label = (location.hash.match(/#s=/) ? 'screen-mock' : 'main');
+  const label = location.hash.match(/#w=/) ? 'w-mock'
+    : (location.hash.match(/#s=/) ? 'screen-mock' : 'main');
   let fullscreen = false;
   const currentWindow = {
     label,
     async onCloseRequested(fn) { currentWindow._closeCb = fn; },
     async destroy() { calls.emits.push({ name: 'mock:destroyed' }); },
+    // Tauri's close() REQUESTS a close: onCloseRequested runs first and may
+    // preventDefault, which is exactly what the file backend's quit hook does
+    // when it has an unsaved edit to flush. Emulated in that order so the
+    // pop-out ✕ exercises the same sequence it will hit in the binary.
+    async close() {
+      calls.emits.push({ name: 'mock:close-requested' });
+      let prevented = false;
+      if (currentWindow._closeCb) {
+        await currentWindow._closeCb({
+          preventDefault: () => { prevented = true; calls.emits.push({ name: 'mock:close-prevented' }); },
+        });
+      }
+      if (!prevented) calls.emits.push({ name: 'mock:closed' });
+    },
     async setFocus() {},
     async setFullscreen(v) { fullscreen = !!v; calls.emits.push({ name: 'mock:fullscreen', payload: v }); },
     async isFullscreen() { return fullscreen; },
