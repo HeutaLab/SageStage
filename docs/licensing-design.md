@@ -1,6 +1,6 @@
 # Sage Stage — Licensing, Bundles & Release
 
-**Status:** Concept design — nothing implemented; **hard-blocked on the Tauri desktop build**
+**Status:** Concept design — nothing implemented. **The Tauri block is lifted** (working macOS build 26 Aug 2026, §2.1's precondition met); §3.5 added the same day when Glenn set the platform direction.
 **Companion documents:** [Storage abstraction & Tauri desktop](storage-abstraction-plan.md) · [App review checklist](app-review-checklist.md) · [English widgets](english-widgets-design.md) · [Iteration log](iteration-log.md)
 **Date:** 2026-07-22
 **Depends on:** [storage-abstraction-plan.md](storage-abstraction-plan.md) §9 phases 1–4 complete (a static folder cannot be licensed — see §2.1)
@@ -128,6 +128,64 @@ one per class. Gating them means a lapsed or free teacher is locked out of
 lessons they already built, which violates §2.2. Leave decks free.
 
 ---
+
+### 3.5 The platform axis — added 26 Aug
+
+§3 divides the product by **widget**. Glenn's direction adds a second axis, by
+**platform**: *"it's in need of being web for free with limited data and memory
+use, the downloaded app needs to be Windows and Mac."*
+
+Three tiers, then, where this document had two:
+
+| | storage | pictures | widgets |
+|---|---|---|---|
+| **Web** — free | browser, bounded | one at a time | 32 free |
+| **Desktop** — Mac + Windows | a real file, no ceiling | own picture folders | 32 free |
+| **Desktop + Maths Toolkit** | — | — | all 43 |
+
+**The limit on the web tier must fall on capability, not on size.** Two reasons,
+and the second is the one that decides it.
+
+The first is that a size limit cannot be stated honestly. Browser storage
+ceilings vary by engine and by profile, so "limited data" becomes a wall that
+arrives at an unpredictable point — which is exactly what happened to Glenn on
+26 Aug: the taster refused a save mid-work, and the experience was *broken*, not
+*bounded*. An accidental ceiling is the worst possible free tier.
+
+The second is §2.3, which this document already argues: a free version that
+cannot save is a demo, nobody builds a term of lessons in a demo, and the staff
+room is the only marketing this product has. **Deliberately crippling the web
+build contradicts that.**
+
+The resolution is that the honest limit already exists and needs no inventing.
+**A browser cannot hold a persistent reference to a folder.** So the media
+library ([media-library-design.md](media-library-design.md) §6–7) is inherently
+desktop-only — not withheld, unavailable. That gives:
+
+> **Web, free:** the whole app, pictures one at a time.
+> **The app:** your own picture folders, and no ceiling.
+
+which is §2.3's instinct extended — everything is the same, only the folders
+differ — and it requires no artificial limitation at all.
+
+**And the size problem is largely self-solving.** On 26 Aug Glenn's desktop file
+was 529 KB, of which **98% was two base64 images and about 10 KB was the entire
+lesson**. Once the asset store lands (media-library §5, P1), images stop living
+in the state JSON, and the browser build's ceiling stops being about pictures.
+At ~10 KB a lesson that is hundreds of lessons before anything complains. P1 is
+therefore a licensing prerequisite as well as a storage one.
+
+**Open, and it decides the rest of this section:**
+
+1. **Is the download itself paid, or is it free-with-a-paid-bundle?** The table
+   above assumes the latter, consistent with §3. Glenn's phrasing — free *web*,
+   downloaded *app* — can be read either way, and the two produce different
+   products.
+2. **Is the web build the free tier, or is it the taster?** They are not the
+   same thing and both currently exist: `window.SAGE_DEMO` is set only by the
+   deployed taster, which is *designed* to hit its ceiling as a sales moment
+   (app.js:14826). If the web build becomes a real free tier, that behaviour
+   has to change, because §2.3 forbids it there.
 
 ## 4. Positioning: what has to change in the README
 
@@ -362,6 +420,20 @@ Three consequences that shape the release process:
   cloud CI can sign. Note also that from February 2026 certificate lifetimes cap
   at 459 days (~15 months), so this is a roughly annual renewal.
 
+**Field evidence, 26 Aug — and it weakens the case for buying early.** Glenn,
+on his own schools' Windows machines: *"I've installed loads of unsigned
+software on the schools Windows machines. The security settings can be opened by
+the IT department as well."* Taken with the first bullet above — the warning
+appears regardless of certificate until download volume earns reputation — the
+conclusion is that **a certificate bought before there is volume buys almost
+nothing**. Ship Windows unsigned, put the "More info → Run anyway" screenshot in
+the install guide as planned, and buy the cert when there are downloads for it to
+accrue against. The ~£230/yr floor in §11 moves out of the pre-revenue budget.
+
+One caveat to keep: this is evidence from *Glenn's* schools. It is strong for the
+first market because that is where the first market is, and it should be checked
+against a second school before it is load-bearing for anyone else's deployment.
+
 **Azure Trusted Signing (~$10/month) is not available.** It is restricted to
 US/Canada organisations with 3+ years of verifiable trading history, and
 individual onboarding has been paused since April 2025. Worth re-checking at
@@ -426,3 +498,7 @@ after teachers have the app. Do not ship a gate you cannot patch.
   licences, and what the department paid per seat for Explain Everything at 35.
   Those set the range better than any external comparison.
 - **Founder count.** 75 is the working number; nothing in the design depends on it.
+- **Is the download paid, or free-with-a-bundle?** §3.5#1. Decides what the
+  three-tier table actually means.
+- **Free tier or taster — which is the web build?** §3.5#2. If it is the free
+  tier, the taster's deliberate ceiling has to stop being its behaviour.
