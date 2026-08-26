@@ -250,10 +250,14 @@
     const label = (T.window.getCurrentWindow().label || 'main')
       .toLowerCase().replace(/[^a-z0-9-]/g, '-') || 'main';
 
-    // The absolute Documents path, needed by convertFileSrc — the fs plugin
-    // works in baseDir-relative terms but the asset protocol does not. Resolved
-    // once at init; '' until then, which assetUrl treats as "not ready".
-    let docDir = '';
+    // The absolute path of the data directory, needed by convertFileSrc — the
+    // fs plugin works in baseDir-relative terms but the asset protocol does
+    // not. Derived from `state_file_path`, the Rust command the "Show the file"
+    // button has used since the desktop build shipped, rather than from
+    // T.path.documentDir(): reuse the mechanism this app already proves works
+    // instead of introducing a second one that has to be proved separately.
+    // '' until init resolves it, which assetUrl treats as "not ready".
+    let dataDirAbs = '';
     let errCb = null, extCb = null;
     let readOnly = false;          // set when the file could not be READ
     let lastMtime = 0;             // for the external-modification guard
@@ -404,7 +408,10 @@
       kind: 'file',
 
       async init() {
-        try { docDir = await T.path.documentDir(); } catch (e) { docDir = ''; }
+        try {
+          const f = await T.core.invoke('state_file_path');
+          dataDirAbs = String(f || '').replace(/[\\/][^\\/]+$/, '');   // drop the filename
+        } catch (e) { dataDirAbs = ''; }
         await fs.mkdir(DIR, { ...D, recursive: true });
         // stale per-window temps from a crash mid-write
         try {
@@ -495,9 +502,18 @@
       // not known yet, so a caller renders the missing-picture placeholder
       // instead of a broken image icon.
       assetUrl(rel) {
-        if (!docDir) return '';
-        try { return T.core.convertFileSrc(docDir + '/' + DIR + '/' + rel); }
-        catch (e) { return ''; }
+        // Loudly, not silently. The first version of this returned '' on every
+        // failure path, so a picture that would not display produced an empty
+        // frame and NOTHING anywhere said why — not the console, not stderr,
+        // not the asset protocol's own log, because a src that is never set is
+        // never requested. That cost an evening. Whatever goes wrong here now
+        // says so.
+        if (!dataDirAbs) { console.error('assetUrl: data directory not resolved; cannot show ' + rel); return ''; }
+        try {
+          const url = T.core.convertFileSrc(dataDirAbs + '/' + rel);
+          if (!url) console.error('assetUrl: convertFileSrc returned nothing for ' + rel);
+          return url || '';
+        } catch (e) { console.error('assetUrl: convertFileSrc threw for ' + rel, e); return ''; }
       },
 
       // For export, which has to put the bytes back into the JSON so a backup
