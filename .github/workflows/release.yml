@@ -1,0 +1,96 @@
+# Builds the desktop app for macOS and Windows.
+#
+# Windows cannot be cross-compiled from a Mac in any way worth relying on, so
+# the only honest answer is a Windows machine — either Glenn's, or this one.
+# Runs the same commands he runs locally rather than going through
+# tauri-apps/tauri-action: this repo has no package.json (no build system, by
+# design), and an action that infers a package manager from one it cannot find
+# is a layer of guessing between him and a failure. `npx @tauri-apps/cli build`
+# is what works on his machine; it is what runs here.
+#
+# UNSIGNED, deliberately — see licensing-design.md §9.5. On macOS that means
+# Gatekeeper blocks it on any Mac but the one that built it; on Windows,
+# SmartScreen shows "unknown publisher", which the first bullet of §9.5 says
+# happens with or without a certificate until download volume earns reputation.
+# Signing slots in here later as two extra steps and a handful of secrets.
+name: desktop-build
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write        # needed only by the release step, and only on a tag
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false   # a Windows failure must not hide a working mac artifact
+      matrix:
+        include:
+          - os: macos-latest
+            name: macos-universal
+            # Universal rather than the arm64-only build made locally. Not
+            # urgent — Glenn is currently the only Mac user, and he is on
+            # Apple Silicon — but an Intel Mac cannot run an aarch64 bundle at
+            # all, and the cost is CI minutes on a manually-triggered workflow
+            # rather than anything anyone waits for. UNTESTED: no universal
+            # build has been run; the local one is arm64 and lands in
+            # target/release/bundle, not target/universal-apple-darwin/. The
+            # path below is the documented layout, not an observed one, and the
+            # first run of this workflow is what proves it.
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            args: --target universal-apple-darwin
+            artifacts: |
+              src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          - os: windows-latest
+            name: windows-x64
+            targets: x86_64-pc-windows-msvc
+            args: ''
+            artifacts: |
+              src-tauri/target/release/bundle/msi/*.msi
+              src-tauri/target/release/bundle/nsis/*.exe
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # .gitattributes pins *.sh and the frontend to LF, so a Windows checkout
+      # produces the same bytes a mac one does — which matters when the output
+      # is embedded in the binary rather than read from disk.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+
+      # The release profile is lto + codegen-units=1: slow on purpose, so that
+      # an app a teacher opens at 8:40 with a class coming in starts fast. Worth
+      # caching properly.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.name }}
+
+      - name: Build
+        run: npx @tauri-apps/cli@2 build ${{ matrix.args }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sage-stage-${{ matrix.name }}
+          path: ${{ matrix.artifacts }}
+          if-no-files-found: error   # a green run with no installer is worse than a red one
+
+      # Only on a tag. A workflow_dispatch run leaves the installers as
+      # artifacts on the run page and publishes nothing.
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifacts }}
+          draft: true                # never publish a download without looking at it
+          fail_on_unmatched_files: true
