@@ -10466,7 +10466,15 @@
   // real window destroy; in a browser the tab was opened by a script, so it is
   // allowed to close itself.
   function closeSoloWindow() {
-    if (window.SagePlatform && SagePlatform.closeThisWindow) { SagePlatform.closeThisWindow(); return; }
+    if (window.SagePlatform && SagePlatform.closeThisWindow) {
+      // Never let the ✕ just sit there. window.close() is itself a no-op in this
+      // webview, so there is no quiet fallback to try — if the platform could not
+      // close the window, the only useful thing left is to say so.
+      Promise.resolve(SagePlatform.closeThisWindow()).then((ok) => {
+        if (ok === false) toast('Couldn’t close this window — use the window’s own close button.', { ms: 6000 });
+      });
+      return;
+    }
     window.close();
   }
 

@@ -660,9 +660,19 @@
       // The ✕ in a pop-out. close() rather than destroy() precisely SO the file
       // backend's onCloseRequested hook runs: a pop-out holding an unsaved edit
       // flushes it before the window goes.
+      //
+      // It REPORTS failure rather than swallowing it, and that is not defensive
+      // habit — the first version of this swallowed one. close() needs
+      // `core:window:allow-close`, which is not in `core:window:default` (28
+      // entries, and the only close-ish member is allow-is-closable), so without
+      // it granted the call rejects on a permission denial, the catch ate the
+      // rejection, and the ✕ was a button that did nothing at all, forever, with
+      // nothing anywhere to say why. Silent no-ops in this webview are this
+      // repo's recurring desktop bug — prompt, print, downloads, _blank,
+      // fullscreen — and this one is not joining them.
       async closeThisWindow() {
-        try { await T.window.getCurrentWindow().close(); }
-        catch (e) { /* the window is going anyway */ }
+        try { await T.window.getCurrentWindow().close(); return true; }
+        catch (e) { console.error('window close failed', e); return false; }
       },
 
       openExternal(url) {
