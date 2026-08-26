@@ -151,7 +151,8 @@
   // was for. Passive and once — this listener never runs a second time.
   window.addEventListener('pointerdown', () => audioCtx(), { once: true, passive: true });
 
-  function beep(times = 3) {
+  function beep(times = 3, forId) {
+    if (soundClaimedElsewhere(forId)) return;
     try {
       const ctx = audioCtx();
       if (!ctx) return;
@@ -171,6 +172,55 @@
       // deliberately not closed: the context is shared and outlives the chime.
       // Each oscillator and gain is disposable and released when it stops.
     } catch (e) { /* audio unavailable */ }
+  }
+
+  // ---------------------------------------------------------------- one chime
+  // Two windows showing the same widget both mount it, both run its interval and
+  // both reach the same finish branch, so a timer that ends while it is popped
+  // out rings twice, a beat apart, on one machine's one speaker. This needs no
+  // interaction at all to happen — it is not a two-people-editing problem — and
+  // it is live today for anyone who opens the current screen in a second window.
+  //
+  // The rule: a pop-out owns its widget's chime while it is open, and the board
+  // goes quiet for that one widget. The pop-out is the copy guaranteed to be
+  // mounted — the board may well have been flipped to another screen — so giving
+  // it the chime is what makes the ring certain rather than merely likely.
+  //
+  // Claims EXPIRE rather than waiting to be released. A claim that is never
+  // released — a window killed rather than closed — would leave a timer finishing
+  // in silence, and in a classroom that is a worse way to be wrong than a doubled
+  // ding. So a pop-out re-asserts every few seconds and the board stops believing
+  // a claim it has not heard renewed. Kill a pop-out however you like and the
+  // board has its chime back within one lapse; timers run for minutes, so the gap
+  // costs nothing.
+  const CLAIM_RENEW = 4000, CLAIM_LAPSE = 11000;
+  const mutedUntil = new Map();
+  const soundClaimedElsewhere = (id) => !!id && (mutedUntil.get(id) || 0) > Date.now();
+
+  const soundBus = (() => {
+    if (window.SagePlatform && SagePlatform.claimSound) {
+      return {
+        claim: (id, on) => SagePlatform.claimSound(id, on),
+        listen: (fn) => SagePlatform.onSoundClaim(fn),
+      };
+    }
+    // The browser build's two-tab equivalent. BroadcastChannel does not echo to
+    // the sender, so unlike the Tauri path it needs no self-filter.
+    if (!('BroadcastChannel' in window)) return null;
+    let ch = null;
+    try { ch = new BroadcastChannel('sage-sound-claim'); } catch (e) { return null; }
+    return {
+      claim: (id, on) => { try { ch.postMessage({ id, on: !!on }); } catch (e) { /* alone */ } },
+      listen: (fn) => { ch.onmessage = (e) => { if (e.data) fn(e.data.id, e.data.on); }; },
+    };
+  })();
+
+  if (soundBus) {
+    soundBus.listen((id, on) => {
+      if (!id) return;
+      if (on) mutedUntil.set(id, Date.now() + CLAIM_LAPSE);
+      else mutedUntil.delete(id);
+    });
   }
 
   // ---------------------------------------------------------------- state
@@ -602,12 +652,40 @@
   const hashScreenId = () => (location.hash.match(/s=([a-z0-9]+)/) || [])[1] || null;
   let viewId = hashScreenId();
 
+  // A window opened by a widget's "Open in its own window" carries #w=<widget id>
+  // and shows exactly that one widget, filling the frame — same state, same
+  // mount(), no stage around it. It PINS itself to the screen holding the widget,
+  // so every deck and screen accessor below resolves the way a #s= window's
+  // already does and almost nothing else in the app has to know this mode exists.
+  const hashWidgetId = () => (location.hash.match(/w=([a-z0-9]+)/) || [])[1] || null;
+  // Two variables, deliberately. `soloBoot` is what this window was OPENED as and
+  // never changes; `soloId` is the live one, cleared the instant the widget stops
+  // existing — closed in the main window, or on a deck this state no longer has.
+  // Keeping both is what lets a pop-out say "this was closed elsewhere" instead
+  // of silently reverting to a full app window, which is what clearing soloId on
+  // its own would do: the teacher's timer window would quietly become a second
+  // copy of the whole board.
+  const soloBoot = hashWidgetId();
+  let soloId = soloBoot;
+
+  // A pop-out takes the chime for its widget and keeps saying so, because the
+  // board stops believing a claim it has not heard renewed (see "one chime").
+  if (soloBoot && soundBus) {
+    const assertClaim = () => soundBus.claim(soloBoot, true);
+    assertClaim();
+    setInterval(assertClaim, CLAIM_RENEW);
+    // The ordinary close. pagehide covers both closing the window and navigating
+    // away, and storage.js already leans on it for the browser build's flush.
+    window.addEventListener('pagehide', () => soundBus.claim(soloBoot, false));
+  }
+
   // Back and Forward change the hash without reloading, and nothing listened —
   // so a pinned `#s=` tab kept showing the old screen while the address bar said
   // otherwise, until the teacher reloaded. Re-read the hash and re-render.
   // Guarded against re-entry: setCurrent() assigns location.hash itself, which
   // fires this, and re-rendering the screen we just rendered is wasted work.
   window.addEventListener('hashchange', () => {
+    if (soloBoot) return;   // a pop-out shows one widget for as long as it is open
     const id = hashScreenId();
     if (id === viewId) return;
     viewId = id;
@@ -616,9 +694,19 @@
 
   const deckById = (id) => state.decks.find((d) => d.id === id) || null;
   const deckOfScreen = (sid) => state.decks.find((d) => d.screens.some((s) => s.id === sid)) || null;
+  // Widget ids are global — removeWidget already deletes across every deck, which
+  // is precisely why uid() was widened — so a pop-out resolves its own widget the
+  // same way, without having to be told which deck or screen it came from.
+  const deckOfWidget = (wid) => state.decks.find(
+    (d) => d.screens.some((s) => s.widgets.some((x) => x.id === wid))) || null;
 
   // the deck this TAB is viewing: pinned tabs resolve their screen across all decks
   function viewDeck() {
+    if (soloId) {
+      const d = deckOfWidget(soloId);
+      if (d) return d;
+      soloId = null; // widget closed in another window — renderScreen says so
+    }
     if (viewId) {
       const d = deckOfScreen(viewId);
       if (d) return d;
@@ -629,7 +717,13 @@
   const screens = () => viewDeck().screens;
 
   function currentIndex() {
-    const d = viewDeck(); // may clear a stale viewId as a side effect
+    const d = viewDeck(); // may clear a stale viewId or soloId as a side effect
+    if (soloId) {
+      // viewDeck() just proved the widget is on this deck, so this cannot be -1.
+      // A widget marked "show on all screens" lives on exactly one screen's list
+      // and is merely DRAWN on the others, so there is still one right answer.
+      return d.screens.findIndex((s) => s.widgets.some((x) => x.id === soloId));
+    }
     if (viewId) return d.screens.findIndex((s) => s.id === viewId);
     return clamp(d.current, 0, d.screens.length - 1);
   }
@@ -6119,14 +6213,14 @@
             // ring and roll straight into the next cycle (e.g. every 10 minutes)
             w.props.repeatLeft--;
             w.props.endAt = Date.now() + w.props.total * 1000;
-            if (w.props.sound) beep(4);
+            if (w.props.sound) beep(4, w.id);
             save();
             return;
           }
           fired = true;
           w.props.running = false;
           w.props.remaining = 0;
-          if (w.props.sound) beep(4);
+          if (w.props.sound) beep(4, w.id);
           save();
         }
       };
@@ -7096,7 +7190,7 @@
           fired = true;
           w.props.running = false;
           w.props.remaining = 0;
-          if (w.props.sound) beep(4);
+          if (w.props.sound) beep(4, w.id);
           save();
         }
         const rect = cv.getBoundingClientRect();
@@ -10026,7 +10120,9 @@
       item('trash', 'Remove', '⌘⌫', () => removeWidget(w.id)),
       item('gear', 'Settings', 'S', () => openSettingsPanel(w)),
       el('hr'),
-      item('fit', 'Resize to fit', '', () => resizeToFit(w)),
+      // "Resize to fit" writes w.w/w.h, which is board geometry — from in here it
+      // would resize the widget on a screen the teacher cannot see.
+      soloBoot ? null : item('fit', 'Resize to fit', '', () => resizeToFit(w)),
       item('copy', 'Duplicate', '⌘D', () => duplicateWidget(w)),
       // §4.5 poster seam: the method's existence is the capability
       (window.SagePrint && WIDGETS[w.type]
@@ -10049,12 +10145,41 @@
             SagePrint.openDialog(job, { title: def.title, current: at });
           })
         : null,
-      item('pin', w.everywhere ? 'Only on this screen' : 'Show on all screens', '⇧P', () => toggleEverywhere(w)),
-      item('spot', 'Spotlight', '⇧S', () => spotlightWidget(w)),
-      item('lock', w.locked ? 'Unlock position' : 'Lock in position', '⇧L', () => toggleLock(w)),
-      el('hr'),
-      item('tofront', 'Bring to front', '⌘↑', () => bringFront(w)),
-      item('toback', 'Send to back', '⌘↓', () => sendBack(w)),
+      // A second window showing this one widget: the projector gets the timer,
+      // the board keeps the lesson. Same anchor-plus-takeover shape as a screen's
+      // "Open in new tab" — the href keeps middle-click and copy-link working in
+      // a browser, and under Tauri SagePlatform takes over because target=_blank
+      // is a silent no-op in the webview. The link delegate near the foot of this
+      // file lets it through untouched: it only intercepts http(s).
+      //
+      // Not offered inside a pop-out. That window already IS the widget, and a
+      // pop-out of a pop-out would land on the same label and merely refocus.
+      soloBoot ? null : el('a', {
+        class: 'wmenu-item', target: '_blank',
+        href: location.href.split('#')[0] + '#w=' + w.id,
+        onclick: (e) => {
+          e.stopPropagation(); closeWidgetMenu();
+          if (!window.SagePlatform) return;
+          e.preventDefault();
+          // Opened bigger than it sits on the board: a widget given a whole
+          // window is being shown to a room, not tucked into a corner of a
+          // layout. Floored so a sticker-sized widget still gets a usable frame.
+          SagePlatform.openWidgetWindow(w.id, {
+            title: (WIDGETS[w.type] && WIDGETS[w.type].title) || 'Sage Stage',
+            width: Math.max(420, Math.round(w.w * 1.5)),
+            height: Math.max(320, Math.round(w.h * 1.5)),
+          });
+        },
+      }, iconEl('expand'), el('span', { class: 'grow', style: 'text-align:left;' }, 'Open in its own window')),
+      // Everything below describes a widget's place among others on a screen:
+      // which screens it appears on, what it sits in front of, whether it can be
+      // dragged. A window of one has no answer to any of them.
+      soloBoot ? null : item('pin', w.everywhere ? 'Only on this screen' : 'Show on all screens', '⇧P', () => toggleEverywhere(w)),
+      soloBoot ? null : item('spot', 'Spotlight', '⇧S', () => spotlightWidget(w)),
+      soloBoot ? null : item('lock', w.locked ? 'Unlock position' : 'Lock in position', '⇧L', () => toggleLock(w)),
+      soloBoot ? null : el('hr'),
+      soloBoot ? null : item('tofront', 'Bring to front', '⌘↑', () => bringFront(w)),
+      soloBoot ? null : item('toback', 'Send to back', '⌘↓', () => sendBack(w)),
     );
     widgetEl.append(menuEl);
   }
@@ -10139,6 +10264,11 @@
   window.addEventListener('resize', () => {
     clearTimeout(refitTimer);
     refitTimer = setTimeout(() => {
+      // Never in a pop-out. The widget's x/y describe where it sits on the
+      // board, and this window is not the board: dragging a 420px pop-out narrower
+      // would clamp a widget at x=900 back to x=360 and save it, rearranging a
+      // layout the class navigates from memory — on a screen nobody was looking at.
+      if (soloBoot) return;
       let moved = false;
       for (const node of document.querySelectorAll('.widget[data-wid]')) {
         const w = findWidgetById(node.dataset.wid);
@@ -10154,10 +10284,19 @@
   function mountWidget(w) {
     const def = WIDGETS[w.type];
     if (!def) return;
-    fitToWindow(w);
+    // In a pop-out the WINDOW does the layout. No clamping, no geometry in the
+    // style attribute, and — the part that matters — nothing here writes a
+    // position or size back into the deck. Resizing the pop-out must never move
+    // the widget the teacher arranged on the board; children navigate that board
+    // by remembering where things are.
+    const solo = soloId === w.id;
+    if (!solo) fitToWindow(w);
 
     const body = el('div', { class: 'widget-body' });
-    const widgetEl = el('div', { class: 'widget', 'data-help': w.type, 'data-wid': w.id, style: `left:${w.x}px;top:${w.y}px;width:${w.w}px;height:${w.h}px;z-index:${w.z};` });
+    const widgetEl = el('div', {
+      class: 'widget' + (solo ? ' solo' : ''), 'data-help': w.type, 'data-wid': w.id,
+      style: solo ? '' : `left:${w.x}px;top:${w.y}px;width:${w.w}px;height:${w.h}px;z-index:${w.z};`,
+    });
 
     // A widget that lays itself out to the width it has been given needs to
     // hear about the resize. ResizeObserver is the obvious answer and is fine
@@ -10208,15 +10347,31 @@
         class: 'wbtn menu', title: 'More options',
         onclick: (e) => { e.stopPropagation(); openWidgetMenu(widgetEl, w); },
       }, iconEl('dots')),
-      el('button', { class: 'wbtn close', title: 'Close', onclick: (e) => { e.stopPropagation(); removeWidget(w.id); } }, iconEl('close')),
+      el('button', {
+        class: 'wbtn close',
+        // In a pop-out this closes the WINDOW. Deleting the widget from the deck
+        // here would be a trap worth naming: the teacher reaches for the obvious
+        // close on what is, to them, a window — and loses the thing off the board
+        // as well. Same glyph, and it has to mean the window.
+        title: solo ? 'Close this window' : 'Close',
+        onclick: (e) => { e.stopPropagation(); if (solo) closeSoloWindow(); else removeWidget(w.id); },
+      }, iconEl('close')),
     );
 
     const handle = el('div', { class: 'resize-handle' });
-    widgetEl.append(header, body, handle);
+    widgetEl.append(header, body);
+    // The OS window frame is the resize affordance in a pop-out. The grip is left
+    // built but never inserted, so its listener below simply never fires — a grip
+    // that ran would write w.w/w.h and resize the widget on the board too.
+    if (!solo) widgetEl.append(handle);
     stage.append(widgetEl);
 
     widgetEl.addEventListener('pointerdown', () => {
       lastActiveId = w.id;
+      // A window of one has nothing to stack against, and z is shared state: a
+      // bump here would write the deck and wake every other window's adopt path
+      // for a change none of them can see.
+      if (solo) return;
       // Only re-stack when this widget is not already on top. Every tap used to
       // bump z and save() — a full JSON.stringify of the entire state, possibly
       // megabytes of base64 imagery, on the main thread, per tap — and every one
@@ -10232,7 +10387,7 @@
 
     // drag
     header.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.wbtn') || w.locked) return;
+      if (e.target.closest('.wbtn') || w.locked || solo) return;
       e.preventDefault();
       const startX = e.clientX - w.x;
       const startY = e.clientY - w.y;
@@ -10307,6 +10462,27 @@
   }
 
   // ---------------------------------------------------------------- screens
+  // Closing a pop-out closes the window, never the widget. Under Tauri that is a
+  // real window destroy; in a browser the tab was opened by a script, so it is
+  // allowed to close itself.
+  function closeSoloWindow() {
+    if (window.SagePlatform && SagePlatform.closeThisWindow) { SagePlatform.closeThisWindow(); return; }
+    window.close();
+  }
+
+  // A pop-out whose widget no longer exists — closed on the board, or on a deck
+  // this state no longer has. Not an error: closing a widget is allowed, and the
+  // pop-out is the surface that finds out last. It says so in plain words and
+  // stops there. What it deliberately does NOT do is fall back to rendering the
+  // deck: a window opened to show one timer must not quietly become a second copy
+  // of the whole board while the teacher is looking somewhere else.
+  function renderSoloGone() {
+    document.title = 'Sage Stage';
+    stage.append(el('div', { class: 'solo-gone' },
+      el('p', {}, 'This widget has been closed.'),
+      el('button', { class: 'btn', onclick: () => closeSoloWindow() }, 'Close this window')));
+  }
+
   function renderScreen() {
     // Any render invalidates the cross-tab "what am I showing" cache. Local
     // navigation — changing deck or screen — goes through here without touching
@@ -10325,7 +10501,21 @@
     closeSettingsPanel();
     const spot = $('.spotlight-overlay');
     if (spot) spot.remove();
+    const gone = $('.solo-gone');
+    if (gone) gone.remove();
     applyBackground();
+    // A pop-out renders one widget and no chrome. Keyed off soloBoot rather than
+    // soloId so the class survives the widget being deleted underneath us — the
+    // window must not sprout a toolbar at the moment it loses its contents.
+    document.body.classList.toggle('solo', !!soloBoot);
+    if (soloBoot) {
+      const only = soloId ? findWidgetById(soloId) : null;
+      if (!only) { renderSoloGone(); return; }
+      zTop = Math.max(10, only.z || 10);
+      document.title = (WIDGETS[only.type] && WIDGETS[only.type].title) || 'Sage Stage';
+      mountWidget(only);
+      return;
+    }
     // this screen's widgets, plus any widget marked "show on all screens"
     const toShow = [...screen().widgets];
     const shown = new Set(toShow.map((w) => w.id));
@@ -14729,7 +14919,21 @@
       // renderScreen() clears the cache (any local navigation must invalidate
       // it, or a later external change could compare against a screen this tab
       // stopped showing and skip a rebuild it needed) — so set it AFTER.
-      if (incomingVisible !== wasShowing) renderScreen();
+      // `state = incoming` above replaced every object in the tree, but the
+      // rebuild below is conditional — so an adopt that changes nothing this
+      // window is showing leaves each mounted widget's closure holding a `w` that
+      // is no longer part of `state`. It keeps painting (the values were equal,
+      // which is why the skip looked safe) and its next edit is written into a
+      // detached object that save() does not serialize. The edit is simply gone,
+      // with no error.
+      //
+      // A pop-out is the window most exposed to this: it exists to sit and watch
+      // one widget while the teacher works on the board, so unrelated adopts are
+      // its normal condition rather than an edge case. It is also the cheapest
+      // window to rebuild — one widget, no layout — so it always does, and the
+      // remount is what re-links it. The board keeps the conditional rebuild it
+      // has always had; the same flaw is reachable there and wants its own fix.
+      if (soloBoot || incomingVisible !== wasShowing) renderScreen();
       lastAdoptedVisible = incomingVisible;
       if (dashEl) renderDashboard();
     } catch (err) { /* ignore malformed writes */ }
@@ -14890,7 +15094,9 @@
   // land on the dashboard so the teacher picks their class deck; a tab pinned
   // to one screen (#s=) is a display tab and goes straight there instead
   if (persisted.notice) toast(persisted.notice);
-  if (!viewId && !demoSeeded) openDashboard();
+  // A pop-out has no viewId either, and without naming it here the dashboard
+  // opens straight over the widget the window was created to show.
+  if (!viewId && !soloBoot && !demoSeeded) openDashboard();
 })().catch((e) => {
   // Boot is async now, so a throw here is a promise rejection rather than a
   // console error with a half-drawn page behind it. A teacher at a board needs

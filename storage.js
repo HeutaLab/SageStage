@@ -609,6 +609,62 @@
         });
         win.once('tauri://error', (e) => console.error('window create failed', e));
       },
+
+      // One widget, filling its own window. Everything openScreenWindow does and
+      // for the same reasons — the awaited getByLabel, the focus-if-open, the
+      // flush, dragDropEnabled — differing only in what the hash pins it to.
+      async openWidgetWindow(id, opts) {
+        const { WebviewWindow } = T.webviewWindow;
+        const o = opts || {};
+        const label = 'w-' + id;
+        const existing = await WebviewWindow.getByLabel(label);
+        if (existing) { await existing.setFocus(); return; }
+        // The new window's only truth is its own read of the data file, so
+        // anything sitting in the debounce has to land first. Without it a
+        // teacher who sets a timer and immediately pops it out puts last
+        // second's duration on the wall — and the first tap in the new window
+        // writes that stale version back over the good one.
+        try { await window.SageStorage.flush(); } catch (e) { /* open it anyway */ }
+        const win = new WebviewWindow(label, {
+          url: 'index.html#w=' + id,
+          title: o.title ? 'Sage Stage — ' + o.title : 'Sage Stage',
+          width: o.width || 520,
+          height: o.height || 420,
+          // Inherited deliberately, not copied by habit: wry's OS-level drop
+          // interception eats the .pptx and register drop routes, and a window
+          // created without this loses them in a way that reads as a new bug.
+          dragDropEnabled: false,
+        });
+        win.once('tauri://error', (e) => console.error('widget window create failed', e));
+      },
+
+      // A pop-out telling the other windows it owns its widget's chime, and the
+      // board hearing it. An event and never a file write: which windows a
+      // teacher happens to have open is not their data, and persisting it would
+      // leave a widget mute after a crash. Tauri's emit echoes to the sender, so
+      // the label rides along and is filtered on the far side — the same shape as
+      // `sage:written`.
+      claimSound(id, on) {
+        try {
+          T.event.emit('sage:sound-claim', { id, on: !!on, from: T.window.getCurrentWindow().label });
+        } catch (e) { /* one window; nobody to tell */ }
+      },
+      onSoundClaim(fn) {
+        const me = T.window.getCurrentWindow().label;
+        T.event.listen('sage:sound-claim', (e) => {
+          if (!e || !e.payload || e.payload.from === me) return;
+          fn(e.payload.id, e.payload.on);
+        }).catch(() => { /* single window */ });
+      },
+
+      // The ✕ in a pop-out. close() rather than destroy() precisely SO the file
+      // backend's onCloseRequested hook runs: a pop-out holding an unsaved edit
+      // flushes it before the window goes.
+      async closeThisWindow() {
+        try { await T.window.getCurrentWindow().close(); }
+        catch (e) { /* the window is going anyway */ }
+      },
+
       openExternal(url) {
         // The system browser, not a webview with no chrome and no way back.
         try { T.opener.openUrl(url); } catch (e) { /* nothing sensible to fall back to */ }

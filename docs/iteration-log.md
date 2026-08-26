@@ -6330,3 +6330,92 @@ bytes at all: `dragDropEnabled` is `false` in both the window config and the
 second-window creation, deliberately, so wry's OS-level interception doesn't eat
 the `.pptx` and register drop routes. The picker's most natural gesture is built
 on the answer.
+
+## 26 August 2026 (later still) — a widget in its own window, and an edit that was going missing
+
+A teacher wanted a widget out of the layout and onto its own window: the timer on
+the projector while the board keeps the lesson. The question was how much of that
+already existed. Most of it, as it turned out.
+
+`SagePlatform.openScreenWindow` has created real second windows since the
+projector work — awaited `getByLabel`, focus-if-open, a `flush()` first because
+the new window's only truth is its own read of the file. The `#s=` hash pins a
+window to a screen. The adopt path keeps windows in step. And a widget has always
+been `mount(body, w, api)` rendering into any container it is handed. Pop-out is
+that machinery at a smaller granularity: `#w=<widget id>`, pinned to the screen
+that holds the widget, so every deck and screen accessor resolves the way a `#s=`
+window's already does.
+
+### Mirror, not move
+
+The first instinct was to move the widget out and leave a placeholder, because two
+live copies converging through whole-state-replace looked like trouble. Glenn's
+answer was that no teacher is working on two widgets at once, and the precedent
+agreed with him: open the current screen in a second window today and both copies
+are already live. Widget pop-out is not a new class of thing. So it mirrors, and
+the placeholder was never built.
+
+### The ✕ has to mean the window
+
+In a pop-out the obvious close is on what is, to the teacher, a window. Wiring it
+to `removeWidget` would take the thing off the board as well — the same glyph
+quietly meaning something much larger than it looks. In solo mode it closes the
+window, via `close()` rather than `destroy()` precisely so the file backend's
+flush hook still runs.
+
+The menu lost the items that only mean something on a board: resize to fit, show
+on all screens, spotlight, lock, front and back. A window of one has no answer to
+any of them. Remove, Settings and Duplicate stay.
+
+### One chime
+
+Two windows showing the same timer both mount it, both run its interval, both
+reach the finish branch — so it rings twice, a beat apart, on one machine's one
+speaker. No interaction required, and live today for anyone using the screen
+window. A pop-out now owns its widget's chime and the board goes quiet for that
+one widget: the pop-out is the copy guaranteed to be mounted, since the board may
+have been flipped elsewhere.
+
+Claims **expire** rather than waiting to be released. A claim that is never
+released — a window killed rather than closed — would leave a timer finishing in
+silence, and that is a worse way to be wrong than a doubled ding. So a pop-out
+re-asserts every four seconds and the board stops believing a claim it has not
+heard renewed. Announced over Tauri events, or BroadcastChannel in the browser;
+never written to the data file, because which windows a teacher has open is not
+their data.
+
+### The bug the testing found
+
+A pop-out was losing edits. Set it to ten minutes, and the window said ten
+minutes while the file still said five.
+
+`state = incoming` in the adopt path replaces every object in the tree. The
+rebuild underneath it is conditional — deliberately, so an unrelated write does
+not take the caret out of whatever is being typed. But an adopt that skips the
+rebuild leaves every mounted widget's closure holding a `w` that is no longer part
+of `state`. It keeps painting, because the values were equal, which is exactly why
+the skip looked safe. Its next edit is written into a detached object that `save()`
+never serializes. The edit is gone, silently.
+
+It needed two adopts to show up, which is why the first test missed it: the boot
+render nulls the comparison cache, so the *next* adopt always rebuilds and looks
+fine. The one after that is the one that drops the edit.
+
+A pop-out is the window most exposed — it exists to sit and watch one widget while
+the teacher works on the board, so unrelated adopts are its normal condition. It
+is also the cheapest to rebuild, one widget and no layout, so it now always does,
+and the remount is the re-link.
+
+**The board still has this.** The same flaw is reachable there — two tabs, an edit
+on a deck this one is not showing — and it was not fixed here, because the fix
+that is right for one widget is not obviously right for a screen full of them
+mid-lesson. It wants its own change and its own testing.
+
+### Verified
+
+Browser build, both windows live: the menu entry, full-bleed render with no
+chrome, sync in both directions, the claim broadcasting on schedule, the board's
+geometry untouched by resizing the pop-out, the widget-was-closed message, and no
+regression to the board or the `#s=` window. The Tauri path — `openWidgetWindow`,
+the event-based claim, `closeThisWindow` — is written against the existing
+patterns in `storage.js` but has not been run in a desktop build.

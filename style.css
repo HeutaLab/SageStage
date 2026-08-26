@@ -709,8 +709,13 @@ input, select, textarea { font: inherit; color: inherit; }
   min-width: 216px;
   color: #22303c;
 }
-.wmenu button {
+/* The pop-out entry is an anchor, not a button, so a browser keeps middle-click
+   and copy-link on it — which means it has to be indistinguishable from the
+   buttons it sits between. */
+.wmenu button,
+.wmenu a {
   display: flex;
+  text-decoration: none;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -720,7 +725,8 @@ input, select, textarea { font: inherit; color: inherit; }
   font-weight: 600;
   color: #22303c;
 }
-.wmenu button:hover { background: rgba(15, 118, 110, 0.1); }
+.wmenu button:hover,
+.wmenu a:hover { background: rgba(15, 118, 110, 0.1); }
 .wmenu .ic svg { width: 15px; height: 15px; }
 .wmenu kbd {
   margin-left: auto;
@@ -736,6 +742,47 @@ input, select, textarea { font: inherit; color: inherit; }
 /* locked widgets */
 .widget.locked .resize-handle { display: none; }
 .widget.locked .widget-header { cursor: default; }
+
+/* ---------- pop-out: one widget, its own window ---------- */
+/* Everything that frames a widget as one object among many on a board goes — the
+   chrome for navigating decks, the drawing overlay that belongs to a screen, and
+   the widget's own lift and rounded corners. What is left is the widget, edge to
+   edge, which is the entire point of the window. */
+body.solo #topbar,
+body.solo #toolbar,
+body.solo #screenNav,
+body.solo #drawTools,
+body.solo #drawLayer { display: none; }
+
+.widget.solo {
+  inset: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  /* The blur is a depth cue for a panel floating above a stage. Filling the
+     window there is nothing behind it to sit above, and the filter still costs a
+     full-window composite on every frame the widget repaints — which, for a
+     timer, is four a second for the length of a lesson. */
+  backdrop-filter: none;
+  background: var(--panel-solid);
+  /* Sized by the window now, so the stage's minimums must not make it scroll. */
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The widget was closed on the board while this window was showing it. */
+.solo-gone {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  color: #fff;
+}
 
 /* spotlight */
 .spotlight-overlay {
