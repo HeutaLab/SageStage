@@ -65,6 +65,15 @@
     return {
       kind: 'local',
 
+      // A browser has nowhere to put a file, so it says so rather than
+      // pretending. pickImage() reads the null and keeps the data-URL it
+      // already had, which is exactly today's behaviour — the browser build is
+      // unchanged by any of this, and can therefore never PRODUCE an assets/
+      // reference, which is what lets the resolver treat one as desktop-only.
+      async putAsset() { return null; },
+      assetUrl() { return ''; },
+      async readAsset() { return null; },
+
       // Resolves in microtasks — before paint, and before any user event can
       // land — so awaiting it in app.js's boot costs nothing observable.
       async init() {
@@ -164,6 +173,19 @@
   const DIR = 'Sage Stage';
   const MAIN = DIR + '/sage-stage.json';
   const BACKUPS = DIR + '/backups';
+  // Pictures, one file each, named by the SHA-256 of their own bytes and
+  // sharded one level so no directory grows past a few thousand entries. Kept
+  // OUT of sage-stage.json for the reason media-library-design.md §5 measures:
+  // a data-URL image is ~333 KB of base64 inside a file that is serialized and
+  // fsynced whole on every change, copied into a daily backup, and weighed
+  // against the snapshot budget. A reference is seventy bytes.
+  //
+  // Content addressing is not cleverness for its own sake. The same photo used
+  // thirty times is stored once; re-importing a folder is idempotent with no
+  // "already got this?" dialog; and "is this file still needed?" becomes a
+  // refcount over state rather than a guess, which is what any credible
+  // delete-these-photos promise has to rest on.
+  const ASSETS = DIR + '/assets';
   const KEEP_DAILY = 14;
 
   // Coalescing, single-in-flight write queue. The one non-obvious rule: a FAILED
@@ -228,6 +250,10 @@
     const label = (T.window.getCurrentWindow().label || 'main')
       .toLowerCase().replace(/[^a-z0-9-]/g, '-') || 'main';
 
+    // The absolute Documents path, needed by convertFileSrc — the fs plugin
+    // works in baseDir-relative terms but the asset protocol does not. Resolved
+    // once at init; '' until then, which assetUrl treats as "not ready".
+    let docDir = '';
     let errCb = null, extCb = null;
     let readOnly = false;          // set when the file could not be READ
     let lastMtime = 0;             // for the external-modification guard
@@ -378,6 +404,7 @@
       kind: 'file',
 
       async init() {
+        try { docDir = await T.path.documentDir(); } catch (e) { docDir = ''; }
         await fs.mkdir(DIR, { ...D, recursive: true });
         // stale per-window temps from a crash mid-write
         try {
@@ -439,6 +466,48 @@
         return { raw: null, existed: false, notice: null, readOnly: false };
       },
 
+      /* ---------------------------------------------------------- assets
+         Three methods and one invariant: a reference names its own contents, so
+         writing the same bytes twice is a no-op and a reference can never point
+         at something other than what it says. */
+
+      // 'assets/<2 hex>/<64 hex>.<ext>', or null if it could not be written —
+      // in which case the caller keeps whatever it had rather than losing the
+      // picture. Never throws.
+      async putAsset(bytes, ext) {
+        try {
+          const digest = await crypto.subtle.digest('SHA-256', bytes);
+          const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+          const shard = hex.slice(0, 2);
+          const rel = 'assets/' + shard + '/' + hex + '.' + ext;
+          const abs = DIR + '/' + rel;
+          // Same bytes, same name: already there, nothing to do. This is the
+          // whole of the de-duplication and it costs one exists().
+          if (await fs.exists(abs, D)) return rel;
+          await fs.mkdir(ASSETS + '/' + shard, { ...D, recursive: true });
+          await fs.writeFile(abs, bytes, D);
+          return rel;
+        } catch (e) { return null; }
+      },
+
+      // The webview cannot open a file path, so the asset protocol stands in
+      // for one. Returns '' rather than a broken URL when the absolute path is
+      // not known yet, so a caller renders the missing-picture placeholder
+      // instead of a broken image icon.
+      assetUrl(rel) {
+        if (!docDir) return '';
+        try { return T.core.convertFileSrc(docDir + '/' + DIR + '/' + rel); }
+        catch (e) { return ''; }
+      },
+
+      // For export, which has to put the bytes back into the JSON so a backup
+      // stays self-contained and importable by a browser. null when the file is
+      // gone — export renders that as a missing picture rather than failing.
+      async readAsset(rel) {
+        try { return await fs.readFile(DIR + '/' + rel, D); }
+        catch (e) { return null; }
+      },
+
       write(serialize) { queue.write(serialize); },
       async flush() { await queue.flush(); },
       cancel() { queue.cancel(); },
@@ -461,7 +530,12 @@
         // control, so it does not get to be approximately right.
         try { await T.event.emit('sage:erased', { from: label }); } catch (e) { /* alone */ }
         await new Promise((r) => setTimeout(r, 250));
-        for (const p of [MAIN, BACKUPS]) {
+        // ASSETS included deliberately. Erase is a privacy control, and one that
+        // leaves photographs of children on the disk after saying "everything
+        // cleared" is not approximately right, it is wrong. The design doc
+        // reserved this folder from erase() back when nothing wrote to it;
+        // something does now.
+        for (const p of [MAIN, BACKUPS, ASSETS]) {
           try { await fs.remove(p, { ...D, recursive: true }); } catch (e) { /* already gone */ }
         }
         lastMtime = 0; backedUpDay = null; lastSize = 0;

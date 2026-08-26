@@ -14,6 +14,13 @@
   try { disk = JSON.parse(localStorage.getItem(FS_KEY) || '{}'); } catch (e) { disk = {}; }
   const flushDisk = () => { try { localStorage.setItem(FS_KEY, JSON.stringify(disk)); } catch (e) { /* full */ } };
 
+  // Asset bytes are held HERE, not in `disk`, because `disk` is persisted to
+  // localStorage and a few hundred kilobytes of picture would blow the mock's
+  // own quota — reproducing the exact bug the asset store exists to remove, in
+  // the harness that is meant to prove it gone. Contents do not survive a
+  // reload; nothing under test depends on that.
+  const blobs = new Map();
+
   const calls = { saveState: 0, stateFilePath: 0, dialogSave: [], openUrl: [], reveal: [], windows: [], print: 0, emits: [], errors: [] };
 
   // path resolution: plugin-style calls pass a relative path + baseDir option;
@@ -42,8 +49,15 @@
     },
     async writeFile(path, bytes, opts) {
       const p = norm(path, opts);
+      blobs.set(p, bytes ? Uint8Array.from(bytes) : new Uint8Array(0));
       disk[p] = { content: '<binary ' + (bytes && bytes.length || 0) + ' bytes>', bytes: bytes && bytes.length, mtime: Date.now() };
       flushDisk();
+    },
+    async readFile(path, opts) {
+      const p = norm(path, opts);
+      const b = blobs.get(p);
+      if (!b) throw new Error('mock fs: no such file ' + p);
+      return b;
     },
     async rename(oldPath, newPath, opts) {
       const from = norm(oldPath, opts), to = norm(newPath, { baseDir: opts && opts.newPathBaseDir });
@@ -126,7 +140,15 @@
   window.isTauri = true;
   window.__TAURI__ = {
     fs,
+    path: {
+      async documentDir() { return DOC.replace(/\/$/, ''); },
+    },
     core: {
+      // The asset protocol, which is how the webview is allowed to display a
+      // file it cannot open by path. Shape only: this proves the app asks for
+      // the right path, and cannot prove the real protocol or the CSP that
+      // gates it — those live below __TAURI__ and need the binary.
+      convertFileSrc(p) { return 'asset://localhost/' + encodeURIComponent(p); },
       async invoke(cmd, args) {
         if (cmd === 'save_state') {
           calls.saveState++;

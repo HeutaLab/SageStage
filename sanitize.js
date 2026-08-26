@@ -81,11 +81,25 @@
 
   // A URL for an <img> or a CSS background: the web, or the inline bitmap the
   // teacher's own upload produces.
+  // A reference into the app's own asset store: `assets/<2 hex>/<64 hex>.<ext>`.
+  // Deliberately NOT "any relative path". A content-addressed name is a closed
+  // vocabulary — fixed length, fixed alphabet, anchored at both ends — which is
+  // the whole reason it is safe to let through a file that otherwise allows only
+  // http(s) and data:. There is no `..` expressible in it, no separator beyond
+  // the one shard level, and nothing a hostile template could smuggle a scheme
+  // into. The resolver in app.js turns it into a displayable URL; the sanitiser's
+  // only job is to say that this SHAPE is permitted, and it stays the single gate
+  // every stored string passes.
+  const ASSET_REF = /^assets\/[0-9a-f]{2}\/[0-9a-f]{64}\.(?:png|jpe?g|gif|webp|avif)$/;
+
   function imageUrl(raw) {
     const s = String(raw == null ? '' : raw);
+    const t = s.trim();
+    if (ASSET_REF.test(t)) return t;
     const b = bare(s);
     return (HTTP_SCHEME.test(b) || DATA_IMAGE.test(b)) ? s.trim() : '';
   }
+  function isAssetRef(raw) { return ASSET_REF.test(String(raw == null ? '' : raw).trim()); }
 
   // Schemes a stored string must never open with. A deny-list, where every
   // other test in this file is an allow-list, and deliberately so: the live URL
@@ -194,5 +208,5 @@
     return body ? (body.textContent || '') : '';
   }
 
-  window.SageSanitize = { html, text, url, frameUrl, imageUrl, hostileUrl, cssUrl, cssPaint, style };
+  window.SageSanitize = { html, text, url, frameUrl, imageUrl, isAssetRef, hostileUrl, cssUrl, cssPaint, style };
 })();

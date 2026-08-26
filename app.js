@@ -426,7 +426,14 @@
       data.dashBg = { type: 'gradient', value: DASH_BG_DEFAULT };
     }
     if (typeof data.className !== 'string') data.className = '';
-    if (typeof data.mascotImage !== 'string' || !data.mascotImage.startsWith('data:image/')) data.mascotImage = '';
+    // An assets/ reference is as valid here as a data URL, and normalize must
+    // let one through — it is the single funnel every entry point passes, so a
+    // guard that only knows about data: would quietly erase every stored
+    // picture the first time a file-backed state was loaded.
+    if (typeof data.mascotImage !== 'string'
+      || !(data.mascotImage.startsWith('data:image/') || SageSanitize.isAssetRef(data.mascotImage))) {
+      data.mascotImage = '';
+    }
     if (!['standard', 'hyper', 'dys'].includes(data.readingFont)) data.readingFont = 'standard';
     if (!data.rewards || typeof data.rewards !== 'object' || Array.isArray(data.rewards)) data.rewards = {};
     const rw = data.rewards;
@@ -1685,7 +1692,7 @@
   // which face a piece should wear: Commons photo, the teacher's upload, or none
   function moneyImgFor(curId, v, skin) {
     if (skin === 'photo') return (MONEY_PHOTOS[curId] || {})[v] || null;
-    if (skin === 'custom') return ((state.moneyImages || {})[curId] || {})[v] || null;
+    if (skin === 'custom') return resolveImageSrc(((state.moneyImages || {})[curId] || {})[v]) || null;
     return null;
   }
 
@@ -7034,7 +7041,7 @@
       body.append(wrap);
       // the picker only ever writes a data: bitmap, but a template or an older
       // saved deck can hold anything under this prop
-      const src = SageSanitize.imageUrl(w.props.src);
+      const src = resolveImageSrc(w.props.src);
       if (src) {
         const img = el('img', { src, alt: '' });
         img.classList.toggle('cover', w.props.fit === 'cover');
@@ -9502,6 +9509,106 @@
   function colorInput(value, onChange) {
     return el('input', { type: 'color', value, onchange: (e) => onChange(e.target.value) });
   }
+  // ----------------------------------------------------------------- assets
+  // Two representations reach every image sink and only one of them is a URL.
+  // A data: URL is displayable as it stands; an `assets/<hash>.<ext>` reference
+  // names a file in the store and has to be turned into something the webview
+  // can open.
+  //
+  // The order here is load-bearing: SANITISE FIRST, resolve second. The
+  // sanitiser stays the single gate every stored string passes — it is what a
+  // hostile imported template runs into — and the resolver only ever sees a
+  // string the gate has already vouched for. Reversing them would mean
+  // resolving attacker-controlled text and sanitising the result, which is the
+  // shape of most path-traversal bugs.
+  //
+  // A reference whose file has gone returns '' and the caller paints its
+  // missing-picture state. It must NEVER be helpfully cleared from state: a
+  // lesson that lost its pictures to a bad restore should look like it lost
+  // them, not like it never had them.
+  function resolveImageSrc(raw) {
+    const ok = SageSanitize.imageUrl(raw);
+    if (!ok) return '';
+    if (!SageSanitize.isAssetRef(ok)) return ok;
+    return (window.SageStorage && SageStorage.assetUrl) ? SageStorage.assetUrl(ok) : '';
+  }
+
+  // data:image/jpeg;base64,… -> the bytes, and the extension the store files
+  // them under. Extensions are constrained to what the sanitiser's ASSET_REF
+  // will accept, so a reference this produces is always one it will let back.
+  const ASSET_EXT = { jpeg: 'jpg', jpg: 'jpg', png: 'png', gif: 'gif', webp: 'webp', avif: 'avif' };
+  function dataUrlParts(dataUrl) {
+    const m = /^data:image\/([a-z0-9+.-]+);base64,([\s\S]*)$/i.exec(String(dataUrl || ''));
+    if (!m) return null;
+    const ext = ASSET_EXT[m[1].toLowerCase()];
+    if (!ext) return null;
+    let bin;
+    try { bin = atob(m[2]); } catch (e) { return null; }
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return { bytes, ext };
+  }
+
+  // The write side of the same seam. Hands the picture to the store and calls
+  // back with a reference; falls back to the data-URL it was given whenever the
+  // store cannot take it — no store (browser), an unsupported format, a failed
+  // write. The caller never has to know which happened, and a picture is never
+  // lost to a storage problem.
+  function storeImage(dataUrl, cb) {
+    const parts = window.SageStorage && SageStorage.putAsset ? dataUrlParts(dataUrl) : null;
+    if (!parts) { cb(dataUrl); return; }
+    SageStorage.putAsset(parts.bytes, parts.ext)
+      .then((ref) => cb(ref || dataUrl))
+      .catch(() => cb(dataUrl));
+  }
+
+  // Export has to put the bytes BACK. A backup is promised to be one
+  // self-contained file a teacher can email, copy to a stick, or import into
+  // the browser build — and the browser build has no store to resolve a
+  // reference against, so a JSON full of `assets/…` names would import as a
+  // lesson with every picture missing. So the export path, and only the export
+  // path, walks the state and swaps each reference for its data URL.
+  //
+  // Works on a deep clone: `state` must come out of this untouched, or the very
+  // next save would write the inlined copy back into the file and undo all of
+  // §5's savings in one keystroke.
+  //
+  // NOTE the standing tension, media-library-design.md §14#2: self-contained is
+  // right for portability and wrong for a file that may hold photographs of
+  // children. This implements today's promise; changing it is a product
+  // decision, not a refactor.
+  async function stateForExport() {
+    const clone = JSON.parse(JSON.stringify(state));
+    if (!(window.SageStorage && SageStorage.readAsset)) return clone;
+    const cache = new Map();
+    const MIME = { jpg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif' };
+    const toDataUrl = async (ref) => {
+      const bytes = await SageStorage.readAsset(ref);
+      if (!bytes) return null;                       // gone: leave the reference, import shows a placeholder
+      let bin = '';
+      // Chunked: String.fromCharCode.apply on a whole megabyte blows the
+      // argument limit, and the failure is a RangeError mid-export.
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      const ext = (ref.match(/\.([a-z0-9]+)$/i) || [])[1] || 'jpg';
+      return 'data:' + (MIME[ext.toLowerCase()] || 'image/jpeg') + ';base64,' + btoa(bin);
+    };
+    const walk = async (node) => {
+      if (Array.isArray(node)) { for (const v of node) await walk(v); return; }
+      if (!node || typeof node !== 'object') return;
+      for (const k of Object.keys(node)) {
+        const v = node[k];
+        if (typeof v === 'string') {
+          if (!SageSanitize.isAssetRef(v)) continue;
+          if (!cache.has(v)) cache.set(v, await toDataUrl(v));   // one read per distinct picture
+          const d = cache.get(v);
+          if (d) node[k] = d;
+        } else { await walk(v); }
+      }
+    };
+    await walk(clone);
+    return clone;
+  }
+
   // ------------------------------------------------------------------- HEIC
   // iPads and iPhones save photos as HEIC by default and the webview will not
   // show one. Chromium — the Windows build and every browser build — refuses
@@ -9601,7 +9708,7 @@
         img.onerror = failed;
         img.onload = () => {
           const limit = maxW || 1600;
-          if (img.width <= limit && file.size < 400_000) { cb(reader.result); return; }
+          if (img.width <= limit && file.size < 400_000) { storeImage(reader.result, cb); return; }
           // Width alone is not enough of a limiter. A 1000×20000 scan is under
           // any width cap and still asks for a 20M-pixel canvas — over WebKit's
           // 16,777,216 ceiling, so on the Tauri build the canvas fails and
@@ -9615,7 +9722,10 @@
           cv.height = Math.round(img.height * scale);
           cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
           // small pngs keep their transparency (coin cut-outs); the rest go jpeg
-          cb(file.type === 'image/png' && limit <= 400 ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.82));
+          storeImage(
+            file.type === 'image/png' && limit <= 400 ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.82),
+            cb,
+          );
         };
         img.src = reader.result;
       };
@@ -10664,7 +10774,7 @@
     // an imported deck can arrive with zero screens; a plain card beats a throw
     if (!s) { thumb.style.background = '#eef2f1'; return thumb; }
     const bg = s.background;
-    const bgImg = bg.type === 'image' ? SageSanitize.imageUrl(bg.value) : '';
+    const bgImg = bg.type === 'image' ? resolveImageSrc(bg.value) : '';
     if (bgImg) {
       thumb.style.background = '#fff';
       thumb.append(el('img', { class: 'deck-thumb-bg', src: bgImg, alt: '', loading: 'lazy', decoding: 'async' }));
@@ -10679,9 +10789,9 @@
       mini.style.height = clamp((w.h / sh) * 100, 6, 100) + '%';
       const def = WIDGETS[w.type];
       let content = null;
-      if (w.type === 'image' && w.props && SageSanitize.imageUrl(w.props.src)) {
+      if (w.type === 'image' && w.props && resolveImageSrc(w.props.src)) {
         content = el('img', {
-          class: 'deck-mini-img', src: SageSanitize.imageUrl(w.props.src), alt: '', loading: 'lazy', decoding: 'async',
+          class: 'deck-mini-img', src: resolveImageSrc(w.props.src), alt: '', loading: 'lazy', decoding: 'async',
           style: 'object-fit:' + (w.props.fit === 'cover' ? 'cover' : 'contain'),
         });
       } else if (w.type === 'text' && w.props && w.props.html) {
@@ -11736,9 +11846,18 @@
     const paintMascot = () => {
       mascot.innerHTML = '';
       if (state.mascotImage) {
-        const face = el('img', { class: 'm-face', alt: '', src: state.mascotImage });
-        // a corrupt data URL (hand-edited backup) falls back to the sprout
-        face.addEventListener('error', () => { state.mascotImage = ''; save(); paintMascot(); });
+        const face = el('img', { class: 'm-face', alt: '', src: resolveImageSrc(state.mascotImage) });
+        // A corrupt data URL (hand-edited backup) falls back to the sprout AND
+        // is cleared, because nothing will ever make those bytes decode. An
+        // assets/ reference is different: the file may simply not be readable
+        // this second — a restore in progress, the store not yet resolved — so
+        // it falls back to the sprout for this paint and is LEFT ALONE. Clearing
+        // it would turn a temporary read into permanent deletion of the
+        // teacher's picture, silently.
+        face.addEventListener('error', () => {
+          if (!SageSanitize.isAssetRef(state.mascotImage)) { state.mascotImage = ''; save(); }
+          paintMascot();
+        });
         mascot.append(face);
       } else {
         mascot.append(
@@ -12010,7 +12129,7 @@
         for (const [k, kind] of Object.entries(URL_SINKS[w.type] || {})) {
           if (typeof props[k] !== 'string' || !props[k]) continue;
           const safe = kind === 'frame' ? SageSanitize.frameUrl(props[k])
-            : kind === 'image' ? SageSanitize.imageUrl(props[k])
+            : kind === 'image' ? resolveImageSrc(props[k])
               : SageSanitize.url(props[k]);
           if (safe) continue;
           rejected.push(forDisplay(props[k]));
@@ -12050,7 +12169,7 @@
         // like any other — and a "gradient" holding url(https://tracker/x) is
         // the same hotlink as an image background wearing a different label.
         const value = type === 'image'
-          ? SageSanitize.imageUrl(s.background.value)
+          ? resolveImageSrc(s.background.value)
           : SageSanitize.cssPaint(s.background.value);
         if (value) bg = { type, value };
         else rejected.push(forDisplay(s.background.value));
@@ -13496,7 +13615,7 @@
           el('button', {
             class: 'btn',
             onclick: async () => {
-              const json = JSON.stringify(state, null, 2);
+              const json = JSON.stringify(await stateForExport(), null, 2);
               const name = 'sage-stage-backup-' + new Date().toISOString().slice(0, 10) + '.json';
               // WKWebView ignores a blob-anchor download, so on the desktop this
               // button did nothing at all — silently, which is the worst way for

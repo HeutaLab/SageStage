@@ -30,13 +30,26 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' ipc: http://ipc.localhost https:; media-src 'self' blob: data: https:; frame-src 'self' blob: https:; worker-src 'self' blob:; object-src 'none'",
-      "dangerousDisableAssetCspModification": ["style-src"]
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https: asset: http://asset.localhost; connect-src 'self' ipc: http://ipc.localhost https:; media-src 'self' blob: data: https:; frame-src 'self' blob: https:; worker-src 'self' blob:; object-src 'none'",
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ],
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$DOCUMENT/Sage Stage/assets/**"
+        ]
+      }
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg", "msi", "nsis"],
+    "targets": [
+      "app",
+      "dmg",
+      "msi",
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
