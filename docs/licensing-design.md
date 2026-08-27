@@ -420,19 +420,19 @@ Three consequences that shape the release process:
   cloud CI can sign. Note also that from February 2026 certificate lifetimes cap
   at 459 days (~15 months), so this is a roughly annual renewal.
 
-**Field evidence, 26 Aug — and it weakens the case for buying early.** Glenn,
-on his own schools' Windows machines: *"I've installed loads of unsigned
-software on the schools Windows machines. The security settings can be opened by
-the IT department as well."* Taken with the first bullet above — the warning
+**Field evidence, 26 Aug — and it weakens the case for buying early.**
+Practitioner report from the target setting: unsigned installers are not in
+practice a barrier there, and where a machine does object, the people who
+administer it can allow it. Taken with the first bullet above — the warning
 appears regardless of certificate until download volume earns reputation — the
 conclusion is that **a certificate bought before there is volume buys almost
 nothing**. Ship Windows unsigned, put the "More info → Run anyway" screenshot in
 the install guide as planned, and buy the cert when there are downloads for it to
 accrue against. The ~£230/yr floor in §11 moves out of the pre-revenue budget.
 
-One caveat to keep: this is evidence from *Glenn's* schools. It is strong for the
-first market because that is where the first market is, and it should be checked
-against a second school before it is load-bearing for anyone else's deployment.
+One caveat to keep: this is a single setting, and it is strong evidence precisely
+because that setting is the first market. It should still be checked against a
+second before it is load-bearing for anyone else's deployment.
 
 **Azure Trusted Signing (~$10/month) is not available.** It is restricted to
 US/Canada organisations with 3+ years of verifiable trading history, and
