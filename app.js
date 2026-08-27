@@ -9609,6 +9609,45 @@
     return clone;
   }
 
+  // The way IN. stateForExport puts pictures back into the JSON; this takes them
+  // out again on the way in, so the store has one door instead of the building
+  // having three.
+  //
+  // pickImage() was the only route that ever reached putAsset, which meant P1's
+  // saving applied to pictures a teacher CHOSE and not to pictures that ARRIVED.
+  // Both import paths handed base64 straight into state — and the .pptx importer
+  // is the worst case in the app, because "pictures" mode is the default and
+  // renders every slide as a full-size JPEG. A thirty-slide deck re-inflated the
+  // state file to exactly the size P1 had just removed.
+  //
+  // Mutates in place, and is called BEFORE the tree becomes `state`, so no save
+  // ever sees the data-URL form. Returns silently to the caller: a picture the
+  // store cannot take keeps its data URL and still works, which is also what
+  // every browser build does.
+  async function internAssets(node) {
+    if (!(window.SageStorage && SageStorage.putAsset)) return 0;
+    const seen = new Map();          // one write per distinct picture, not per use
+    let n = 0;
+    const walk = async (o) => {
+      if (Array.isArray(o)) { for (const v of o) await walk(v); return; }
+      if (!o || typeof o !== 'object') return;
+      for (const k of Object.keys(o)) {
+        const v = o[k];
+        if (typeof v === 'string') {
+          if (!/^data:image\//i.test(v)) continue;
+          if (!seen.has(v)) {
+            const parts = dataUrlParts(v);
+            seen.set(v, parts ? await SageStorage.putAsset(parts.bytes, parts.ext) : null);
+          }
+          const ref = seen.get(v);
+          if (ref) { o[k] = ref; n++; }
+        } else { await walk(v); }
+      }
+    };
+    try { await walk(node); } catch (e) { /* keep whatever was interned */ }
+    return n;
+  }
+
   // ------------------------------------------------------------------- HEIC
   // iPads and iPhones save photos as HEIC by default and the webview will not
   // show one. Chromium — the Windows build and every browser build — refuses
@@ -11326,7 +11365,8 @@
 
   // a parsed PowerPoint (pptx-import.js) arrives as ready-made screen objects;
   // ids are minted here so imported decks obey the same uniqueness rules
-  function addImportedDeck(name, screenList) {
+  async function addImportedDeck(name, screenList) {
+    await internAssets(screenList);   // before it becomes state, never after
     const d = blankDeck(name);
     d.screens = screenList.map((s) => ({
       id: uid(), name: s.name || '', background: s.background,
@@ -11338,9 +11378,10 @@
   }
 
   // same id-minting rules, but the screens land at the end of an existing deck
-  function appendImportedScreens(deckId, screenList) {
+  async function appendImportedScreens(deckId, screenList) {
     const d = deckById(deckId);
     if (!d) return null;
+    await internAssets(screenList);
     d.screens.push(...screenList.map((s) => ({
       id: uid(), name: s.name || '', background: s.background,
       widgets: (s.widgets || []).map((w) => ({ ...w, id: uid() })),
@@ -13645,10 +13686,16 @@
                   try {
                     const data = JSON.parse(reader.result);
                     if (!data || (!Array.isArray(data.screens) && !Array.isArray(data.decks))) throw new Error('bad file');
-                    confirmDialog('Replace everything with this backup?', () => {
+                    confirmDialog('Replace everything with this backup?', async () => {
                       const next = normalize(data);
                       if (!next) { toast("⚠️ That file doesn't look like a Sage Stage backup."); return; }
-                      state = scrubImportedHTML(next);
+                      const incoming = scrubImportedHTML(next);
+                      // A backup is self-contained by design (stateForExport
+                      // inlines), so a restore is the single biggest delivery of
+                      // base64 the app ever receives. Intern before the swap, so
+                      // the first save already writes references.
+                      await internAssets(incoming);
+                      state = incoming;
                       // old backups predate the chrome fields: stamp the rewards
                       // clock before any star lands under weekStart '', and
                       // re-apply the chrome the swapped state describes

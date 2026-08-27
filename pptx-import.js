@@ -986,9 +986,11 @@
         try {
           const screens = await runImport(parsed, mode, progress, () => cancelled);
           if (!screens || cancelled) return;
+          // Awaited now: both write incoming pictures into the asset store
+          // before the screens become state.
           const deck = targetDeckId
-            ? D.appendImportedScreens(targetDeckId, screens)
-            : D.addImportedDeck(parsed.name, screens);
+            ? await D.appendImportedScreens(targetDeckId, screens)
+            : await D.addImportedDeck(parsed.name, screens);
           if (!deck) throw new Error('The deck no longer exists.');
           D.toast((targetDeckId ? 'Added ' : 'Imported ') + screens.length + ' slide' + (screens.length === 1 ? '' : 's') + ' into “' + deck.name + '”');
           const problems = [];
