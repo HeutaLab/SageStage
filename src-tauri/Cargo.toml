@@ -1,6 +1,6 @@
 [package]
 name = "sage-stage"
-version = "0.1.0"
+version = "0.1.1"
 description = "Sage Stage — a fully local classroom screen"
 authors = ["Sage Stage"]
 edition = "2021"
