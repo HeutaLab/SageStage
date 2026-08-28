@@ -6419,3 +6419,129 @@ geometry untouched by resizing the pop-out, the widget-was-closed message, and n
 regression to the board or the `#s=` window. The Tauri path — `openWidgetWindow`,
 the event-based claim, `closeThisWindow` — is written against the existing
 patterns in `storage.js` but has not been run in a desktop build.
+
+## 28 August 2026 — the sidebar that would not stay where you left it, and three corners that did nothing
+
+Two reports from the board, both about windows: the screen sidebar throwing you
+back to the top, and widgets that could only be resized from one corner.
+
+### The sidebar
+
+`renderDeck()` opens with `deckPanel.innerHTML = ''` and builds the whole list
+again. The list *is* the scroller, so the rebuild takes the scroll position with
+it. That would be a cosmetic annoyance on its own, except every screen change
+runs `renderScreen()`, and `renderScreen()` ends by calling `renderDeck()`. So
+the sidebar snapped to the top on every single navigation.
+
+At a 720px board the cards are 179px plus a 10px gap, which puts about three and
+a half of them above the fold. Scroll down, tap screen six, and the list threw
+you straight back to screens one to four with the card you had just picked out of
+sight below. Nothing past the fourth screen would stay reachable, which is
+exactly what it looked like from the front: the thumbnails jump, and the deck
+stops at four.
+
+The fix is two lines of intent. Carry the offset across the rebuild, and — only
+when the render followed a *change of screen* — roll the list far enough to
+uncover the active card. A rename, a background swap or a checkbox in the export
+bar are incidental renders, and there the teacher's own scroll position is the
+right answer and now survives. `deckShownIndex` is what tells the two apart, and
+`closeDeck()` resets it so reopening the panel always aims at the current screen.
+
+Deliberately not `scrollIntoView()`, for the reason already written into the
+genre toolkit: it walks up and scrolls every scrollable ancestor it finds. This
+rolls the sidebar's own list and nothing else. It also declines to do the
+arithmetic at all when the list reports itself under 40px tall — the same 0×0
+report from a minimised window that `fitToWindow` and `deckThumb` already guard
+against, and it leaves `deckShownIndex` alone so the next real render still
+performs the scroll it owes.
+
+### The corners
+
+One grip, bottom right, since the beginning. A widget parked against the right or
+bottom edge of the board could only be made bigger by dragging it somewhere
+roomier first — which on a screen children navigate from memory is the wrong
+thing to have to do.
+
+Four now. The two that drag the left or top edge write `x`/`y` as well as
+`w`/`h`, pinning the opposite corner so the widget grows towards the hand rather
+than away from it. The top edge stops at the top of the window, because past it
+the header — the only way to move a widget — would be off screen; the left and
+right are left free, since hanging off the side has always been allowed and the
+drag itself permits it.
+
+The three new corners carry no glyph. A card ringed with four brackets reads as
+*selected* rather than as a window, and the widget already carries plenty of
+chrome. They are 28px hit areas over the card's own 26px corner curve, which is
+where a hand aims for "the corner" anyway, and small enough that the header stays
+draggable. The bottom-right grip keeps its 44px target and its mark: it is the
+discoverable one and it sits in empty space.
+
+The top-right corner is the only contested one, because the Close button lives
+there. `.widget-header .wbtn` now takes `position: relative; z-index: 1` and the
+handles sit at `z-index: 0`, so Close always wins the pixels it shares — checked
+by hit-test down to the 150px traffic light, the narrowest widget in the app,
+where the three header buttons are already shrinking to fit.
+
+### The nav that was under the panel all along
+
+Found while testing the above, and fixed on Glenn's word. `#screenNav` is
+z-index 4000 and `.deck-panel` is 4500, and they occupy the same bottom-right
+corner — so with the sidebar open the arrows, **+** and 🗑 were all sitting
+behind it. The nasty part was the Screens button itself: it came to rest over a
+thumbnail, so pressing it again to close the panel jumped the class to a
+different screen instead. The one control whose whole job is to toggle the panel
+could not toggle it.
+
+The panel gives ground, not the nav. Shifting the nav left was the obvious move
+and it is wrong: at 1280 the dock runs to x=919 and the nav would land on it. And
+the nav is chrome a teacher reaches for from memory, while the panel is the thing
+that just appeared. So `.deck-panel` now stops 68px short of the bottom and the
+pill sits in clear air below it, with `toggleDeck()` re-measuring on open because
+the reading fonts change the pill's height. It costs the list 56px — about a
+third of a card — which is the cheapest thing in the exchange.
+
+### And the topbar, the other way round
+
+Same overlap, opposite answer. The star, backup, help and fullscreen buttons were
+under the panel too, but up there the free width still exists: between the
+deck-name pill and that cluster the top of the board is empty, where the bottom's
+spare width had already gone to the dock. So the top cluster moves and the panel
+keeps its height. Glenn's call, offered as a choice against insetting the panel's
+top and losing another 56px of list.
+
+`body.deck-open #topbar { right: 328px }` — the bar ENDS where the panel begins
+(300px of panel, its 12px offset, and the bar's own 16px inset reused as the
+gap). Narrowing the bar rather than nudging the cluster with a margin is what
+keeps the deck-name pill exactly where it was, and leaves `space-between` doing
+the arithmetic when a long deck name meets a small board. The body class is what
+CSS has to work with: `:has()` is out, because the pre-2023 Chromium on
+locked-down school machines drops the whole rule.
+
+Below about 900px the pill wraps to two lines while the panel is open — 300px of
+sidebar on an 820px window leaves 492px for a 280px pill and a 255px cluster, and
+something has to give. It wraps rather than overlaps or clips, everything stays
+reachable, and it snaps back the moment the panel closes. No guard, because a
+guard would only choose a different thing to break.
+
+### Verified
+
+Browser build at 1280×720, nine screens. Sidebar: opens scrolled to the current
+screen from a cold load; clicking screen 7 with the list at the bottom leaves the
+list exactly where it was; adding a screen scrolls the new card into view; an
+incidental re-render holds position. Resize: all four corners drag, with the
+opposite corner pinned each time (checked numerically — NW to (40,40) left
+right/bottom at 340/250); the top clamps at y=0 when dragged past the ceiling;
+150×100 minimum still holds; geometry persists through a reload. Corner
+hit-testing clean on clock, timer, draw pad, name picker, poll and traffic light;
+Close reachable on all six; header drag still moves rather than resizes; pop-out
+windows still get no grips at all; a locked widget hides all four. No console
+errors. Desktop build not run — `dist/` is assembled by `beforeBuildCommand`, so
+it picks both changes up on the next `tauri build`.
+
+Chrome vs panel: all ten buttons in the two corners hit-test clean with the panel
+open — before, they hit the panel's thumbnails, kebabs and title bar. The nav
+pill clears the panel by 12px under all three reading fonts, and `›` driven from
+the nav walks the sidebar to screen 8 with the list following. The top cluster
+lands 16px clear of the panel at 1280 and 1024 (183px still between it and the
+brand pill at 1024), wraps but stays reachable at 820, and every measurement
+returns to its old value when the panel closes. No console errors.

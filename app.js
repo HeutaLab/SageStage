@@ -10507,12 +10507,20 @@
       }, iconEl('close')),
     );
 
-    const handle = el('div', { class: 'resize-handle' });
+    // Every corner resizes, the way any other window on the board does — the
+    // bottom-right one was the only grip for a long time, so a widget parked
+    // against the right or bottom edge could only be made bigger by dragging it
+    // somewhere roomier first. The other three carry no glyph: they are hit
+    // areas over the card's own rounded corner, kept small so the header stays
+    // draggable and the three header buttons keep their targets (see the
+    // z-index in style.css).
+    const handles = ['se', 'sw', 'ne', 'nw'].map((c) =>
+      el('div', { class: 'resize-handle rh-' + c, 'data-corner': c }));
     widgetEl.append(header, body);
-    // The OS window frame is the resize affordance in a pop-out. The grip is left
-    // built but never inserted, so its listener below simply never fires — a grip
-    // that ran would write w.w/w.h and resize the widget on the board too.
-    if (!solo) widgetEl.append(handle);
+    // The OS window frame is the resize affordance in a pop-out. The grips are
+    // left built but never inserted, so their listeners below simply never fire —
+    // a grip that ran would write w.w/w.h and resize the widget on the board too.
+    if (!solo) widgetEl.append(...handles);
     stage.append(widgetEl);
 
     widgetEl.addEventListener('pointerdown', () => {
@@ -10573,15 +10581,38 @@
     });
 
     // resize
-    handle.addEventListener('pointerdown', (e) => {
+    for (const handle of handles) handle.addEventListener('pointerdown', (e) => {
       if (w.locked) return;
       e.preventDefault();
       e.stopPropagation();
-      const startW = w.w - e.clientX;
-      const startH = w.h - e.clientY;
+      // A corner that drags the left or top edge has to write x/y as well as
+      // w/h, or the widget would grow away from the hand instead of towards it.
+      // The opposite edge is the anchor: hold it still and derive the moving one.
+      const corner = handle.dataset.corner;
+      const west = corner === 'nw' || corner === 'sw';
+      const north = corner === 'nw' || corner === 'ne';
+      const startX = e.clientX, startY = e.clientY;
+      const w0 = w.w, h0 = w.h;
+      const right = w.x + w0, bottom = w.y + h0;
       const move = (ev) => {
-        w.w = clamp(startW + ev.clientX, 150, window.innerWidth);
-        w.h = clamp(startH + ev.clientY, 100, window.innerHeight);
+        if (west) {
+          w.w = clamp(right - ev.clientX, 150, window.innerWidth);
+          w.x = right - w.w;
+          widgetEl.style.left = w.x + 'px';
+        } else {
+          w.w = clamp(w0 + (ev.clientX - startX), 150, window.innerWidth);
+        }
+        if (north) {
+          // The one clamp the drag also enforces: the top edge stops at the top
+          // of the window. Past it the header — the only way to move the widget
+          // again — would be off screen. Hanging off the left or right is fine
+          // and always has been, so those are left alone.
+          w.h = clamp(bottom - ev.clientY, 100, Math.max(100, bottom));
+          w.y = bottom - w.h;
+          widgetEl.style.top = w.y + 'px';
+        } else {
+          w.h = clamp(h0 + (ev.clientY - startY), 100, window.innerHeight);
+        }
         widgetEl.style.width = w.w + 'px';
         widgetEl.style.height = w.h + 'px';
         if (resizeHook) { try { resizeHook(w.w, w.h); } catch (_) { resizeHook = null; } }
@@ -10758,6 +10789,12 @@
   let deckPanel = null;
   let deckMenu = null;
   let deckSelect = null; // Set of screen ids while picking screens to export
+  // Which screen the sidebar was last drawn for. renderDeck() rebuilds the whole
+  // list on every render, so it needs to know whether this one followed a change
+  // of screen (scroll the new card into view) or was incidental — a rename, a
+  // background swap, a checkbox in the export bar — where the teacher's own
+  // scroll position is the right answer and must survive.
+  let deckShownIndex = -1;
 
   function closeDeckMenu() {
     if (deckMenu) { deckMenu.remove(); deckMenu = null; }
@@ -10789,12 +10826,35 @@
   function closeDeck() {
     closeDeckMenu();
     deckSelect = null;
+    deckShownIndex = -1; // reopening must aim at the current screen, not the old scroll
+    document.body.classList.remove('deck-open');
     if (deckPanel) { deckPanel.remove(); deckPanel = null; }
   }
   function toggleDeck() {
     if (deckPanel) { closeDeck(); return; }
     closePanels();
     deckPanel = el('aside', { class: 'deck-panel' });
+    // Stop the panel above the screen nav instead of moving the nav out of its
+    // way. They share the bottom-right corner and the panel is z-index 4500 to
+    // the nav's 4000, so the nav simply lost: the arrows, add and delete all sat
+    // under it — and worst, the Screens button that OPENS the panel came to rest
+    // over a thumbnail, so pressing it again jumped the class to another screen
+    // rather than closing. The nav is chrome a teacher reaches for from memory
+    // and the panel is the thing that just appeared, so the panel is the one
+    // that gives ground. Measured rather than hardcoded because the reading
+    // fonts change the pill's height (42px standard, 52px OpenDyslexic); the
+    // stylesheet's own bottom already clears the standard one, and the floor
+    // here keeps a 0x0 window from collapsing the inset to nothing.
+    const nav = $('#screenNav');
+    const navH = nav ? nav.getBoundingClientRect().height : 0;
+    deckPanel.style.bottom = Math.round(Math.max(42, navH) + 26) + 'px'; // 14px sits under the nav, 12px of air above it
+    // The top-right cluster — star, backup, help, fullscreen — was buried by the
+    // same overlap, and there the answer IS to move rather than to shorten: the
+    // top of the board is empty between the deck-name pill and those buttons, so
+    // the space is free, where the bottom's was already spent on the dock. The
+    // class narrows the topbar itself rather than nudging the cluster, so the
+    // pill does not move and space-between still copes on a small board.
+    document.body.classList.add('deck-open');
     document.body.append(deckPanel);
     renderDeck();
   }
@@ -11019,6 +11079,15 @@
   function renderDeck() {
     if (!deckPanel) return;
     closeDeckMenu();
+    // The list is the scroller and it is rebuilt from scratch below, so its
+    // scroll position dies with it. Every screen change calls renderScreen(),
+    // which calls this — so on a deck of more than about four screens the
+    // sidebar snapped back to screen 1 on every navigation, the card you had
+    // just picked was left below the fold, and the screens past the fourth were
+    // effectively unreachable: scroll down, tap one, and the list threw you back
+    // to the top. Carry the offset across the rebuild.
+    const prevList = deckPanel.querySelector('.deck-list');
+    const keepScroll = prevList ? prevList.scrollTop : 0;
     deckPanel.innerHTML = '';
     const title = el('input', {
       class: 'deck-title', value: viewDeck().name || '', placeholder: 'My screen deck',
@@ -11077,6 +11146,30 @@
         el('span', { class: 'deck-add-plus' }, iconEl('plus'))));
     }
     deckPanel.append(list);
+    list.scrollTop = keepScroll;
+    // …and when the render followed a change of screen, bring that card into
+    // view. Deliberately not scrollIntoView(), which walks up and scrolls every
+    // scrollable ancestor it finds: this rolls the sidebar's own list and
+    // nothing else, and only far enough to uncover the card — a screen already
+    // on show does not move the list at all.
+    const idx = currentIndex();
+    const active = list.querySelector('.deck-card.active');
+    // A minimised or not-yet-laid-out window reports the list as 0 tall, and the
+    // arithmetic below would then roll it to a nonsense offset — the same 0x0
+    // report fitToWindow and deckThumb already guard against. Leave both the
+    // list and deckShownIndex alone, so the next real render still owes the
+    // teacher this scroll and performs it.
+    if (idx !== deckShownIndex && active && list.clientHeight > 40) {
+      deckShownIndex = idx;
+      const pad = 12; // the list's own padding, so the card lands clear of the edge
+      const lr = list.getBoundingClientRect();
+      const top = active.getBoundingClientRect().top - lr.top + list.scrollTop;
+      const bottom = top + active.offsetHeight;
+      if (top - pad < list.scrollTop) list.scrollTop = Math.max(0, top - pad);
+      else if (bottom + pad > list.scrollTop + list.clientHeight) {
+        list.scrollTop = bottom + pad - list.clientHeight;
+      }
+    }
   }
 
   // ---------------------------------------------------------------- dashboard (landing page)

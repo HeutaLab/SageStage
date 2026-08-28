@@ -142,8 +142,19 @@ input, select, textarea { font: inherit; color: inherit; }
   align-items: flex-start;
   pointer-events: none;
   z-index: 4000;
+  transition: right 0.18s ease;
 }
 #topbar > * { pointer-events: auto; }
+/* The screen deck sidebar is 4500 to this bar's 4000 and lands in the same
+   top-right corner, so the star, backup, help and fullscreen buttons sat behind
+   it. End the bar where the panel begins — 300px of panel, its 12px offset, and
+   this bar's own 16px inset reused as the gap — rather than nudging the cluster
+   with a margin: the deck-name pill then stays exactly where it was, and
+   space-between goes on doing the right thing when a long deck name meets a
+   small board. The nav in the OPPOSITE corner is solved the other way round
+   (the panel stops short of it) because down there the dock has already spent
+   the free width. */
+body.deck-open #topbar { right: 328px; }
 
 .brand {
   display: flex;
@@ -407,6 +418,10 @@ input, select, textarea { font: inherit; color: inherit; }
   font-size: 15px;
   color: var(--ink-soft);
   opacity: 0.75;
+  /* above the top-right resize corner, which overlaps this button's own corner.
+     Whoever paints last wins the touch, and it must be the button. */
+  position: relative;
+  z-index: 1;
 }
 /* The header's 6px gap is right between the TITLE and the buttons, and wrong
    between the buttons themselves: at 44px each with a 24px glyph, the padding
@@ -802,16 +817,30 @@ body.solo #drawLayer { display: none; }
 }
 .widget.show-settings .widget-settings { display: flex; }
 
+/* Four of these now, one per corner. Only the bottom-right draws the grip
+   glyph — a card ringed with four brackets reads as selected rather than as a
+   window, and the widget already carries plenty of chrome. The other three are
+   invisible hit areas sitting on the card's own 26px corner curve, which is
+   where a hand aims for "the corner" anyway. z-index 0 puts them under the
+   header buttons: at the top-right the Close button and the grip want the same
+   pixels, and Close — the thing a child actually presses — has to win. */
 .resize-handle {
   position: absolute;
-  right: 0;
-  bottom: 0;
   width: 20px;
   height: 20px;
-  cursor: nwse-resize;
+  z-index: 0;
   opacity: 0.4;
 }
-.resize-handle::after {
+.rh-se { right: 0; bottom: 0; cursor: nwse-resize; }
+.rh-nw { left: 0; top: 0; cursor: nwse-resize; }
+.rh-ne { right: 0; top: 0; cursor: nesw-resize; }
+.rh-sw { left: 0; bottom: 0; cursor: nesw-resize; }
+/* The three silent corners stay corner-sized. The bottom-right grip is a
+   deliberate 44px target (see below) because it is the discoverable one and it
+   sits in empty space; 44px in the top corners would swallow the header a
+   teacher drags the widget by. */
+.rh-nw, .rh-ne, .rh-sw { width: 28px; height: 28px; }
+.rh-se::after {
   content: "";
   position: absolute;
   right: 5px;
@@ -2078,7 +2107,12 @@ body.helping, body.helping * { cursor: help !important; }
   position: fixed;
   top: 12px;
   right: 12px;
-  bottom: 12px;
+  /* Clear of the screen nav, which shares this corner and sits below the panel
+     in z-order — 14px of nav offset, a 42px pill, 12px of air. toggleDeck()
+     re-measures and overrides this, because the reading fonts make the pill
+     taller; this value is what the standard font needs, and what the panel
+     falls back to. */
+  bottom: 68px;
   width: 300px;
   background: var(--panel);
   border: 1px solid var(--panel-border);
@@ -6604,6 +6638,7 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
   .sb-sweep.run b { animation: none; opacity: 0; }
 
   /* transitions that move something -- instant state change instead */
+  #topbar,
   .icon-btn,
   .theme-card,
   .tb-swatch,
@@ -6676,8 +6711,10 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
    under any touch guidance. The grip GLYPH keeps its size and position (the
    ::after is untouched); only the hit area grows, outwards into the widget's own
    corner where there is nothing to collide with. This is the one small control
-   that can be enlarged without risking a mis-hit on its neighbour. */
-.resize-handle {
+   that can be enlarged without risking a mis-hit on its neighbour — which is
+   why it is the bottom-right grip alone: the other three corners share their
+   space with the header and its buttons, so they stay corner-sized. */
+.rh-se {
   width: 44px;
   height: 44px;
   opacity: 0.65;
