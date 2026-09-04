@@ -6633,3 +6633,42 @@ No guard on a pale pick: yellow dots on a white face do vanish, but the die is
 sitting there on the board changing as you choose, so the failure explains
 itself. Verified: red dots survive a roll and a reload, and the tumble carries
 the colour onto the side faces.
+
+## 4 September 2026 (later still) — the same die, wearing numerals
+
+`face: 'dots' | 'numbers'`, offered as "Faces show". Every face carries both from
+the moment it is built: nine pips in the grid and a `<b>` taken out of the grid's
+flow by `position: absolute`, with one class on the cube deciding which is seen.
+Nothing is rebuilt on a roll, and switching mode keeps the values — 9 and 6 read
+as nine dots and six dots, then as 9 and 6.
+
+The numeral is `calc(var(--die-z) * 1.16)` — `--die-z` is half the edge, so about
+58% of the die's height, the proportion a numbered die is actually printed at.
+Sized off the same custom property the cube's depth uses, so it follows the die
+from a 54px face in a default-size widget to a full board without a second
+measurement. It takes its colour from `--die-dot` too: the colour setting was
+never really about dots.
+
+Two labels shipped this morning were only ever true of dots, so they changed with
+it. "Dots per die" is now "Highest number" (the ceiling is the same setting
+either way, and its options are bare numerals rather than "1 to 6"), and "Dot
+color" is now "Color". Both were hours old; the alternative was a settings panel
+that describes half of what the widget does.
+
+`paintFace` addresses the pips with `querySelectorAll('span')` now instead of
+walking `children` — with a `<b>` among them, index 9 would have been a pip that
+never lit, which is harmless right up until someone adds a tenth cell.
+
+The numerals stop at 9 because that is where the pip grid stops, and one ceiling
+for both modes is easier to explain than two. Numerals have no such limit, so a
+10, 12 or 20 die is a small change if it is ever wanted — it needs the option list
+to depend on the mode, and a clamp when someone switches a d20 back to dots.
+
+### Verified
+
+Browser build. Numerals render at 1, 2 and 3 dice and at ceilings up to 9; the
+tumble carries them onto the side faces and lands showing the settled number,
+with the DOM checked against the screen; the sides go blank again at rest.
+Switching Dots to Numbers and back preserves the values. Colour applies to
+numerals (blue #1d4ed8 through both modes). At the 260x200 default the numeral
+renders 31px on a 54px face with no overflow on .widget-body. Desktop not run.

@@ -6755,7 +6755,7 @@
   // ---- Dice ----
   WIDGETS.dice = {
     title: 'Dice', icon: 'dice', accent: '#c7d2fe', w: 260, h: 200,
-    defaults: () => ({ count: 2, faces: 6, values: [3, 5], showTotal: true, dotColor: '#22303c' }),
+    defaults: () => ({ count: 2, faces: 6, values: [3, 5], showTotal: true, dotColor: '#22303c', face: 'dots' }),
     mount(body, w) {
       const row = el('div', { class: 'dice-row' });
       const total = el('div', { class: 'dice-total' });
@@ -6773,6 +6773,8 @@
       const faces = () => clamp(+w.props.faces || 6, 3, 9);
       // ...nor a dot colour: #22303c is the ink the die was drawn in
       const dotColor = () => w.props.dotColor || '#22303c';
+      // ...nor a face style, and dots are what a die has always shown here
+      const numerals = () => w.props.face === 'numbers';
       const rnd = () => 1 + Math.floor(Math.random() * faces());
       let rolling = false;
       // a real six-sided cube, not a flat square: rotated edge-on a plane
@@ -6780,10 +6782,13 @@
       const FACES = ['f1', 'f2', 'f3', 'f4', 'f5', 'f6'];
       const buildDie = (value) => {
         const slot = el('div', { class: 'die-slot', title: 'Click to roll' });
-        const cube = el('div', { class: 'die' });
+        const cube = el('div', { class: 'die' + (numerals() ? ' numerals' : '') });
         FACES.forEach((f) => {
           const face = el('div', { class: 'die-face ' + f });
           for (let i = 0; i < 9; i++) face.append(el('span'));
+          // the numeral rides on every face beside the pips, out of the grid's
+          // flow; which of the two is seen is one class on the cube
+          face.append(el('b'));
           cube.append(face);
         });
         setDie(cube, value);
@@ -6794,7 +6799,8 @@
       const dice = () => [...row.children].map((slot) => slot.querySelector('.die'));
       const paintFace = (face, value) => {
         const dots = PIPS[value] || [];
-        [...face.children].forEach((s, i) => s.classList.toggle('on', dots.includes(i)));
+        face.querySelectorAll('span').forEach((s, i) => s.classList.toggle('on', dots.includes(i)));
+        face.querySelector('b').textContent = value ? String(value) : '';
       };
       // `sides` carries dots only while the die is turning: at rest the other
       // five faces are seen almost edge-on, where their dots read as grime
@@ -6865,8 +6871,11 @@
     settings(box, w, api) {
       box.append(
         settingRow('Number of dice', selectInput([[1, '1'], [2, '2'], [3, '3']], w.props.count, (v) => { w.props.count = +v; api.refresh(); })),
-        settingRow('Dots per die', selectInput(
-          [[3, '1 to 3'], [4, '1 to 4'], [5, '1 to 5'], [6, '1 to 6'], [7, '1 to 7'], [8, '1 to 8'], [9, '1 to 9']],
+        settingRow('Faces show', selectInput([['dots', 'Dots'], ['numbers', 'Numbers']], w.props.face === 'numbers' ? 'numbers' : 'dots', (v) => { w.props.face = v === 'numbers' ? 'numbers' : 'dots'; api.refresh(); })),
+        // "Dots per die" stopped being true the moment a face could show a
+        // numeral; the ceiling is the same setting either way
+        settingRow('Highest number', selectInput(
+          [[3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7'], [8, '8'], [9, '9']],
           clamp(+w.props.faces || 6, 3, 9),
           (v) => {
             const f = clamp(+v || 6, 3, 9);
@@ -6876,7 +6885,7 @@
             api.refresh();
           },
         )),
-        settingRow('Dot color', colorInput(w.props.dotColor || '#22303c', (v) => { w.props.dotColor = v; api.refresh(); })),
+        settingRow('Color', colorInput(w.props.dotColor || '#22303c', (v) => { w.props.dotColor = v; api.refresh(); })),
         checkRow('Show total', w.props.showTotal, (v) => { w.props.showTotal = v; api.refresh(); }),
       );
     },

@@ -1052,6 +1052,23 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
    animated property inside the preserve-3d subtree left ghosts on screen */
 .die span { border-radius: 50%; background: var(--die-dot, #22303c); transform: scale(0); transition: transform 0.1s; }
 .die span.on { transform: scale(0.72); }
+/* the numeral sits out of the pip grid's flow, so both live on every face and
+   one class on the cube decides which is seen -- a roll never rebuilds a die */
+.die-face > b {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  /* --die-z is half the edge, so this is a numeral about 58% of the die's
+     height: the proportion a numbered die is actually printed at */
+  font-size: calc(var(--die-z, 30px) * 1.16);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--die-dot, #22303c);
+}
+.die.numerals .die-face > b { display: flex; }
+.die.numerals .die-face > span { display: none; }
 .dice-total { text-align: center; font-weight: 700; color: var(--ink-soft); flex-shrink: 0; }
 
 /* three tumbles, not one: dice thrown together should not spin in lockstep.
