@@ -6755,53 +6755,98 @@
   // ---- Dice ----
   WIDGETS.dice = {
     title: 'Dice', icon: 'dice', accent: '#c7d2fe', w: 260, h: 200,
-    defaults: () => ({ count: 2, values: [3, 5], showTotal: true }),
+    defaults: () => ({ count: 2, faces: 6, values: [3, 5], showTotal: true, dotColor: '#22303c' }),
     mount(body, w) {
       const row = el('div', { class: 'dice-row' });
       const total = el('div', { class: 'dice-total' });
       body.append(row, total);
+      // the 3x3 grid goes all the way to nine, so a die can carry any dot
+      // count a KS1 game needs -- 1 to 3 for the youngest, 1 to 9 to stretch
       const PIPS = {
         1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
+        7: [0, 2, 3, 4, 5, 6, 8], 8: [0, 1, 2, 3, 5, 6, 7, 8], 9: [0, 1, 2, 3, 4, 5, 6, 7, 8],
       };
+      // with the tumble suppressed the die never turns, so its sides would only
+      // sit there collecting dots (see prefers-reduced-motion in the stylesheet)
+      const tumbles = () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      // decks saved before the dot count existed carry no `faces`
+      const faces = () => clamp(+w.props.faces || 6, 3, 9);
+      // ...nor a dot colour: #22303c is the ink the die was drawn in
+      const dotColor = () => w.props.dotColor || '#22303c';
+      const rnd = () => 1 + Math.floor(Math.random() * faces());
       let rolling = false;
+      // a real six-sided cube, not a flat square: rotated edge-on a plane
+      // collapses to a sliver and reads as paper flipping over
+      const FACES = ['f1', 'f2', 'f3', 'f4', 'f5', 'f6'];
       const buildDie = (value) => {
-        const d = el('div', { class: 'die', title: 'Click to roll' });
-        for (let i = 0; i < 9; i++) d.append(el('span'));
-        setDie(d, value);
-        d.addEventListener('click', roll);
-        return d;
+        const slot = el('div', { class: 'die-slot', title: 'Click to roll' });
+        const cube = el('div', { class: 'die' });
+        FACES.forEach((f) => {
+          const face = el('div', { class: 'die-face ' + f });
+          for (let i = 0; i < 9; i++) face.append(el('span'));
+          cube.append(face);
+        });
+        setDie(cube, value);
+        slot.append(el('div', { class: 'die-shadow' }), cube);
+        slot.addEventListener('click', roll);
+        return slot;
       };
-      const setDie = (d, value) => {
-        [...d.children].forEach((s, i) => s.classList.toggle('on', PIPS[value].includes(i)));
-        d.dataset.value = value;
+      const dice = () => [...row.children].map((slot) => slot.querySelector('.die'));
+      const paintFace = (face, value) => {
+        const dots = PIPS[value] || [];
+        [...face.children].forEach((s, i) => s.classList.toggle('on', dots.includes(i)));
+      };
+      // `sides` carries dots only while the die is turning: at rest the other
+      // five faces are seen almost edge-on, where their dots read as grime
+      const setDie = (cube, value, sides) => {
+        const cubeFaces = [...cube.children];
+        paintFace(cubeFaces[0], value);
+        for (let i = 1; i < cubeFaces.length; i++) paintFace(cubeFaces[i], sides ? rnd() : 0);
+        cube.dataset.value = value;
       };
       const paint = () => {
         row.innerHTML = '';
-        while (w.props.values.length < w.props.count) w.props.values.push(1 + Math.floor(Math.random() * 6));
-        w.props.values = w.props.values.slice(0, w.props.count);
+        row.style.setProperty('--die-dot', dotColor());
+        const f = faces();
+        while (w.props.values.length < w.props.count) w.props.values.push(rnd());
+        w.props.values = w.props.values.slice(0, w.props.count).map((v) => clamp(+v || 1, 1, f));
         w.props.values.forEach((v) => row.append(buildDie(v)));
         sizeDice();
         paintTotal();
       };
       const sizeDice = () => {
         const n = w.props.count;
-        const s = Math.max(40, Math.min((row.clientWidth - 14 * n) / n, row.clientHeight - 10));
-        [...row.children].forEach((d) => { d.style.width = s + 'px'; });
+        // a tilted cube is wider and taller than its front face, and the widget
+        // body clips -- so budget for the corners that stick out of the slot
+        const s = Math.max(36, Math.min((row.clientWidth - 14 * n) / (n * 1.18), (row.clientHeight - 10) / 1.3));
+        // half the edge, because that is how far each face pushes out from the centre
+        [...row.children].forEach((d) => {
+          d.style.width = s + 'px';
+          d.style.setProperty('--die-z', (s / 2) + 'px');
+        });
       };
       const paintTotal = () => {
         total.style.display = w.props.showTotal && w.props.count > 1 ? '' : 'none';
         total.textContent = 'Total: ' + w.props.values.reduce((a, b) => a + b, 0);
       };
-      let rollTimer = null;
+      let rollTimer = null, landTimer = null;
       function roll() {
         if (rolling) return;
         rolling = true;
+        const slots = [...row.children];
+        // each die gets its own tumble keyframes (see .die-slot.rolling in the
+        // stylesheet) so three dice do not spin as one block
+        slots.forEach((s) => { s.classList.remove('landed'); s.classList.add('rolling'); });
         let n = 0;
         rollTimer = setInterval(() => {
-          [...row.children].forEach((d) => setDie(d, 1 + Math.floor(Math.random() * 6)));
+          dice().forEach((d) => setDie(d, rnd(), tumbles()));
           if (++n > 9) {
             clearInterval(rollTimer);
-            w.props.values = [...row.children].map((d) => +d.dataset.value);
+            w.props.values = dice().map((d) => +d.dataset.value);
+            dice().forEach((d) => setDie(d, +d.dataset.value, false));
+            slots.forEach((s) => { s.classList.remove('rolling'); s.classList.add('landed'); });
+            clearTimeout(landTimer);
+            landTimer = setTimeout(() => slots.forEach((s) => s.classList.remove('landed')), 400);
             paintTotal();
             rolling = false;
             save();
@@ -6815,11 +6860,23 @@
       // clearing the roll matters as much as the observer: a die closed
       // mid-roll kept writing to detached nodes and then save()d a widget
       // the teacher had already removed
-      return () => { ro.disconnect(); clearInterval(rollTimer); };
+      return () => { ro.disconnect(); clearInterval(rollTimer); clearTimeout(landTimer); };
     },
     settings(box, w, api) {
       box.append(
         settingRow('Number of dice', selectInput([[1, '1'], [2, '2'], [3, '3']], w.props.count, (v) => { w.props.count = +v; api.refresh(); })),
+        settingRow('Dots per die', selectInput(
+          [[3, '1 to 3'], [4, '1 to 4'], [5, '1 to 5'], [6, '1 to 6'], [7, '1 to 7'], [8, '1 to 8'], [9, '1 to 9']],
+          clamp(+w.props.faces || 6, 3, 9),
+          (v) => {
+            const f = clamp(+v || 6, 3, 9);
+            w.props.faces = f;
+            // a 6 left over from a normal die would be unrollable on a 1-to-4 one
+            w.props.values = (w.props.values || []).map((n) => clamp(+n || 1, 1, f));
+            api.refresh();
+          },
+        )),
+        settingRow('Dot color', colorInput(w.props.dotColor || '#22303c', (v) => { w.props.dotColor = v; api.refresh(); })),
         checkRow('Show total', w.props.showTotal, (v) => { w.props.showTotal = v; api.refresh(); }),
       );
     },

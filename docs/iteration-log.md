@@ -6545,3 +6545,91 @@ the nav walks the sidebar to screen 8 with the list following. The top cluster
 lands 16px clear of the panel at 1280 and 1024 (183px still between it and the
 brand pill at 1024), wraps but stays reachable at 820, and every measurement
 returns to its old value when the panel closes. No console errors.
+
+## 4 September 2026 — the die grows a sixth face, and the dots stop lying about how many there are
+
+Two asks, one widget. The dice needed a dot-count setting, and the roll needed to
+look like a throw rather than a flicker.
+
+### Dots per die
+
+A new `faces` prop, 3 to 9, exposed as "Dots per die" ("1 to 3" … "1 to 9"). The
+3×3 pip grid was already there and already had nine cells — only patterns for 1
+to 6 had ever been written — so seven, eight and nine cost three lines of table
+and no new geometry. 1-to-3 and 1-to-4 are the reason this exists: reception and
+Year 1 counting games where a six is a number the class cannot hold yet.
+
+Two guards. Decks saved before today have no `faces`, so every read goes through
+`clamp(+w.props.faces || 6, 3, 9)` rather than trusting the prop. And changing
+the setting clamps the values already showing — a 6 left over from a normal die
+is unrollable on a 1-to-4 one, and would have sat there until the next roll.
+
+### The roll
+
+The first attempt tumbled the existing flat square in 3D. Edge-on, a plane is a
+sliver: it read as paper flipping, not a die. So each die is now a real cube —
+six `.die-face` children in a `preserve-3d` wrapper, each pushed out by half the
+edge (`--die-z`, set in JS beside the width). The other five faces carry dots
+only while the cube is turning; at rest they are seen almost edge-on, where their
+dots read as grime rather than as numbers.
+
+The float is a shadow, not a lift: an ellipse under the cube that shrinks and
+fades as the die climbs and comes back as it lands. Three keyframe sets, chosen
+by `:nth-child`, so three dice thrown together do not spin in lockstep, and every
+turn is a whole one so the cube always lands square on its front face.
+
+Two things had to give. The cube is pushed BACK by half its edge, so its front
+face sits in the slot plane — without that, perspective magnifies the resting
+face well past its own box, and at 400px dice the widget overflowed. And the
+tumble flies away from the viewer, scaling to about 0.7 at the top of the throw:
+a cube at 45° needs 1.41× its own width, `.widget-body` clips, and a jutting
+corner would have raised a scrollbar. Sizing now budgets 1.18× across and 1.3×
+down for the corners that sit outside the slot.
+
+### The stale layer
+
+The bug that cost the most: after a roll the dots were right in the DOM —
+verified through computed style — and wrong on screen. Ghost pips at a
+half-finished scale, side faces still showing dots that had been cleared. Forcing
+a reflow fixed it, which is the tell.
+
+The cause was `filter: brightness()` on the faces. A filter inside the
+`preserve-3d` subtree left the cube's composited layer holding a frame from the
+middle of the tumble, and later DOM changes never reached the screen. The faces
+are shaded by their own background gradients now, no filters, and the settled die
+is correct without any repaint nudge. Worth remembering, because the filter was
+the obvious way to shade a cube and the failure looked nothing like its cause.
+
+Also fixed in passing: the pips were `var(--ink)`, so an Ink- or Navy-themed dice
+widget drew black-on-white dots as white-on-white — invisible, and invisible
+before today too. A die is a white object with black dots whatever panel it sits
+on, so both the dots and the front outline are pinned to `#22303c`.
+
+### Verified
+
+Browser build. 1, 2 and 3 dice; 1-to-3 through 1-to-9, including the seven, eight
+and nine patterns; values clamp when the ceiling drops. Settled faces read
+correctly after a dozen rolls with the DOM checked against the screen. No
+scrollbars on `.widget-body` at the 260×200 default or at 880px wide. Total line
+tracks the faces. Ink theme shows its dots. Reduced motion drops the tumble and
+the landing and keeps the face changes, and the sides stay blank there because a
+die that never turns has no use for them. Desktop build not run.
+
+## 4 September 2026 (later) — dots in any colour
+
+`dotColor`, defaulting to the `#22303c` the die was already drawn in, exposed as
+"Dot color" — the same `colorInput` row the draw pad's ink and the visual timer's
+disc use, so there is nothing new for a teacher to learn. The value rides in as a
+`--die-dot` custom property on `.dice-row`, which is one write per paint rather
+than one per pip: fifty-four spans per die × three dice is not a place to set an
+inline style. Older decks have no prop, so every read falls back.
+
+The face stays white and its outline stays dark. A coloured die is a white die
+with coloured dots — red for the tens, blue for the units is the reason to want
+this — and recolouring the body as well would have needed the dots to pick a
+contrasting colour of their own, which is a different feature.
+
+No guard on a pale pick: yellow dots on a white face do vanish, but the die is
+sitting there on the board changing as you choose, so the failure explains
+itself. Verified: red dots survive a roll and a reload, and the tumble carries
+the colour onto the side faces.

@@ -983,20 +983,128 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
 
 /* dice */
 .dice-row { flex: 1; display: flex; align-items: center; justify-content: center; gap: 14px; }
+/* the slot is the stage: the cube floats inside it and drops its shadow on the
+   floor, so the die can tumble without moving the layout */
+.die-slot {
+  position: relative;
+  aspect-ratio: 1;
+  flex: 0 0 auto;
+  perspective: calc(var(--die-z, 30px) * 14);
+  cursor: pointer;
+}
+.die-shadow {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: -7%;
+  height: 15%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(15, 30, 45, 0.5), rgba(15, 30, 45, 0));
+  opacity: 0.85;
+}
+/* .die is the cube itself; the six .die-face children are its sides */
 .die {
-  background: #fff;
-  border: 2px solid var(--ink);
-  border-radius: 18%;
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  /* at rest it hangs a little above its shadow, turned just enough to show
+     it has thickness -- the dots stay square-on and readable */
+  transform: translateY(-6%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(-8deg) rotateY(-10deg);
+}
+.die-face {
+  position: absolute;
+  inset: 0;
   display: grid;
   grid-template: repeat(3, 1fr) / repeat(3, 1fr);
   padding: 10%;
-  aspect-ratio: 1;
-  cursor: pointer;
-  box-shadow: 0 4px 10px rgba(15, 30, 45, 0.15);
+  background: linear-gradient(155deg, #fff 0%, #fff 52%, #eaeff5 100%);
+  /* a die is a white object with black dots whatever panel it sits on: with
+     var(--ink) its pips went white-on-white in the dark widget themes */
+  border: 2px solid #22303c;
+  border-radius: 10%;
+  backface-visibility: hidden;
+  box-shadow: inset 0 6px 10px -6px rgba(255, 255, 255, 0.95);
 }
-.die span { border-radius: 50%; background: var(--ink); transform: scale(0); transition: transform 0.1s; }
+.die-face:not(.f1) { border-color: rgba(34, 48, 60, 0.3); }
+/* each side is shaded by its own background, NOT by filter: brightness() -- a
+   filter inside this preserve-3d subtree left the cube's composited layer
+   holding a stale frame after the tumble, so dots changed in the DOM and not
+   on screen */
+.die-face.f1 { transform: translateZ(var(--die-z, 30px)); }
+.die-face.f2 { transform: rotateY(180deg) translateZ(var(--die-z, 30px)); }
+.die-face.f3 {
+  transform: rotateY(90deg) translateZ(var(--die-z, 30px));
+  background: linear-gradient(100deg, #e3e9f0 0%, #d2dae4 100%);
+}
+.die-face.f4 {
+  transform: rotateY(-90deg) translateZ(var(--die-z, 30px));
+  background: linear-gradient(260deg, #e6ecf2 0%, #d7dfe8 100%);
+}
+.die-face.f5 {
+  transform: rotateX(90deg) translateZ(var(--die-z, 30px));
+  background: linear-gradient(180deg, #f5f8fb 0%, #e7edf3 100%);
+}
+.die-face.f6 {
+  transform: rotateX(-90deg) translateZ(var(--die-z, 30px));
+  background: linear-gradient(180deg, #d4dce6 0%, #c7d0dc 100%);
+}
+/* one state per dot, carried by the .on class alone: fading dots with a second
+   animated property inside the preserve-3d subtree left ghosts on screen */
+.die span { border-radius: 50%; background: var(--die-dot, #22303c); transform: scale(0); transition: transform 0.1s; }
 .die span.on { transform: scale(0.72); }
 .dice-total { text-align: center; font-weight: 700; color: var(--ink-soft); flex-shrink: 0; }
+
+/* three tumbles, not one: dice thrown together should not spin in lockstep.
+   every turn is a whole one, so the cube lands square on its front face */
+.die-slot.rolling .die { animation: die-tumble-a 0.8s cubic-bezier(0.34, 0.06, 0.32, 1) both; }
+.die-slot.rolling:nth-child(2) .die { animation-name: die-tumble-b; }
+.die-slot.rolling:nth-child(3) .die { animation-name: die-tumble-c; }
+.die-slot.rolling .die-shadow { animation: die-tumble-shadow 0.8s cubic-bezier(0.34, 0.06, 0.32, 1) both; }
+.die-slot.landed .die { animation: die-land 0.4s cubic-bezier(0.22, 0.9, 0.3, 1.2) both; }
+.die-slot.landed .die-shadow { animation: die-land-shadow 0.4s cubic-bezier(0.22, 0.9, 0.3, 1.2) both; }
+
+@keyframes die-tumble-a {
+  0% { transform: translateY(-6%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(-8deg) rotateY(-10deg) scale(1); }
+  30% { transform: translateY(-11%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(236deg) rotateY(170deg) scale(0.72); }
+  60% { transform: translateY(-13%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(478deg) rotateY(350deg) scale(0.67); }
+  85% { transform: translateY(-8%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(658deg) rotateY(620deg) scale(0.88); }
+  100% { transform: translateY(-6%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(712deg) rotateY(710deg) scale(1); }
+}
+@keyframes die-tumble-b {
+  0% { transform: translateY(-6%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(-8deg) rotateY(-10deg) scale(1); }
+  30% { transform: translateY(-12%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(-188deg) rotateY(-190deg) scale(0.7); }
+  60% { transform: translateY(-14%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(-368deg) rotateY(-460deg) scale(0.66); }
+  85% { transform: translateY(-7%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(-638deg) rotateY(-640deg) scale(0.89); }
+  100% { transform: translateY(-6%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(-728deg) rotateY(-730deg) scale(1); }
+}
+@keyframes die-tumble-c {
+  0% { transform: translateY(-6%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(-8deg) rotateY(-10deg) scale(1); }
+  30% { transform: translateY(-10%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(172deg) rotateY(-190deg) scale(0.74); }
+  60% { transform: translateY(-15%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(442deg) rotateY(-370deg) scale(0.65); }
+  85% { transform: translateY(-6%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(622deg) rotateY(-640deg) scale(0.9); }
+  100% { transform: translateY(-6%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(712deg) rotateY(-730deg) scale(1); }
+}
+/* the shadow shrinks and fades as the die climbs -- that is the whole
+   trick behind "it is in the air" */
+@keyframes die-tumble-shadow {
+  0% { transform: scale(1); opacity: 0.85; }
+  30% { transform: scale(0.66); opacity: 0.4; }
+  60% { transform: scale(0.58); opacity: 0.32; }
+  85% { transform: scale(0.88); opacity: 0.66; }
+  100% { transform: scale(1); opacity: 0.85; }
+}
+@keyframes die-land {
+  0% { transform: translateY(-6%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(-8deg) rotateY(-10deg) scale(1); }
+  30% { transform: translateY(1%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(-8deg) rotateY(-10deg) scaleX(1.06) scaleY(0.94); }
+  65% { transform: translateY(-11%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(-8deg) rotateY(-10deg) scale(1.01); }
+  100% { transform: translateY(-6%) translateZ(calc(var(--die-z, 30px) * -1)) rotateX(-8deg) rotateY(-10deg) scale(1); }
+}
+@keyframes die-land-shadow {
+  0% { transform: scale(1); opacity: 0.85; }
+  30% { transform: scale(1.14); opacity: 1; }
+  65% { transform: scale(0.92); opacity: 0.72; }
+  100% { transform: scale(1); opacity: 0.85; }
+}
 
 /* sound meter */
 .sound-canvas { flex: 1; width: 100%; min-height: 0; border-radius: 10px; }
@@ -6621,6 +6729,13 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
   .connect-slot.winner span { animation: none; }  /* the amber cell / white ring is the win */
   .ft-frame.done { animation: none; }             /* the amber ring in the same rule is the "done" */
   .bm-pop { animation: rm-fade 0.3s ease; }       /* most uses mark a value that just changed — keep the blink, drop the bounce */
+
+  /* the die still changes face nine times on a roll -- that is the roll --
+     but it does not tumble through the air; the shadow holds still under it */
+  .die-slot.rolling .die,
+  .die-slot.landed .die,
+  .die-slot.rolling .die-shadow,
+  .die-slot.landed .die-shadow { animation: none; }
 
   /* the exchange chip must still shout, standing still: frozen at the glow's brightest frame */
   .dn-xchip { animation: none; box-shadow: 0 3px 12px rgba(180, 83, 9, 0.55); }

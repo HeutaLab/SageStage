@@ -43,7 +43,7 @@ window.SAGE_HELP = {
     { id: 'sound', cat: 'more', name: 'Noise meter', blurb: 'The room’s loudness as a bar the class can see. Nothing is recorded.', inclass: 'Set the threshold, let the meter be the reminder.' },
     { id: 'picker', cat: 'more', name: 'Name picker', blurb: 'Picks a name from your class list, fairly. Can rest picked names.', inclass: 'Cold-call with no lolly sticks to lose.' },
     { id: 'groups', cat: 'more', name: 'Group maker', blurb: 'Sorts your class into random groups or pairs in one click.', inclass: 'Fresh talk partners every Monday, no negotiating.' },
-    { id: 'dice', cat: 'more', name: 'Dice', blurb: 'One to three dice. Click to roll.', inclass: 'Roll two, add them; roll three, make the biggest number.' },
+    { id: 'dice', cat: 'more', name: 'Dice', blurb: 'One to three dice, with as few or as many dots as you need. Click to roll.', inclass: 'Roll two, add them; roll three, make the biggest number.' },
     { id: 'poll', cat: 'more', name: 'Poll', blurb: 'A quick class vote with big buttons and a live tally.', inclass: 'Predict the ending — vote again after the chapter.' },
     { id: 'score', cat: 'more', name: 'Scoreboard', blurb: 'Points for teams — house points, table points, quiz scores.', inclass: 'Table points that survive to Friday.' },
     { id: 'promptcards', cat: 'more', name: 'Prompt cards', blurb: 'Heads-up and guess-it card packs — vocabulary games for the front of class.', inclass: 'Topic-word heads-up as a Friday plenary.' },
