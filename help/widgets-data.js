@@ -49,6 +49,7 @@ window.SAGE_HELP = {
     { id: 'promptcards', cat: 'more', name: 'Prompt cards', blurb: 'Heads-up and guess-it card packs — vocabulary games for the front of class.', inclass: 'Topic-word heads-up as a Friday plenary.' },
     { id: 'wordbuilder', cat: 'more', name: 'Word builder', blurb: 'A spelling engine with friendly build-up games.', inclass: 'This week’s spellings, built letter by letter together.' },
     { id: 'memory', cat: 'games', name: 'Memory pairs', blurb: 'Find-the-pairs on words or pictures you choose.', inclass: 'Match French words to pictures; boys v girls.' },
+    { id: 'wordsearch', cat: 'games', name: 'Word search', blurb: 'A word search built from your own words — drag or tap the first and last letter to find one.', inclass: 'Hide this half-term’s topic words in it; find three as a lesson starter.' },
     { id: 'tictactoe', cat: 'games', name: 'Tic tac toe', blurb: 'Noughts and crosses, for quick turns and talk.', inclass: 'Answer to earn your go.' },
     { id: 'connectfour', cat: 'games', name: 'Connect four', blurb: 'Connect four counters, two teams.', inclass: 'A column costs a correct times-table fact.' },
     { id: 'countdowngame', cat: 'games', name: 'Numbers & letters', blurb: 'Numbers and letters rounds, Countdown-style.', inclass: 'Letters round with this week’s phonemes as the pool.' },

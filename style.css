@@ -1490,6 +1490,72 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
   overflow-wrap: anywhere;
 }
 
+/* word search — the grid is one SVG whose viewBox IS the grid, so everything
+   inside it is written in cells and the browser does the scaling. Keeping the
+   letters as SVG <text> rather than DOM cells means they inherit --font-ui and
+   the Aa pill's dyslexia face reaches the one screen in the app that is nothing
+   but isolated letters. */
+.ws-game { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
+/* The grid outranks the clue list for the space: squeezed small, the clues
+   scroll away and the puzzle stays playable, never the other way round. */
+.ws-board { flex: 1 1 auto; min-height: 110px; display: flex; align-items: center; justify-content: center; }
+.ws-grid {
+  position: relative;
+  height: 100%;
+  max-height: 100%;
+  max-width: 100%;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 2px rgba(34, 48, 60, .1), 0 6px 16px rgba(34, 48, 60, .1);
+  overflow: hidden;
+  transition: transform .09s ease;
+}
+.ws-grid.ws-miss { animation: ws-shake .26s ease; }
+@keyframes ws-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+.ws-svg { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+.ws-svg:focus-visible { box-shadow: inset 0 0 0 3px var(--acc, #a5b4fc); border-radius: 12px; }
+.ws-letters {
+  font-family: var(--font-ui);
+  font-size: .56px;
+  font-weight: 700;
+  fill: #243142;
+  text-anchor: middle;
+  dominant-baseline: central;
+  user-select: none;
+}
+/* Found is a drawn ring plus a struck clue. The tint is the third thing
+   carrying the news, never the only one — a class contains children who cannot
+   separate a colour wash from the paper it sits on. */
+.ws-found { fill: rgba(14, 118, 110, .12); stroke: #0f766e; stroke-width: .085; }
+.ws-shown { fill: none; stroke: #9aa6b2; stroke-width: .075; stroke-dasharray: .3 .22; }
+.ws-sel { fill: rgba(37, 99, 235, .13); stroke: #2563eb; stroke-width: .075; }
+.ws-cursor { fill: none; stroke: #2563eb; stroke-width: .07; stroke-dasharray: .22 .16; }
+.ws-clues {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 9px;
+  justify-content: center;
+  max-height: 26%;
+  overflow: auto;
+}
+.ws-clue {
+  font-size: clamp(11px, 1.9vh, 16px);
+  font-weight: 700;
+  color: var(--ink);
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(34, 48, 60, .06);
+}
+.ws-clue.found { text-decoration: line-through; text-decoration-thickness: 2px; color: #0f766e; background: rgba(14, 118, 110, .12); }
+.ws-clue.missing { color: var(--ink-soft); background: transparent; box-shadow: inset 0 0 0 1px rgba(34, 48, 60, .16); text-decoration: line-through dotted; }
+
 /* tic tac toe */
 .ttt-grid {
   width: min(100%, 330px);

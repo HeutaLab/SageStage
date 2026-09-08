@@ -123,6 +123,9 @@
       <circle cx="5.8" cy="15.4" r="1.2" fill="currentColor" stroke="none"/>
       <path d="M10.3 15.4h3.4"/>
       <path d="M16.5 14.8c1 1.7 2.7 1.7 3.7 0"/>`,
+    wordsearch: `<rect x="3.2" y="3.2" width="17.6" height="17.6" rx="2.4"/>
+      <rect x="4.4" y="9.9" width="15.2" height="4.2" rx="2.1" transform="rotate(-26 12 12)" ${A}/>
+      <path d="M6.9 6.6h.01M12 6.6h.01M17.1 6.6h.01M6.9 17.4h.01M12 17.4h.01M17.1 17.4h.01" stroke-width="2.4"/>`,
     wordsort: `<rect x="8.8" y="3.2" width="6.4" height="3.8" rx="1.2" ${A}/>
       <path d="M12 7v1.6"/>
       <rect x="3.2" y="8.6" width="7.6" height="10.6" rx="1.4" ${A}/>

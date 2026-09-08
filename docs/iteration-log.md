@@ -7085,6 +7085,173 @@ them. Pressing "↓ Deal a sentence" walks the first sentence's words into the
 waiting band and marks it "✓ out" on the rail, with the second still offering
 "↓ deal". `app.js?v=` 114 → 115, `copy-dist.mjs` run, 65 files. The seed change is
 in HeutaLab/sagestage-app. Desktop not run.
+## 7 September 2026 — the word search, and what "custom topics" turned out to mean
+
+`docs/wordsearch-design.md`, 257 lines, no code. The question was "how possible
+is it to make a wordsearch widget for custom topics". The puzzle is a day's work
+and was never the interesting part; the phrase "custom topics" carries two
+completely different asks and the doc's job was to separate them.
+
+### One of the two answers is a refusal
+
+"Custom topics" reading one: the teacher pastes their own words. That is already
+solved three times over on the games shelf — Prompt cards, Word builder and
+Memory pairs all take a `gameLines()` textarea, and copying it costs nothing.
+
+Reading two: type "Rainforest", get words. Nothing local knows what a rainforest
+contains. The only thing that does is an API call, and that breaks the promise
+the entire English set rests on. So the doc refuses it, and then names the route
+that would work if the demand ever turns out to be real — `kind: 'topic'` on the
+existing `sage-pack@1` envelope, shipped word lists as data, offline, on a rail
+that already exists. Forty topic lists of authoring and no new architecture. It
+should not start until a teacher has asked twice.
+
+What replaces it is better anyway: pull the words from the **Word bank on the
+same screen**, using the sentence builder's `bankWords()` scoping
+(`english-word.js:3225`). The class harvested "meander" and "tributary" on
+Tuesday; Friday's word search is made of them. Fifteen lines, and it turns a
+standalone toy into the tail of the vocabulary pipeline.
+
+### It goes on the games shelf, and the doc says why in its first section
+
+A word search teaches very little reading — no decoding happens, a child can
+find EVAPORATION without knowing what it means, and it sits nowhere on the
+Sound → Word → Sentence → Text spine. Writing that down first was the point.
+It still gets built: teachers expect it, repeated visual exposure to topic
+spellings is a real if narrow job, and a letter grid is the cleanest vector the
+app could print. But it is `cat: 'games'`, beside Memory pairs, not an English
+widget wearing a spine position it hasn't earned.
+
+The one setting that lifts it above pattern-matching is **Hide the list** —
+with the clues hidden, children have to recall the vocabulary before they can
+look for it. One checkbox, and the only genuinely pedagogical control on the
+widget.
+
+### The print path has a default that is wrong for worksheets
+
+`SagePrint.openDialog` defaults to **budget 4** — about A2, tiled across four
+sheets — and the widget menu at `app.js:10360` passes no budget at all
+(`print.js:28`). Correct for the poster-shaped printables the engine was written
+for. Wrong for a worksheet, whose entire point is one sheet per child, thirty
+times over. Nothing currently in the app trips this, because everything with a
+`toPrintable` today is poster-shaped; the word search is the first printable
+that isn't.
+
+Fix specified as an optional `printBudget` on the widget def, forwarded by the
+menu. One line in each place, and every future worksheet-shaped printable
+inherits the right default instead of quietly wasting three sheets in four.
+
+### Two small things that decide whether it feels generic
+
+Filler letters are sampled from the **letter frequency of the hidden words**,
+not uniform A–Z. Uniform filler scatters Q, X and Z across the grid and the
+hidden words stand out as the only ordinary-looking letters in it. One line,
+and it is the difference between a puzzle and a puzzle-shaped thing.
+
+And the finished grid is scanned — rows, columns, diagonals, both directions —
+against a small blocklist before it is shown, with a re-fill on any hit. Random
+letters on a projector in front of thirty children will eventually produce
+something that ends the lesson. Once, at generation, costs nothing.
+
+### Verified
+
+Design doc only; no app code touched. Every cited line reference checked against
+the working tree at 78cec65 — `gameLines` (`app.js:7892`), the three games-shelf
+textarea widgets, `pairKey` (`app.js:8061`), `cleanWord`'s accent fold
+(`app.js:7980`), `bankWords` (`english-word.js:3225`), `ptSoundMatSvg`
+(`english-word.js:88`, hooked `english-word.js:1396`), the print seam
+(`app.js:10344`, `app.js:10360`), `BUDGETS` (`print.js:28`), the games chrome
+classes (`style.css:1316`) and the tray block (`app.js:12747`). `SageSounds`
+confirmed still unbuilt — there is no `sounds.js` — so sound is deferred rather
+than assumed.
+
+## 7 September 2026 (later) — the word search, slice 1, and a filler that swears
+
+`docs/wordsearch-design.md` slice 1 built: `WIDGETS.wordsearch` in `app.js`, a
+games-shelf entry, an icon, a help row and about sixty lines of CSS. One session,
+as the doc estimated.
+
+The grid is one SVG whose viewBox **is** the grid — `viewBox="0 0 12 12"`, one
+`<text>` per cell at `(c+.5, r+.5)`, found words drawn as rotated rounded rects a
+cell high. Nothing in the widget measures a pixel and there is no
+`ResizeObserver`: the browser scales cells to whatever the widget is. Two things
+fell out of that which were not the reason for doing it. Hit-testing is
+`floor(offset / (box.width / n))` — no cell DOM at all, so a 15×15 grid costs 225
+`<text>` nodes instead of 225 divs plus 225 listeners. And the letters inherit
+`--font-ui`, so the Aa pill's OpenDyslexic reaches the one screen in the app that
+is nothing but isolated letters. Verified on the board; it does.
+
+### The scrub is not precautionary, it is load-bearing
+
+The design specified a blocklist scan of the finished grid as cheap insurance. It
+is not insurance. Extracted the generator into a Node harness and measured how
+often an **unscrubbed** 12×12 fill contains something from `WS_BAD`:
+
+| filler drawn from | grids needing the scrub |
+|---|---|
+| uniform A–Z | 19.5% |
+| the volcano list's own letters | 21.3% |
+| the Anglo-Saxon list's own letters | **51.7%** |
+
+One grid in five, and for a letter-poor topic list one in two. Worse, this is the
+two design decisions interacting: sampling filler from the hidden words' own
+letters (§5, which exists to stop Q and X betraying where the real words are)
+*raises* the hit rate, because a list heavy in A, S, N, O, T, E, W spells short
+offensive words readily. The nicer puzzle is the dirtier one.
+
+The scrub clears it. 3,000 grids on the worst-case list, zero survivors; the
+60-pass cap was never close to being reached, because a hit is re-rolled cell by
+cell rather than by regenerating the grid. Detection was checked directly against
+planted runs across, down, backwards, diagonal and anti-diagonal — all five found
+— and against `CLASSROOM` sitting entirely in placed cells, which is correctly
+ignored: a teacher who typed it is not being second-guessed.
+
+### Two bugs found by building it
+
+**The size floor counted words that could never fit.** §5 said floor the grid at
+`longest word + 1`. Put a 28-letter word in the list and the floor pinned the grid
+at 15×15 — for a word that was then reported as missing anyway. The teacher who
+asked for 12×12 got 15×15 and a message about a word that is not in it. The floor
+now considers only words within `WS_MAX`.
+
+**The clue list would not give up its space.** `flex-shrink: 0` on the clue row
+meant that at 300×300 the grid got 69px — five-pixel cells — while the chips kept
+their full height. The rule was meant to be the other way round: the grid outranks
+the clues, and squeezed small the clues scroll away. Now 110px at the same size,
+and nothing overflows at any size between 300×300 and 900×700.
+
+### A pre-existing one, not mine, worth someone's afternoon
+
+Every `.btn.ghost` inside a widget **loses its label entirely** on the Clear and
+Clear light themes. `.btn.ghost` sets `color: var(--accent-text, var(--accent))`
+on `background: var(--accent-soft)`, which is a fine pairing; then
+`.widget.theme-scrim .btn` (`style.css:356`) overrides the background to
+`var(--accent)`. On those themes `--accent-text` and `--accent` are the same value
+(`#6fefe1`), so the button paints accent on accent: contrast 1:1, the word gone.
+
+Confirmed it is the app's and not the word search's by forcing the same theme
+classes onto Memory pairs — "Shuffle and reset" vanishes identically. It hits
+Prompt cards, Word builder, Memory pairs, Modelled writing and now the word
+search's Reveal. Left alone here: it is a one-line CSS fix that changes how every
+widget looks on two themes, which is not slice 1's call to make.
+
+### Verified
+
+Browser, dev server, no test suite. Placement, drag-find, tap-first-tap-last,
+arrow-keys-plus-Enter, Reveal, New grid, and a wrong selection all exercised on
+the board and screenshotted. Reload keeps the grid and the found words exactly
+(3/8 before, 3/8 and the same twelve rows after) — the `seedKey` guard does what
+Memory pairs' `pairKey` does. Resize at 300×300, 380×420, 520×600 and 900×700:
+grid square to within a pixel every time, letters never change, no overflow.
+Accents, hyphens and spaces confirmed on `café`, `élève`, `Anglo-Saxon` and
+`water cycle` — stripped for the grid, intact in the clue list. A one-letter entry
+is dropped. OpenDyslexic confirmed reaching the grid letters.
+
+4,500 generated grids in the Node harness across three direction bands, six word
+lists and every size from 6 to 15: no word failed to place, every placement reads
+back out of the stored grid, every cell A–Z, slowest single grid 17ms. Desktop
+build not run.
+
 ## 8 September 2026 — YouTube on the board, and an origin that was never going to be allowed
 
 Every Video widget holding a YouTube link showed the player's own black card in

@@ -8205,6 +8205,423 @@
     },
   };
 
+  // ---- Word search: the class's own topic words, hidden in a letter grid ----
+  // Design: docs/wordsearch-design.md. Slice 1 — the puzzle.
+  //
+  // The grid is GENERATED ONCE and stored (§3.2). It must not change on resize,
+  // on reload, or when a screen is revisited: half-found is the normal state of
+  // a word search on a Tuesday afternoon, and children navigate this app by
+  // memory. `seedKey` is Memory pairs' `pairKey` trick — regenerate only when
+  // the words, the size, the direction band or the New-grid nonce really change.
+  const WS_BANDS = {
+    straight: { label: 'Across and down', dirs: [[0, 1], [1, 0]] },
+    diagonals: { label: 'Add diagonals', dirs: [[0, 1], [1, 0], [1, 1], [-1, 1]] },
+    backwards: {
+      label: 'Add backwards',
+      dirs: [[0, 1], [1, 0], [1, 1], [-1, 1], [0, -1], [-1, 0], [-1, -1], [1, -1]],
+    },
+  };
+  const WS_MIN = 6, WS_MAX = 15, WS_WORDS = 16;
+  // Random filler will, over enough grids, spell something that ends the lesson.
+  // Short entries only: a 15x15 fill producing a six-letter one by accident is
+  // vanishingly rare, and a longer list would cost more than it buys. A run only
+  // counts as a hit if at least one of its cells is FILLER — a teacher who put
+  // CLASSROOM in the list is not being second-guessed by us (§5).
+  const WS_BAD = ['ARSE', 'BUM', 'COCK', 'CRAP', 'CUNT', 'DICK', 'FAG', 'FUCK', 'JIZZ',
+    'MINGE', 'PISS', 'POO', 'PRICK', 'SHAG', 'SHIT', 'SLAG', 'SLUT', 'TWAT', 'WANK', 'WEE'];
+
+  // Fold accents to base letters BEFORE the A-Z filter, or a French list loses
+  // its letters outright — the trap `cleanWord` above exists for. The display
+  // form keeps its accents, spaces and hyphens; only the hidden form is stripped.
+  const wsLetters = (s) => String(s || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toUpperCase().replace(/[^A-Z]/g, '');
+
+  function wsItems(words) {
+    const out = [], seen = new Set();
+    for (const line of gameLines(words, [], WS_WORDS * 3)) {
+      const letters = wsLetters(line);
+      if (letters.length < 2 || seen.has(letters)) continue;
+      seen.add(letters);
+      out.push({ show: String(line).trim().slice(0, 28), letters });
+      if (out.length >= WS_WORDS) break;
+    }
+    return out;
+  }
+
+  // every straight line through the grid, as lists of [r,c] — rows, columns and
+  // both diagonal families. Used by the filler scrub; the placer has its own.
+  function wsLines(n) {
+    const lines = [];
+    for (let r = 0; r < n; r++) lines.push(Array.from({ length: n }, (_, c) => [r, c]));
+    for (let c = 0; c < n; c++) lines.push(Array.from({ length: n }, (_, r) => [r, c]));
+    const ray = (r0, c0, dr, dc) => {
+      const out = [];
+      for (let r = r0, c = c0; r >= 0 && r < n && c >= 0 && c < n; r += dr, c += dc) out.push([r, c]);
+      return out;
+    };
+    for (let k = 0; k < n; k++) {
+      lines.push(ray(k, 0, 1, 1));
+      if (k) lines.push(ray(0, k, 1, 1));
+      lines.push(ray(k, 0, -1, 1));
+      if (k < n - 1) lines.push(ray(n - 1, k + 1, -1, 1));
+    }
+    return lines.filter((l) => l.length >= 3);
+  }
+
+  // first offending run, as its cells — or null. Both reading directions, since
+  // a child reads a grid in every direction, which is the entire point of it.
+  function wsFindBad(grid, solid, lines) {
+    for (const line of lines) {
+      const fwd = line.map(([r, c]) => grid[r][c]).join('');
+      const rev = fwd.split('').reverse().join('');
+      for (const bad of WS_BAD) {
+        for (const [text, back] of [[fwd, false], [rev, true]]) {
+          const at = text.indexOf(bad);
+          if (at < 0) continue;
+          const cells = [];
+          for (let i = 0; i < bad.length; i++) {
+            cells.push(back ? line[line.length - 1 - (at + i)] : line[at + i]);
+          }
+          if (cells.some(([r, c]) => !solid[r][c])) return cells;
+        }
+      }
+    }
+    return null;
+  }
+
+  // One placement pass. Longest words first, overlaps welcome where the letters
+  // already agree — an overlapping grid is a denser and better puzzle.
+  function wsPlace(items, n, dirs) {
+    const grid = Array.from({ length: n }, () => new Array(n).fill(''));
+    const placed = [], missing = [];
+    for (const item of items.slice().sort((a, b) => b.letters.length - a.letters.length)) {
+      const L = item.letters, len = L.length;
+      let done = false;
+      if (len <= n) {
+        for (let tries = 0; tries < 240 && !done; tries++) {
+          const [dr, dc] = dirs[Math.floor(Math.random() * dirs.length)];
+          const rLo = dr < 0 ? len - 1 : 0, rHi = dr > 0 ? n - len : n - 1;
+          const cLo = dc < 0 ? len - 1 : 0, cHi = dc > 0 ? n - len : n - 1;
+          if (rLo > rHi || cLo > cHi) continue;
+          const r = rLo + Math.floor(Math.random() * (rHi - rLo + 1));
+          const c = cLo + Math.floor(Math.random() * (cHi - cLo + 1));
+          let ok = true;
+          for (let i = 0; i < len && ok; i++) {
+            const cell = grid[r + dr * i][c + dc * i];
+            if (cell && cell !== L[i]) ok = false;
+          }
+          if (!ok) continue;
+          for (let i = 0; i < len; i++) grid[r + dr * i][c + dc * i] = L[i];
+          placed.push({ show: item.show, w: L, r, c, dr, dc });
+          done = true;
+        }
+      }
+      if (!done) missing.push(item.show);
+    }
+    return { grid, placed, missing };
+  }
+
+  function wsGenerate(items, n, band) {
+    const dirs = (WS_BANDS[band] || WS_BANDS.diagonals).dirs;
+    let best = null;
+    for (let go = 0; go < 12; go++) {
+      const attempt = wsPlace(items, n, dirs);
+      if (!best || attempt.missing.length < best.missing.length) best = attempt;
+      if (!best.missing.length) break;
+    }
+    const { grid, placed, missing } = best;
+    const solid = grid.map((row) => row.map((cell) => !!cell));
+    // Filler sampled from the hidden words' OWN letters, not uniform A-Z.
+    // Uniform filler scatters Q, X and Z across the grid and the hidden words
+    // stand out as the only ordinary-looking letters in it (§5).
+    const pool = placed.map((p) => p.w).join('') || 'ETAOINSHRDLUCMFWYPVBGKJQXZ';
+    const pick = () => pool[Math.floor(Math.random() * pool.length)];
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (!grid[r][c]) grid[r][c] = pick();
+    const lines = wsLines(n);
+    for (let pass = 0; pass < 60; pass++) {
+      const hit = wsFindBad(grid, solid, lines);
+      if (!hit) break;
+      for (const [r, c] of hit) if (!solid[r][c]) grid[r][c] = pick();
+    }
+    return { grid: grid.map((row) => row.join('')), placed, missing };
+  }
+
+  // Snap a loose drag to one of the eight rays. Each axis gets a ~53 degree
+  // band and the diagonals the ~37 between them: across and down are what a
+  // child aims for most, so they are the easier targets to hit.
+  function wsRay(r0, c0, r1, c1, n) {
+    const dr = r1 - r0, dc = c1 - c0;
+    if (!dr && !dc) return [[r0, c0]];
+    const ar = Math.abs(dr), ac = Math.abs(dc);
+    let sr, sc, len;
+    if (ar > ac * 2) { sr = Math.sign(dr); sc = 0; len = ar; }
+    else if (ac > ar * 2) { sr = 0; sc = Math.sign(dc); len = ac; }
+    else { sr = Math.sign(dr); sc = Math.sign(dc); len = Math.max(ar, ac); }
+    const out = [];
+    for (let i = 0; i <= len; i++) {
+      const r = r0 + sr * i, c = c0 + sc * i;
+      if (r < 0 || r >= n || c < 0 || c >= n) break;
+      out.push([r, c]);
+    }
+    return out;
+  }
+
+  WIDGETS.wordsearch = {
+    title: 'Word search', icon: 'wordsearch', accent: '#a5b4fc', w: 520, h: 600,
+    defaults: () => ({
+      title: 'Word search',
+      words: ['volcano', 'eruption', 'magma', 'crater', 'molten', 'ash cloud', 'vent', 'lava'],
+      size: 12, band: 'diagonals', reveal: false,
+      grid: null, placed: null, missing: [], found: [], seedKey: '', nonce: 0,
+    }),
+    mount(body, w, api) {
+      const p = w.props;
+      p.title = String(p.title || '').slice(0, 40);
+      p.band = WS_BANDS[p.band] ? p.band : 'diagonals';
+      p.nonce = Math.max(0, Math.floor(+p.nonce || 0));
+      const items = wsItems(p.words);
+      // The size floor: a grid narrower than its longest word cannot hold it, so
+      // asking for 8x8 with PHOTOSYNTHESIS in the list raises the floor and says
+      // why, rather than quietly dropping the word (§5).
+      // The floor is set by the longest word that COULD fit. A word longer than
+      // the largest grid we offer is going to be reported as missing whatever we
+      // do, so it must not also drag the grid to 15x15 on its way out.
+      const longest = items.reduce((a, it) => (it.letters.length <= WS_MAX ? Math.max(a, it.letters.length) : a), 0);
+      const floor = clamp(longest + 1, WS_MIN, WS_MAX);
+      const want = clamp(Math.round(+p.size || 12), WS_MIN, WS_MAX);
+      const n = Math.max(want, floor);
+
+      const key = items.map((it) => it.letters).join('|') + '#' + n + '#' + p.band + '#' + p.nonce;
+      if (p.seedKey !== key || !Array.isArray(p.grid) || p.grid.length !== n) {
+        const made = wsGenerate(items, n, p.band);
+        p.grid = made.grid;
+        p.placed = made.placed;
+        p.missing = made.missing;
+        p.found = [];
+        p.reveal = false;
+        p.seedKey = key;
+        save();
+        if (n > want) toast('Grid grown to ' + n + '×' + n + ' — the longest word needs the room');
+        if (made.missing.length) {
+          toast(made.missing.length === 1
+            ? '“' + made.missing[0] + '” would not fit — the rest are hidden'
+            : made.missing.length + ' words would not fit: ' + made.missing.join(', '));
+        }
+      }
+      if (!Array.isArray(p.placed)) p.placed = [];
+      if (!Array.isArray(p.missing)) p.missing = [];
+      p.found = (Array.isArray(p.found) ? p.found : [])
+        .map((i) => +i).filter((i, at, all) => Number.isInteger(i) && i >= 0 && i < p.placed.length && all.indexOf(i) === at);
+
+      const wrap = el('div', { class: 'ws-game' });
+      body.append(wrap);
+
+      // ---- geometry, in grid units: the SVG's viewBox IS the grid, so every
+      // mark is written in cells and the browser does the scaling. Nothing here
+      // measures a pixel, and nothing needs a ResizeObserver.
+      const ends = (pl) => {
+        const len = pl.w.length - 1;
+        return [pl.c + 0.5, pl.r + 0.5, pl.c + pl.dc * len + 0.5, pl.r + pl.dr * len + 0.5];
+      };
+      const capsule = (x0, y0, x1, y1, cls) => {
+        const h = 0.42, L = Math.hypot(x1 - x0, y1 - y0);
+        const a = Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI;
+        return '<rect class="' + cls + '" x="' + (x0 - h).toFixed(3) + '" y="' + (y0 - h).toFixed(3)
+          + '" width="' + (L + h * 2).toFixed(3) + '" height="' + (h * 2).toFixed(3)
+          + '" rx="' + h + '" transform="rotate(' + a.toFixed(2) + ' ' + x0.toFixed(3) + ' ' + y0.toFixed(3) + ')"/>';
+      };
+
+      let anchor = null;      // armed first cell (tap-tap), or the drag origin
+      let missTimer = null;
+      let pressed = false, moved = false, sel = null, cursor = { r: 0, c: 0 }, keyed = false;
+
+      const marks = () => {
+        const out = [];
+        for (let i = 0; i < p.placed.length; i++) {
+          const isFound = p.found.includes(i);
+          if (!isFound && !p.reveal) continue;
+          const [x0, y0, x1, y1] = ends(p.placed[i]);
+          out.push(capsule(x0, y0, x1, y1, isFound ? 'ws-found' : 'ws-shown'));
+        }
+        if (sel && sel.length) {
+          const [ar, ac] = sel[0], [br, bc] = sel[sel.length - 1];
+          out.push(capsule(ac + 0.5, ar + 0.5, bc + 0.5, br + 0.5, 'ws-sel'));
+        } else if (anchor) {
+          out.push(capsule(anchor.c + 0.5, anchor.r + 0.5, anchor.c + 0.5, anchor.r + 0.5, 'ws-sel'));
+        }
+        if (keyed) out.push('<rect class="ws-cursor" x="' + cursor.c + '" y="' + cursor.r + '" width="1" height="1" rx=".2"/>');
+        return out.join('');
+      };
+
+      const board = el('div', { class: 'ws-board' });
+      const grid = el('div', { class: 'ws-grid' });
+      board.append(grid);
+      let letters = '';
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          letters += '<text x="' + (c + 0.5) + '" y="' + (r + 0.5) + '">' + p.grid[r][c] + '</text>';
+        }
+      }
+      grid.innerHTML = '<svg class="ws-svg" viewBox="0 0 ' + n + ' ' + n + '" role="img" tabindex="0"'
+        + ' aria-label="Word search grid, ' + n + ' by ' + n + '. Arrow keys move, Enter marks the start and end of a word.">'
+        + '<g class="ws-marks"></g><g class="ws-letters">' + letters + '</g></svg>';
+      const svg = grid.querySelector('.ws-svg');
+      const markLayer = grid.querySelector('.ws-marks');
+      const drawMarks = () => { markLayer.innerHTML = marks(); };
+
+      const cellAt = (ev) => {
+        const box = svg.getBoundingClientRect();
+        if (!box.width || !box.height) return null;
+        const c = Math.floor((ev.clientX - box.left) / (box.width / n));
+        const r = Math.floor((ev.clientY - box.top) / (box.height / n));
+        if (r < 0 || r >= n || c < 0 || c >= n) return null;
+        return { r, c };
+      };
+
+      // A found word is marked by a drawn ring and a struck clue. Colour is the
+      // last thing carrying the news, never the only thing (§3.5).
+      const commit = (a, b) => {
+        const path = wsRay(a.r, a.c, b.r, b.c, n);
+        const first = path[0], last = path[path.length - 1];
+        let hit = -1;
+        for (let i = 0; i < p.placed.length; i++) {
+          if (p.found.includes(i)) continue;
+          const pl = p.placed[i];
+          const len = pl.w.length - 1;
+          const sr = pl.r, sc = pl.c, er = pl.r + pl.dr * len, ec = pl.c + pl.dc * len;
+          if (path.length !== pl.w.length) continue;
+          const fwd = first[0] === sr && first[1] === sc && last[0] === er && last[1] === ec;
+          const back = first[0] === er && first[1] === ec && last[0] === sr && last[1] === sc;
+          if (fwd || back) { hit = i; break; }
+        }
+        anchor = null; sel = null;
+        if (hit < 0) {
+          grid.classList.add('ws-miss');
+          clearTimeout(missTimer);
+          missTimer = setTimeout(() => grid.classList.remove('ws-miss'), 260);
+          drawMarks();
+          return;
+        }
+        p.found.push(hit);
+        save(); paint();
+      };
+
+      svg.addEventListener('pointerdown', (ev) => {
+        const cell = cellAt(ev);
+        if (!cell) return;
+        ev.preventDefault();
+        keyed = false;
+        // Tap first, tap last — the gesture that matters. Dragging a finger three
+        // feet across a whiteboard is awkward for an adult and impossible for a
+        // Year 2, and IWB pointer tracking loses long drags anyway.
+        if (anchor && (anchor.r !== cell.r || anchor.c !== cell.c)) { commit(anchor, cell); return; }
+        if (anchor) { anchor = null; sel = null; drawMarks(); return; }
+        anchor = cell; sel = null; pressed = true; moved = false;
+        // Capture keeps a drag alive when the finger leaves the grid, which on a
+        // board is most of them. It throws for a pointer the browser is not
+        // tracking; the drag still works without it, so it is never fatal.
+        try { svg.setPointerCapture(ev.pointerId); } catch (err) { /* no capture, still fine */ }
+        drawMarks();
+      });
+      svg.addEventListener('pointermove', (ev) => {
+        if (!pressed || !anchor) return;
+        const cell = cellAt(ev);
+        if (!cell) return;
+        if (cell.r !== anchor.r || cell.c !== anchor.c) moved = true;
+        sel = moved ? wsRay(anchor.r, anchor.c, cell.r, cell.c, n) : null;
+        drawMarks();
+      });
+      const release = (ev) => {
+        if (!pressed) return;
+        pressed = false;
+        try { svg.releasePointerCapture(ev.pointerId); } catch (err) { /* already gone */ }
+        if (!moved || !anchor) { sel = null; drawMarks(); return; }   // stays armed for the second tap
+        const cell = cellAt(ev) || { r: sel[sel.length - 1][0], c: sel[sel.length - 1][1] };
+        commit(anchor, cell);
+      };
+      svg.addEventListener('pointerup', release);
+      svg.addEventListener('pointercancel', () => { pressed = false; sel = null; drawMarks(); });
+
+      svg.addEventListener('keydown', (ev) => {
+        const step = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[ev.key];
+        if (step) {
+          ev.preventDefault();
+          keyed = true;
+          cursor.r = clamp(cursor.r + step[0], 0, n - 1);
+          cursor.c = clamp(cursor.c + step[1], 0, n - 1);
+          if (anchor) sel = wsRay(anchor.r, anchor.c, cursor.r, cursor.c, n);
+          drawMarks();
+          return;
+        }
+        if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar') {
+          ev.preventDefault();
+          keyed = true;
+          if (anchor) commit(anchor, { r: cursor.r, c: cursor.c });
+          else { anchor = { r: cursor.r, c: cursor.c }; sel = null; drawMarks(); }
+          return;
+        }
+        if (ev.key === 'Escape' && anchor) { ev.preventDefault(); anchor = null; sel = null; drawMarks(); }
+      });
+
+      const paint = () => {
+        wrap.innerHTML = '';
+        const clues = el('div', { class: 'ws-clues' });
+        for (let i = 0; i < p.placed.length; i++) {
+          clues.append(el('span', { class: 'ws-clue' + (p.found.includes(i) ? ' found' : '') }, p.placed[i].show));
+        }
+        for (const miss of p.missing) clues.append(el('span', { class: 'ws-clue missing', title: 'Would not fit in this grid' }, miss));
+        const done = p.found.length === p.placed.length && p.placed.length > 0;
+        wrap.append(
+          el('div', { class: 'game-title-row' },
+            el('strong', {}, p.title || 'Word search'),
+            el('span', { class: 'game-score' }, done ? 'All found!' : p.found.length + ' / ' + p.placed.length + ' found')),
+          board,
+          clues,
+          el('div', { class: 'game-actions' },
+            el('button', {
+              class: 'btn ghost',
+              onclick: () => { p.reveal = !p.reveal; anchor = null; sel = null; save(); paint(); },
+            }, p.reveal ? 'Hide answers' : 'Reveal'),
+            el('button', {
+              class: 'btn',
+              title: 'The same words, hidden somewhere else',
+              onclick: () => { p.nonce = (+p.nonce || 0) + 1; api.refresh(); },
+            }, 'New grid')),
+        );
+        drawMarks();
+      };
+      paint();
+      return () => clearTimeout(missTimer);
+    },
+    settings(box, w, api) {
+      const p = w.props;
+      box.append(
+        settingRow('Title', el('input', {
+          class: 'text-input', value: p.title || '',
+          onchange: (e) => { p.title = e.target.value.trim().slice(0, 40); api.refresh(); },
+        })),
+        settingRow('Grid', selectInput(
+          Array.from({ length: WS_MAX - WS_MIN + 1 }, (_, i) => [String(WS_MIN + i), (WS_MIN + i) + ' × ' + (WS_MIN + i)]),
+          String(clamp(Math.round(+p.size || 12), WS_MIN, WS_MAX)),
+          (v) => { p.size = +v; api.refresh(); })),
+        settingRow('Hidden', selectInput(
+          Object.entries(WS_BANDS).map(([id, b]) => [id, b.label]),
+          WS_BANDS[p.band] ? p.band : 'diagonals',
+          (v) => { p.band = v; api.refresh(); })),
+        el('div', { class: 'hint' }, 'Words to hide, one per line (up to ' + WS_WORDS + '). Spaces, hyphens and accents are kept in the list and dropped from the grid.'),
+        el('textarea', {
+          class: 'text-input', rows: 8,
+          onchange: (e) => { p.words = gameLines(e.target.value, ['word']); api.refresh(); },
+        }, gameLines(p.words, ['word']).join('\n')),
+        el('button', {
+          class: 'btn ghost small',
+          onclick: () => { p.nonce = (+p.nonce || 0) + 1; api.refresh(); },
+        }, 'New grid, same words'),
+      );
+    },
+  };
+
   // ---- Tic tac toe ----
   WIDGETS.tictactoe = {
     title: 'Tic tac toe', icon: 'score', accent: '#67e8f9', w: 520, h: 470,
@@ -12810,6 +13227,7 @@
     widgetTool('promptcards', 'Prompt cards'),
     widgetTool('wordbuilder', 'Word builder'),
     widgetTool('memory', 'Memory pairs', 'games'),
+    widgetTool('wordsearch', 'Word search', 'games'),
     widgetTool('tictactoe', 'Tic tac toe', 'games'),
     widgetTool('connectfour', 'Connect four', 'games'),
     widgetTool('countdowngame', 'Numbers & letters', 'games'),
