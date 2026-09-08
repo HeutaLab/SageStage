@@ -434,9 +434,14 @@ practice, not a reason to withhold instruction.
 > first letter's case (a dealt "They" can go lowercase mid-sentence).
 > Mode pills carry plain-word subtitles and the four-level colour grammar
 > (ink face / traffic turn / grey tools / teal act) holds across bar and
-> ⚙ panel, which is now sectioned. The known wart stands: `srcs` are
+> ⚙ panel, which is now sectioned. ~~The known wart stands: `srcs` are
 > positional and shared across modes, so fix-it's pair lingers into
-> combine's chips until replaced.
+> combine's chips until replaced.~~ **Closed 2026-09-08:** each face owns
+> its own sources in `p.srcsBy` (`combine` / `expand` / `fixit`, each with
+> its `dealtSrcs`), swapped on every mode change; build and roles have no
+> sources of their own and park on an empty pair. Decks saved before this
+> hand their one shared array to the face they were left in, so nothing on
+> screen changes at the upgrade.
 >
 > **Stages become physical (2026-07-25, same session, Glenn's call):**
 > stance-only stages read as "the same thing" in a real lesson, so each

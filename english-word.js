@@ -318,6 +318,26 @@
     .replace(/[<>\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
     .replace(/\s+/g, ' ').trim();
   const sbNewCard = (t, k) => ({ id: D.uid(), t: sbClean(t).slice(0, SB_CARD_MAX), k: k === 'p' ? 'p' : 'w', cap: false, slot: null });
+  // Each face keeps its OWN sources. p.srcs is positional and means a different
+  // thing in each: combine's up-to-three, expand's one, fix-it's [right, broken].
+  // One shared array meant fix-it's broken sentence walked into combine's chips
+  // and sat there as a model for the class to copy — the one harm §4 names — and
+  // arriving in expand could seed the line from whatever the last face left.
+  // dealtSrcs travels with them because it indexes into srcs. Faces that have no
+  // sources of their own (build, roles) park on an empty pair and give the
+  // others theirs back untouched, so a mode tap still creates and destroys
+  // nothing.
+  const SB_SRC_FACES = ['combine', 'expand', 'fixit'];
+  const sbSrcFace = (m) => (SB_SRC_FACES.indexOf(m) >= 0 ? m : null);
+  function sbSwapSrcs(p, from, to) {
+    const f = sbSrcFace(from), t = sbSrcFace(to);
+    if (f === t) return;
+    if (!p.srcsBy || typeof p.srcsBy !== 'object') p.srcsBy = {};
+    if (f) p.srcsBy[f] = { srcs: p.srcs.slice(), dealtSrcs: p.dealtSrcs.slice() };
+    const got = t && p.srcsBy[t] && typeof p.srcsBy[t] === 'object' ? p.srcsBy[t] : null;
+    p.srcs = got && Array.isArray(got.srcs) ? got.srcs.slice() : [];
+    p.dealtSrcs = got && Array.isArray(got.dealtSrcs) ? got.dealtSrcs.slice() : [];
+  }
   const SB_TIGHT = new Set(['.', ',', '!', '?', ':', ';', '’', ')', '”', '…']);
   const SB_OPEN = new Set(['(', '“', '‘']);
   // deal a typed sentence into cards: leading/trailing punctuation peels into
@@ -3149,6 +3169,25 @@ ${set.words.map(card).join('\n')}
         const liveIds = new Set([...p.track, ...p.trackT, ...p.tray].map((c) => c.id));
         p.flagged = (Array.isArray(p.flagged) ? p.flagged : []).filter((id) => typeof id === 'string' && liveIds.has(id));
         p.dealtSrcs = (Array.isArray(p.dealtSrcs) ? p.dealtSrcs : []).filter((i) => Number.isInteger(i) && i >= 0 && i < 3);
+        // per-face sources (see sbSwapSrcs). Sanitise the store the same way the
+        // live pair is sanitised, then give the face being SHOWN whatever is on
+        // p.srcs: a deck saved before this existed has one shared array, and what
+        // it holds belongs to the mode that deck was left in.
+        const rawBy = p.srcsBy && typeof p.srcsBy === 'object' ? p.srcsBy : {};
+        p.srcsBy = {};
+        for (const f of SB_SRC_FACES) {
+          const b = rawBy[f] && typeof rawBy[f] === 'object' ? rawBy[f] : null;
+          if (!b) continue;
+          let kept = (Array.isArray(b.srcs) ? b.srcs : []).slice(0, 3).map((s2) => sbClean(s2).slice(0, SB_SRC_MAX));
+          if (f === 'fixit') { kept = kept.slice(0, 2); while (kept.length && !kept[kept.length - 1]) kept.pop(); }
+          else kept = kept.filter(Boolean);
+          p.srcsBy[f] = {
+            srcs: kept,
+            dealtSrcs: (Array.isArray(b.dealtSrcs) ? b.dealtSrcs : []).filter((i) => Number.isInteger(i) && i >= 0 && i < 3),
+          };
+        }
+        const face0 = sbSrcFace(p.mode);
+        if (face0) p.srcsBy[face0] = { srcs: p.srcs.slice(), dealtSrcs: p.dealtSrcs.slice() };
         // v30 migration: a deck saved mid-lesson in Together (one shared
         // line, no trackT) must not load looking wiped — seed Together's
         // copy from the shared track once. Only a v30 deck can be in this
@@ -3736,6 +3775,7 @@ ${set.words.map(card).join('\n')}
             const prev = p.mode;
             if (prev === 'fixit' && p.dealt && !p.fixed) toast('Show it fixed first — the mended sentence is the one to leave on screen');
             p.mode = m;
+            sbSwapSrcs(p, prev, m); // before anything below reads p.srcs
             popId = null;
             if (m === 'expand' && p.srcs[0] && !p.grown && !p.track.length) { p.track = sbDeal(p.srcs[0]); p.grown = true; }
             // ARRIVING in fix-it always restarts its ceremony — the ceremony
@@ -4053,6 +4093,7 @@ ${set.words.map(card).join('\n')}
           settingRow('Mode', selectInput(SB_MODE_PILLS.map(([id, , , full]) => [id, full]), p.mode, (v) => {
             const prev = p.mode;
             p.mode = SB_MODES.includes(v) ? v : 'combine';
+            sbSwapSrcs(p, prev, p.mode); // p.mode, not v: an unknown value lands on combine
             if (p.mode === 'fixit' && prev !== 'fixit') { p.dealt = false; p.fixed = false; p.flagged = []; } // same restart rule as the quick seg
             api.refresh();
           })),
