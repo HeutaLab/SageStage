@@ -6736,3 +6736,82 @@ without the old rule: with nothing on a scrim theme, zero differences; with four
 widgets on Clear light, exactly four — the four ghosts, and nothing else. Solid
 buttons unchanged at 5.18:1 on Clear and 10.98:1 on Clear light. `style.css?v=`
 127 → 128, `copy-dist.mjs` run, 65 files. Desktop build not run.
+
+## 8 September 2026 (later) — the imported sentences that Fix it could not see
+
+A teacher reported that their own sentences were not showing up while the
+built-in ones were. They were right, and the shape of it is worth recording
+because nothing was lost and nothing errored — the import simply had nowhere to
+land.
+
+Every stock topic in `SB_BANKS` holds three things: `pairs` for Combine, `bases`
+for Expand, Build and Roles, and `fixes` for Fix it. The teacher's own bank,
+assembled from `deck.sbBank[year]`, was built with `fixes: []` written in as a
+literal, and the importer only ever knew two destinations — a line with " / "
+became a Combine pair, a plain line became a base. So in Fix it the "My import"
+chip appeared in the row beside the stock topics, because the topic was pushed
+whenever it had pairs or bases, and tapping it produced "Nothing in this topic
+for the current mode" while The seaside and Romans sitting next to it each
+offered a mend. From the front of a classroom that reads as: my sentences are
+gone.
+
+Fixed by giving the teacher's bank the third bucket it was always missing —
+`fixes` read and sanitised exactly like `pairs`, and counted when deciding
+whether to show the chip at all — and by filing " / " according to the face being
+taught. In Fix it a slashed line is now `right / broken` and lands in `fixes`; in
+every other mode it stays a Combine pair. The caption and the placeholder say
+which, and the toast counts "2 mends" rather than "2 pairs". One separator, one
+meaning at a time, and no second piece of syntax for a teacher to remember.
+
+The rebuild-from-the-sanitised-view line now carries all three buckets. It
+copied `pairs` and `bases` only, which was harmless while `fixes` could not
+exist and would have quietly dropped a term's mends the first time anyone
+banked a pair after this change.
+
+### Verified
+
+Browser build. Pasted a pair and two singles in Combine, then two mends in Fix
+it, and walked all five modes: Combine shows the pair, Expand/Build/Roles show
+the two singles, Fix it shows the two mends — nothing overwritten in either
+direction. Use in Fix it loads `srcs` as `['The gulls circled the boats.', 'the
+gulls circled the boats']`, right one first with `dealt: false`, and the rail
+reads "Read it right first". Survives a reload: all three buckets came back off
+the deck. Before the change, the same walk gave Fix it an empty topic and the
+"Nothing in this topic" hint while the preset topic offered its mend.
+
+## 8 September 2026 (later still) — the writing bars that had no ground to stand on
+
+Left flagged this morning, fixed now. `.mw-bar` and `.mw-bw` carry no background
+of their own, which is right on every opaque theme: they sit on the widget card
+and the ten tool pills tint it. On `clear` the card is genuinely transparent, so
+the bar had nothing behind it but the teacher's wallpaper — and the pills are a
+translucent cue (`#11182738` at the strongest, 22%) with `--ink` on top, so what
+a child actually saw was governed by a photograph. That is the unmeasurable case
+the scrim rule was written to close, and these two bars were simply missed when
+it was.
+
+They join the group. Nothing else changes: the rule is scoped to
+`.widget.theme-scrim`, so on Paper, Ink and Sun the bars stay transparent and the
+pills go on tinting the card exactly as before.
+
+The numbers land where they should. Composited against the scrim, the worst pill
+on Clear is 7.25:1 — which is the number it has always had on Paper, whose card
+is the same `#f1f6f9` this scrim is made of, so Clear now measures as the
+reference rather than as a gamble. Frost is 6.99:1 and Clear light 12.13:1. The
+Big Write bar comes with it: its title and clock read 11.57:1 and its timer
+ghosts 4.96:1.
+
+The pill borders stay as they are. `--cue-bd` is near-black on Clear light and
+vanishes into the plate, but the border was never the signal — the comment above
+the rule says the tint IS the cue, and a border that disappears costs nothing a
+child needs.
+
+### Verified
+
+Browser build, on a live Modelled writing widget stepped through the picker with
+computed backgrounds read off the DOM and each pill's tint composited onto its
+real plate. Scrim themes: Frost 6.99, Clear 7.25, Clear light 12.10 at the worst
+pill. Non-scrim themes still report `rgba(0, 0, 0, 0)` for the bar — Paper 7.25,
+Ink 12.25, Sun 5.91, unchanged. Big Write measured on Clear. `style.css?v=` 128 →
+129, `english-word.js?v=` 42 → 43, `copy-dist.mjs` run, 65 files. Desktop build
+not run.

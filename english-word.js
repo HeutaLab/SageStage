@@ -4139,9 +4139,14 @@ ${set.words.map(card).join('\n')}
           topic: 'My import',
           pairs: (Array.isArray(rawMine.pairs) ? rawMine.pairs : []).map((x) => (Array.isArray(x) ? [sbClean(x[0]).slice(0, SB_SRC_MAX), sbClean(x[1]).slice(0, SB_SRC_MAX)] : null)).filter((x) => x && x[0] && x[1]).slice(0, 30),
           bases: (Array.isArray(rawMine.bases) ? rawMine.bases : []).map((x) => sbClean(x).slice(0, SB_SRC_MAX)).filter(Boolean).slice(0, 30),
-          fixes: [],
+          // mends are a THIRD bucket, sanitised exactly like pairs. They used
+          // to be hard-coded empty, which is what made an import invisible in
+          // Fix it: the topic chip appeared beside the preset ones and then had
+          // nothing under it, so the teacher's own sentences looked lost while
+          // every stock topic offered a mend.
+          fixes: (Array.isArray(rawMine.fixes) ? rawMine.fixes : []).map((x) => (Array.isArray(x) ? [sbClean(x[0]).slice(0, SB_SRC_MAX), sbClean(x[1]).slice(0, SB_SRC_MAX)] : null)).filter((x) => x && x[0] && x[1]).slice(0, 30),
         } : null;
-        if (mine && (mine.pairs.length || mine.bases.length)) topics.push(mine);
+        if (mine && (mine.pairs.length || mine.bases.length || mine.fixes.length)) topics.push(mine);
         if (topics.length) {
           const trow = el2('div', { class: 'sb-topics' });
           for (const b of topics) {
@@ -4184,8 +4189,17 @@ ${set.words.map(card).join('\n')}
           }
         }
 
-        sph('Add your own — a term at a time', 'Paste as many as you like, one per line. Put “ / ” between two sentences to make a Combine pair.');
-        const ta2 = el2('textarea', { class: 'text-input sb-ta', rows: '4', placeholder: 'The tide came in. / The nets were full.\nThe lighthouse blinked.' });
+        // “ / ” files by the face being taught, because the rest of this panel
+        // is mode-specific and a teacher preparing a mend is not preparing a
+        // combine. Same syntax, one meaning at a time, and the caption says
+        // which — rather than a second separator to remember.
+        const mends = p.mode === 'fixit';
+        sph('Add your own — a term at a time', mends
+          ? 'Paste as many as you like, one per line. Put “ / ” between the right sentence and the broken one to make a mend.'
+          : 'Paste as many as you like, one per line. Put “ / ” between two sentences to make a Combine pair.');
+        const ta2 = el2('textarea', { class: 'text-input sb-ta', rows: '4', placeholder: mends
+          ? 'The gulls cried over the harbour. / the gulls cried over the harbour\nThe lighthouse blinked.'
+          : 'The tide came in. / The nets were full.\nThe lighthouse blinked.' });
         const impBtn = el2('button', {
           class: 'sb-act',
           onclick: () => {
@@ -4194,20 +4208,26 @@ ${set.words.map(card).join('\n')}
             const y = effYear();
             deck.sbBank = deck.sbBank && typeof deck.sbBank === 'object' ? deck.sbBank : {};
             // rebuild from the SANITISED view, never the raw store: junk in
-            // a hand-edited deck must not ride forward or eat the caps
-            const bucket = mine ? { pairs: mine.pairs.slice(), bases: mine.bases.slice() } : { pairs: [], bases: [] };
+            // a hand-edited deck must not ride forward or eat the caps. All
+            // three buckets are carried, or filing a mend would drop the
+            // pairs and singles banked in an earlier session.
+            const bucket = mine
+              ? { pairs: mine.pairs.slice(), bases: mine.bases.slice(), fixes: mine.fixes.slice() }
+              : { pairs: [], bases: [], fixes: [] };
+            const two = mends ? bucket.fixes : bucket.pairs;
             let np = 0, nb = 0;
             for (const ln of raw) {
               if (ln.includes('/')) {
                 const [a, b3] = ln.split('/').map((s) => sbClean(s).slice(0, SB_SRC_MAX));
-                if (a && b3 && bucket.pairs.length < 30) { bucket.pairs.push([a, b3]); np++; }
+                if (a && b3 && two.length < 30) { two.push([a, b3]); np++; }
               } else if (bucket.bases.length < 30) { bucket.bases.push(ln); nb++; }
             }
             deck.sbBank[y] = bucket;
             D.save();
             p.bankTopic = 'My import';
             api.refresh();
-            toast(np + (np === 1 ? ' pair' : ' pairs') + ' and ' + nb + (nb === 1 ? ' single' : ' singles') + ' filed under ' + yrLabel(y) + ' · My import');
+            const twoLab = mends ? (np === 1 ? ' mend' : ' mends') : (np === 1 ? ' pair' : ' pairs');
+            toast(np + twoLab + ' and ' + nb + (nb === 1 ? ' single' : ' singles') + ' filed under ' + yrLabel(y) + ' · My import');
           },
         }, 'Add to my bank');
         box.append(ta2, el2('div', { class: 'row', style: 'flex-wrap:wrap;gap:6px;' }, impBtn,
