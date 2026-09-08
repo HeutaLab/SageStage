@@ -6927,3 +6927,62 @@ fix-it-shaped pair on `srcs`: Combine keeps what was on screen, Fix it opens on
 its own ghost hint rather than inheriting, Expand opens empty.
 `english-word.js?v=` 47 → 48, `copy-dist.mjs` run, 65 files. The V0.1 note in
 docs/sentence-builder-design.md is struck through and dated. Desktop not run.
+
+## 8 September 2026 (sixth) — the sentence builder with no sentence in it
+
+Glenn asked me to check Fix it on the live taster. The ceremony itself is sound —
+a mend loads from the bank in two taps, "Bring in the broken one" deals the
+broken version to the line, "Show it fixed" clears it and ends on the correct
+sentence, "Do it again" resets — and Fix it now opens on its own empty prompt
+rather than inheriting another face's sources. What is not sound is that on the
+taster you cannot see any of it.
+
+`.sb-mat` was the only child of the widget body allowed to shrink. The waiting
+band and the bar are both `flex-shrink: 0`, so every pixel the widget lost came
+out of the mat, and the mat is where the sentence lives. Measured on
+sagestage.app at the size demo.js ships — 540x470 — the mat was **16px** and not
+one pixel of the sentence line was on screen. Worse on a window small enough to
+hit the seed's 0.8 clamp: 12px, with the body overflowing by 90. The cards were
+still there and still correct, laid out inside a 16px scrollport and clipped,
+which is exactly why the DOM read right while the board showed a grey band and a
+row of punctuation. It is not a Fix it bug — Combine and the rest deal onto the
+same line — but Fix it is where it shows worst, because the whole point of the
+face is reading the broken sentence together.
+
+The degradation starts well above the taster's size, too: at 700x560 only 44px of
+the line survives. Only at the widget's own declared default, 860x620, does the
+mat get its full 273px.
+
+Two rules now share the squeeze. The mat takes a 132px floor — one card row plus
+the slab's own chrome (the line's 2.3em minimum, its 36px of padding, the slab's
+24px) — and the band is allowed to shrink to a 66px floor, the same number the
+number line's tray uses. That ordering is the argument: the band's cards row
+already scrolls, so the band losing height costs a scroll, where the mat losing
+height cost the sentence. Below roughly 700x560 the body scrolls, which is the
+right trade — a sentence builder with no sentence is not a widget.
+
+Left for Glenn, because it is a composition decision and not a bug: the taster
+seeds this widget at 540x470 against a declared 860x620 — 63% of its width and
+76% of its height, under the ≥85% rule the taster seed geometry records, and the
+boot-time fit can take another 20% off. The recorded principle is "fewer
+full-size beats more crushed", and that screen currently pairs it with Modelled
+writing at 640x536 on a 1280x720 canvas, so there is no room for 860 beside it.
+The floor above means the widget is usable either way now; sizing it properly
+would make it good.
+
+Also noted, unfixed: the bar is what actually eats a narrow widget. It is 147px
+tall at 860 wide, 254px at 540 and 305px at 432, because the mode, stage and beat
+pills wrap. At 540x470 that is more than half the widget spent on chrome before
+the sentence gets a pixel.
+
+### Verified
+
+Browser build, a mend dealt to the line, the widget stepped through four sizes
+with the line's visible height measured against the mat's scrollport rather than
+trusted from the DOM. Before → after, pixels of the sentence line on screen:
+860x620 183 → 183 (untouched, and the body still fits with zero overflow),
+700x560 44 → 71, 540x470 **0 → 71**, 432x376 **0 → 53**. The band holds its cards
+row at 35px through all of it, and the bar stays reachable — 190px of it in view
+at 540x470, the rest a scroll away. `.sb-mat` and `.sb-tray` exist only in this
+widget, so nothing else can be touched by either rule. `style.css?v=` 129 → 130,
+`copy-dist.mjs` run, 65 files. Desktop not run.
