@@ -4161,10 +4161,28 @@ ${set.words.map(card).join('\n')}
         }
         const open = topics.find((b) => b.topic === p.bankTopic);
         if (open) {
+          // Combine takes single sentences as well as pairs. Its own input is
+          // "one per line, up to three" and each line gets its own deal button,
+          // so a lone sentence is first-class here — and offering only pairs was
+          // what made a banked single look thrown away: the import files it,
+          // says "1 single filed", jumps the topic to My import, and Combine
+          // then had nothing to show. Two singles are a pair a teacher chose.
+          const combineSingles = () => open.bases.map((b2) => ({
+            label: b2,
+            use: () => {
+              // append, never replace: dealtSrcs is positional, and adding a
+              // third sentence must not renumber the two already dealt
+              if (p.srcs.includes(b2)) { toast('That one is already on the line'); return; }
+              if (p.srcs.length >= 3) { toast('Combine holds three sentences — clear one first'); return; }
+              p.srcs = p.srcs.concat([b2]);
+              api.refresh();
+              toast('Added to Combine — ' + p.srcs.length + ' on the line');
+            },
+          }));
           const items = p.mode === 'combine' ? open.pairs.map((pr) => ({
             label: pr[0] + '  ·  ' + pr[1],
             use: () => { p.srcs = [pr[0], pr[1]]; p.dealtSrcs = []; api.refresh(); toast('Loaded into Combine — deal when ready'); },
-          })) : p.mode === 'expand' ? open.bases.map((b2) => ({
+          })).concat(combineSingles()) : p.mode === 'expand' ? open.bases.map((b2) => ({
             label: b2,
             use: () => { p.srcs = [b2]; p.dealtSrcs = []; p.track = sbDeal(b2); p.grown = true; api.refresh(); toast('On the line — grow it'); },
           })) : p.mode === 'fixit' ? open.fixes.map((f2) => ({
@@ -4183,7 +4201,19 @@ ${set.words.map(card).join('\n')}
               toast(full ? 'The tray filled up — some words stayed behind' : 'Words dealt to the tray');
             },
           }));
-          if (!items.length) box.append(el2('div', { class: 'hint' }, 'Nothing in this topic for the current mode — switch mode or pick another topic.'));
+          if (!items.length) {
+            // never just "nothing": a teacher who has banked sentences and is
+            // shown an empty topic reads it as lost. Say what is in there and
+            // which face reads it.
+            const held = [];
+            if (open.pairs.length) held.push(open.pairs.length + (open.pairs.length === 1 ? ' pair' : ' pairs') + ' for Combine');
+            if (open.bases.length) held.push(open.bases.length + (open.bases.length === 1 ? ' single' : ' singles') + ' for Expand, Build and Roles');
+            if (open.fixes.length) held.push(open.fixes.length + (open.fixes.length === 1 ? ' mend' : ' mends') + ' for Fix it');
+            const face = (SB_MODE_PILLS.find(([id]) => id === p.mode) || [, 'this face'])[1];
+            box.append(el2('div', { class: 'hint' }, held.length
+              ? 'Nothing here for ' + face + '. This topic holds ' + held.join(' and ') + ' — nothing is lost, switch face to reach it.'
+              : 'Nothing in this topic yet — paste your own below.'));
+          }
           for (const it of items) {
             box.append(el2('div', { class: 'sb-bankitem' }, el2('span', { class: 'grow' }, it.label), el2('button', { class: 'sb-use', onclick: it.use }, 'Use')));
           }
@@ -4215,19 +4245,27 @@ ${set.words.map(card).join('\n')}
               ? { pairs: mine.pairs.slice(), bases: mine.bases.slice(), fixes: mine.fixes.slice() }
               : { pairs: [], bases: [], fixes: [] };
             const two = mends ? bucket.fixes : bucket.pairs;
+            // banking the same paste twice is a slip, not an intention — a
+            // second click on Add used to double every line, and a bank full of
+            // pairs shown twice is its own kind of "this is not keeping my work"
             let np = 0, nb = 0;
             for (const ln of raw) {
               if (ln.includes('/')) {
                 const [a, b3] = ln.split('/').map((s) => sbClean(s).slice(0, SB_SRC_MAX));
-                if (a && b3 && two.length < 30) { two.push([a, b3]); np++; }
-              } else if (bucket.bases.length < 30) { bucket.bases.push(ln); nb++; }
+                if (!a || !b3 || two.some((x) => x[0] === a && x[1] === b3)) continue;
+                if (two.length < 30) { two.push([a, b3]); np++; }
+              } else if (!bucket.bases.includes(ln) && bucket.bases.length < 30) { bucket.bases.push(ln); nb++; }
             }
             deck.sbBank[y] = bucket;
             D.save();
             p.bankTopic = 'My import';
             api.refresh();
             const twoLab = mends ? (np === 1 ? ' mend' : ' mends') : (np === 1 ? ' pair' : ' pairs');
-            toast(np + twoLab + ' and ' + nb + (nb === 1 ? ' single' : ' singles') + ' filed under ' + yrLabel(y) + ' · My import');
+            // "0 and 0 filed" reads as a failure when the truth is that it was
+            // already there — which is the whole point of not duplicating
+            toast(np + nb === 0
+              ? 'Already in your bank under ' + yrLabel(y) + ' — nothing new to file'
+              : np + twoLab + ' and ' + nb + (nb === 1 ? ' single' : ' singles') + ' filed under ' + yrLabel(y) + ' · My import');
           },
         }, 'Add to my bank');
         box.append(ta2, el2('div', { class: 'row', style: 'flex-wrap:wrap;gap:6px;' }, impBtn,

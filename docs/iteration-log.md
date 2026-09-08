@@ -6815,3 +6815,63 @@ pill. Non-scrim themes still report `rgba(0, 0, 0, 0)` for the bar — Paper 7.2
 Ink 12.25, Sun 5.91, unchanged. Big Write measured on Clear. `style.css?v=` 128 →
 129, `english-word.js?v=` 42 → 43, `copy-dist.mjs` run, 65 files. Desktop build
 not run.
+
+## 8 September 2026 (fourth) — the bank that filed the sentence and then showed an empty shelf
+
+Glenn checked this morning's Fix it repair on the live taster and found the same
+complaint one door along. In **Combine**, at Year 5, he typed "The lighthouse
+blinked." — a plain line, no " / " — pressed Add to my bank, and got "Nothing in
+this topic for the current mode" under a My import chip the importer had just
+selected for him. His words: the import doesn't seem to be keeping the text in
+the same way that the premade pills do.
+
+It was keeping it. The deck read
+`{5: {pairs: [], bases: ['The lighthouse blinked.'], fixes: []}}` — the sentence
+was filed, saved and intact. It simply had nowhere to appear, because Combine
+listed `pairs` and nothing else. So the sequence a teacher sees is: type a
+sentence, be told "1 single filed", be moved to your own topic, and find it
+empty. That is indistinguishable from the app throwing the sentence away, and
+this morning's entry only closed the Fix it hole; the Combine one was sitting
+right beside it and I did not look.
+
+Combine takes singles now. Its own input has always been "one per line, up to
+three" and each line gets its own deal button, so a lone sentence was already
+first-class in that face — listing only pairs was the bank disagreeing with the
+mode it was feeding. Use appends rather than replaces, because `dealtSrcs` is
+positional and adding a third sentence must not renumber the two already dealt;
+it refuses a duplicate ("That one is already on the line") and stops at three
+("Combine holds three sentences — clear one first"). Two singles are a pair a
+teacher chose. The preset topics gain the same: Ancient Egypt now offers its two
+pairs and its two singles rather than the pairs alone.
+
+The empty state stops being a shrug. Where a topic genuinely has nothing for the
+face in front of you, it now counts what it does hold and says which face reads
+it — "Nothing here for Fix it. This topic holds 1 single for Expand, Build and
+Roles — nothing is lost, switch face to reach it." A teacher looking at an empty
+shelf should never have to guess whether their work survived.
+
+Two smaller things fell out of testing it. Add to my bank was not idempotent — a
+second press on the same paste banked every line twice, and a bank showing each
+pair twice is its own version of "this is not keeping my work"; duplicates are
+skipped now. And with that guard the toast started saying "0 pairs and 0 singles
+filed", which reads as a failure when the truth is the opposite, so a no-op says
+"Already in your bank under Year 5 — nothing new to file".
+
+Left alone: `srcs` are still positional and shared across modes, so a fix-it pair
+lingers into Combine's chips until replaced. That wart is recorded in the design
+doc and is not what anyone reported.
+
+### Verified
+
+Browser build, reproducing Glenn's exact flow — Year 5, Combine, one plain line.
+Before: "1 single filed" and an empty My import, with the sentence provably in
+the deck. After: the sentence is listed with a Use button. Use puts it on the
+line ("Added to Combine — 1 on the line"); a second Use is refused as a
+duplicate; with three sentences already up, a fourth is refused and the three
+stand. All five faces walked against a bank holding a pair, a single and a mend:
+Combine shows the pair and the single, Expand/Build/Roles the single, Fix it the
+mend. Preset topics in Combine show pairs then singles; Expand and Fix it are
+unchanged. Empty-state message checked with Fix it over a singles-only topic.
+Add pressed twice from a cleared bank: "1 single filed", then "Already in your
+bank". `english-word.js?v=` 43 → 47, `copy-dist.mjs` run, 65 files. Desktop not
+run.
