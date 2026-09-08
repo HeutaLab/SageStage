@@ -348,12 +348,24 @@ body.deck-open #topbar { right: 328px; }
    by applyTheme; `glass` is included because at 0.55 alpha it is as see-through
    as `clear`, and measured honestly its accent edge was 2.93:1 on a mid-grey
    wallpaper, i.e. already below the floor before any of this. */
-.widget.theme-scrim .btn,
 .widget.theme-scrim .text-input,
 .widget.theme-scrim select.text-input,
 .widget.theme-scrim textarea.text-input,
 .widget.theme-scrim .widget-settings { background-color: var(--scrim); }
-.widget.theme-scrim .btn { background-color: var(--accent); }
+/* Buttons take the accent plate rather than the scrim — but NOT ghosts, and the
+   `.btn` that used to sit in the group above has gone with them so the exemption
+   lands on --accent-soft rather than on --scrim. (That entry was dead weight in
+   any case: this line overrode it for every button.) A ghost pairs --accent-soft
+   with --accent-text, and --accent-soft is a flat opaque tone on every theme
+   — #c1d3d4 on Clear, #1d282f on Clear light — so a ghost already hides the
+   wallpaper and needs no help from the rule above. Repainting it with --accent
+   slid the button's own ink underneath it: on Clear light --accent-text and
+   --accent are both #6fefe1, so every ghost label on the board — Reveal, Shuffle
+   and reset, Cancel, from some 127 call sites — measured 1.00:1 and was simply
+   not there. Clear was 1.41:1 and Frost 1.45:1, no better. Left alone the pair
+   measures 4.96, 10.82 and 4.94:1, which is what the other seventeen themes have
+   had all along. */
+.widget.theme-scrim .btn:not(.ghost) { background-color: var(--accent); }
 
 /* These three popovers are DOM children of the widget but paint their own white
    ground, so the cascade would hand them a theme accent chosen to read on a dark

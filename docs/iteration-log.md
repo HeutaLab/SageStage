@@ -6672,3 +6672,67 @@ with the DOM checked against the screen; the sides go blank again at rest.
 Switching Dots to Numbers and back preserves the values. Colour applies to
 numerals (blue #1d4ed8 through both modes). At the 260x200 default the numeral
 renders 31px on a 54px face with no overflow on .widget-body. Desktop not run.
+
+## 8 September 2026 — the ghost buttons that wrote their labels in their own ink
+
+`.btn.ghost` has always paired two tokens: `--accent-soft` for the plate and
+`--accent-text` for the word on it. That pairing is measured and it holds — 4.63:1
+at its worst (Lemon) and 12.36:1 at its best (Ink) across the picker. What it
+never survived was `.widget.theme-scrim .btn`, which repainted every button in a
+see-through widget with `--accent` and left the ghost's `color` untouched. On the
+three themes that carry a scrim the two tokens are the same colour or nearly so.
+Clear light sets `--accent` and `--accent-text` both to `#6fefe1`, so the label
+was drawn in precisely the colour underneath it: 1.00:1, not dim but absent. Clear
+came out at 1.41:1 and Frost at 1.45:1, which is the same failure with a fraction
+of a hue to hide behind. Roughly 127 ghost buttons across the app were affected —
+Pass and Got it on the prompt cards, Try again in the word builder, Shuffle and
+reset in memory pairs, Big Write in the modelled-writing bar, Start blank and
+Load a genre pack in the toolkit, every Cancel in every dialog inside a widget.
+
+The scrim rule's argument is sound and stays: a translucent card gives its
+controls whatever contrast the teacher's wallpaper happens to have, which cannot
+be measured, so anything that has to be read gets an opaque plate. Ghosts simply
+never needed the help. `--accent-soft` is already a flat opaque tone on every
+theme — `#c1d3d4` on Clear, `#1d282f` on Clear light — chosen that way in the
+first place because `color-mix()` is dropped whole by the pre-2023 Chromium on
+locked-down school machines. So the fix is to stop repainting them: `.btn` left
+the grouped scrim selector and the accent line became `.btn:not(.ghost)`. The
+`.btn` in that group was dead weight in any case — the very next line had
+overridden it for every button since the day both were written.
+
+Ghosts on the three scrim themes now measure 4.94, 4.96 and 10.82:1, which is not
+a new pairing but the one the other seventeen themes have had all along. Solid
+buttons keep the accent plate they were given.
+
+Two things worth writing down because they cost time. The first reproduction of
+the bug injected the old rule at the end of `<head>`, where it wins a specificity
+tie that the real rule — sitting at line 356, above `.mw-bar .btn.mw-pill` at
+5594 — loses. That made the ten modelled-writing tool pills appear to go blank
+teal as well. They never did: their own later rule always held, and only the
+plain ghost beside them, Big Write, was ever hit. A reproduction that is stronger
+than the bug will happily confirm damage that was not there. The second: there is
+no word-search widget in this codebase. The Reveal button that showed the fault is
+the prompt cards', with a second one in the genre toolkit.
+
+Left alone, because it is a different problem: on Clear the modelled-writing tool
+pills carry a translucent cue fill (`#11182738` and friends) over a card that is
+genuinely transparent, so their contrast does still ride on the wallpaper. That
+predates this rule and is untouched by it.
+
+### Verified
+
+Browser build, dev server, with the file itself swapped rather than a rule
+injected over it — old stylesheet on disk, reload, measure; fix on disk, reload,
+measure. Before: Big Write, Shuffle and reset, Pass and Try again all
+`rgb(111, 239, 225)` on `rgb(111, 239, 225)`, 1.00:1, and blank teal pills in the
+screenshot. After: all four `rgb(111, 239, 225)` on `rgb(29, 40, 47)`, 10.82:1,
+and legible. Every one of the twenty themes stepped through the real picker on a
+live widget and its computed colour/background pair recorded: 4.90 Paper, 4.94
+Frost, 4.96 Clear, 10.82 Clear light, 4.94 Lilac, 4.92 Mint, 4.63 Lemon, 4.91
+Peach, 4.90 Blossom, 4.93 Sky, 4.91 Rose, 4.91 Sun, 4.91 Tangerine, 5.98 Grape,
+5.96 Ocean, 7.57 Crimson, 7.40 Forest, 8.38 Navy, 10.02 Slate, 12.36 Ink. To show
+the change is surgical, every `.btn` in the document was snapshotted with and
+without the old rule: with nothing on a scrim theme, zero differences; with four
+widgets on Clear light, exactly four — the four ghosts, and nothing else. Solid
+buttons unchanged at 5.18:1 on Clear and 10.98:1 on Clear light. `style.css?v=`
+127 → 128, `copy-dist.mjs` run, 65 files. Desktop build not run.
