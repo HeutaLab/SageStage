@@ -6986,3 +6986,49 @@ row at 35px through all of it, and the bar stays reachable — 190px of it in vi
 at 540x470, the rest a scroll away. `.sb-mat` and `.sb-tray` exist only in this
 widget, so nothing else can be touched by either rule. `style.css?v=` 129 → 130,
 `copy-dist.mjs` run, 65 files. Desktop not run.
+
+## 8 September 2026 (seventh) — the sentence builder gets its own screen on the taster
+
+The other half of this morning's slab fix, and Glenn's call. The app-side floor
+stops the sentence line vanishing at any size; this stops the taster asking it to
+survive a size it was never drawn for.
+
+It shared the writing screen at 540x470 against a widget that declares 860x620 —
+63% of its width, 76% of its height, under the ≥85% rule the taster's own seed
+geometry records, and the boot-time fit can take another 20% off that. Now it has
+its own screen at 1180x540, the same shape and the same numbers the story map
+takes on the tour, whose comment already made the argument: give it the stage it
+was drawn for instead of a squeezed corner.
+
+Width is what buys the height back, which is not obvious. Beyond 860 the extra
+width does nothing for the mat directly — measured, the mat is 193px at 860, 900,
+1000 and 1180 alike. What width does is stop the bar wrapping: the mode, stage
+and beat pills fold below 850px, and a wrapped bar is 254px of chrome where an
+unwrapped one is 147. That 107px is the mat's. 1180 keeps the bar on one tier
+even for a visitor whose window trips the seed's 0.8 clamp, where this lands at
+944x432 — measured, still one tier, still nothing overflowing. Anything under
+1063 seeded would wrap once clamped.
+
+Modelled writing keeps the writing screen to itself, centred at x=320. It is 640
+wide by nature, so sharing the row never cost it anything; the sentence builder
+was always the one paying for the arrangement.
+
+Height stays at 540 with its bottom edge on 620, like every other screen in every
+seed. There is room to go taller on paper and there should not be — that is
+exactly the line modelwrite's own comment was written about, when 760 put a
+widget under the stage's dock on a laptop. The consequence is that a two-row
+sentence still scrolls the slab at this size: the line runs 233px against a 193px
+mat. That is what that mat is for, and it is the one mat in the app that scrolls.
+
+### Verified
+
+Assembled the taster locally with its own `scripts/assemble.sh` against this
+checkout and opened `try/?deck=english` at 1280x720. Three screens: Plan the
+story · Model the writing · Build the sentence. The sentence builder seeds at
+1180x540, the bar holds one tier at 147px, the mat gets 193px, the body does not
+overflow. Fix it walked end to end on it — mode switch, a mend loaded from the
+bank in two taps, "Bring in the broken one" — and the broken sentence is on the
+line in board-sized cards where at 540x470 there was nothing on screen at all.
+Re-seeded from a cleared browser to confirm the 1.0 geometry rather than reading
+a deck built at the clamp. The change is in HeutaLab/sagestage-app (demo.js);
+docs/sagestage-app-design.md §seeding updated to say three screens.
