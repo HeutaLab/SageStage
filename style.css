@@ -351,6 +351,17 @@ body.deck-open #topbar { right: 328px; }
 .widget.theme-scrim .text-input,
 .widget.theme-scrim select.text-input,
 .widget.theme-scrim textarea.text-input,
+/* The modelled-writing bars are here for the same reason, and were missed when
+   this rule was written. Both hold things that have to be READ over a card that
+   is genuinely transparent on `clear`: .mw-bar's ten tool pills are a translucent
+   cue tint (22% at the strongest) with --ink on top, and .mw-bw carries the Big
+   Write title, its lens chip and the clock. Unplated, all of it composited
+   against the wallpaper, which is the unmeasurable case this rule exists to
+   close. On the scrim they measure 7.25:1 at worst on Clear — the same number
+   the pills have always had on Paper, whose card is this scrim's colour — 6.99:1
+   on Frost and 12.13:1 on Clear light. */
+.widget.theme-scrim .mw-bar,
+.widget.theme-scrim .mw-bw,
 .widget.theme-scrim .widget-settings { background-color: var(--scrim); }
 /* Buttons take the accent plate rather than the scrim — but NOT ghosts, and the
    `.btn` that used to sit in the group above has gone with them so the exemption
