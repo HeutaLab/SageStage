@@ -765,6 +765,14 @@
         catch (e) { console.error('window close failed', e); return false; }
       },
 
+      // Asked for ONCE, here, because the answer cannot change while the app
+      // is running and a Video widget must not pay a round trip every time a
+      // teacher flips to its screen. A promise rather than a value because a
+      // widget can mount before this lands; `null` means the port was busy and
+      // the widget should offer the browser instead. See the bridge's note in
+      // src-tauri/src/lib.rs for why a YouTube frame needs an http parent.
+      videoBridge: T.core.invoke('video_bridge_url').catch(() => null),
+
       openExternal(url) {
         // The system browser, not a webview with no chrome and no way back.
         try { T.opener.openUrl(url); } catch (e) { /* nothing sensible to fall back to */ }

@@ -7085,3 +7085,82 @@ them. Pressing "↓ Deal a sentence" walks the first sentence's words into the
 waiting band and marks it "✓ out" on the rail, with the second still offering
 "↓ deal". `app.js?v=` 114 → 115, `copy-dist.mjs` run, 65 files. The seed change is
 in HeutaLab/sagestage-app. Desktop not run.
+## 8 September 2026 — YouTube on the board, and an origin that was never going to be allowed
+
+Every Video widget holding a YouTube link showed the player's own black card in
+the desktop app — "Video player configuration error. Error 153" — with a "Watch
+video on YouTube" button under it that is one more of this webview's silent
+no-ops. In a browser tab the same widget plays.
+
+### What it actually was
+
+Not the sandbox, not the referrer. Under a real production build the probe put
+four frames side by side: the widget's own config, `referrerpolicy="no-referrer"`,
+`youtube-nocookie.com`, and no `sandbox` attribute at all. All four answered 153.
+What the player objects to is the **scheme of the origin around it**: it will not
+run unless its immediate parent is http(s), and on macOS and Linux this app is
+served from `tauri://localhost`. There is no config switch — `useHttpsScheme` is
+Windows and Android only, and tauri's `tauri_protocol_url` hard-codes
+`tauri://localhost` everywhere else. Windows already gets
+`http://tauri.localhost`, so this was never a bug there.
+
+The thing that made a fix possible is that the player only inspects its
+**immediate** parent, not the whole ancestor chain. Framed one level down inside
+an http page it plays perfectly, with the widget's existing sandbox untouched.
+
+### A landmine worth writing down
+
+`cargo build --release` does **not** build the desktop app. `dev` is
+`!tauri/custom-protocol` (tauri's own `build.rs`), so without that feature the
+binary loads `devUrl` — which means it is a browser origin wearing the app's
+window, with the frontend coming from whatever is on :8642 and, when that is
+down, out of WebKit's cache. Two probe builds were read as "the assets didn't
+update" before the byte-identical binary size gave it away. Any desktop bug
+hunted with a plain `cargo build` is being hunted in the wrong origin. The build
+that reproduces what a teacher runs is
+`cargo build --release --features tauri/custom-protocol`.
+
+### The bridge
+
+`start_video_bridge` in `src-tauri/src/lib.rs` serves one page on loopback whose
+whole body is the YouTube iframe; the widget frames that instead. Deliberately
+narrow, because a listening socket on a teacher's laptop is not nothing and the
+badge in the corner says 100% local: bound to 127.0.0.1 and never 0.0.0.0, one
+route (`GET /player`) and 404 for everything else, a per-launch token so nothing
+else on the machine can use it as a general-purpose YouTube frame, and a video id
+validated against YouTube's alphabet — the only caller-supplied thing that
+reaches the page, so there is nothing to inject into. It reads no files, runs no
+commands and never touches a deck.
+
+The port is the constant `47821` rather than whatever the OS hands out, and that
+is the whole reason `frame-src` in **both** CSPs can name one exact origin instead
+of a `127.0.0.1:*` wildcard that would let a shared template frame anything else
+listening on the machine. If the port is taken the bridge does not start,
+`video_bridge_url` answers `null`, and the widget draws a card with an "Open on
+YouTube" button that goes through `SagePlatform.openExternal` — a button that
+works, in place of YouTube's that does not.
+
+The Embed widget takes the same route, since its own settings hint suggests
+pasting a YouTube embed link. `location.protocol` decides: http(s) frames YouTube
+directly as before, so the browser build and Windows are untouched by any of this.
+
+### Considered and not done
+
+A `player.html` on sagestage.co.uk would have been one static file and no socket,
+but the apex is exactly the domain Palo Alto has already been seen sinkholing on
+a school network, and every play would become a request to our web host — which
+is not what the badge promises. A pop-out Tauri window straight at youtube.com
+needs no infrastructure at all and breaks the one thing the board is for: the
+video would stop being where the teacher put it.
+
+### Verified
+
+Browser at :8642: Video widget added from the dock, `watch?v=` pasted, normalised
+to `/embed/` and playing — the direct path is unchanged.
+
+Desktop, `--features tauri/custom-protocol`, run against a seeded state file
+under an isolated `HOME` so no real deck was touched: the real Video widget at
+`tauri://localhost` renders the player and its chrome, no 153. `lsof` confirms the
+listener is `127.0.0.1:47821` only; `/player` without a token and `/anything`
+both answer 404. With the port held by another process the widget falls back to
+the "Open on YouTube" card as intended. Rust builds clean, no warnings.

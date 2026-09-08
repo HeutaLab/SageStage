@@ -22,6 +22,15 @@
        attack this release closed — a shared template naming a data:text/html
        document and getting script onto the classroom board.
 
+       `http://127.0.0.1:47821` in frame-src is the desktop video bridge, and
+       the reason its port is a constant rather than whatever the OS handed out:
+       a fixed port is what lets this name one exact origin instead of a
+       `127.0.0.1:*` wildcard that would let a shared template frame anything
+       else listening on the machine. It is inert in a browser, where nothing
+       ever builds that URL, but it is listed here as well because the two
+       policies are intersected in the bundle and a directive missing from this
+       one is blocked however permissive tauri.conf.json is.
+
        THIS POLICY SHIPS INSIDE THE DESKTOP APP TOO. copy-dist.sh copies
        index.html verbatim into dist/ and tauri.conf.json points frontendDist at
        it, so in the bundle this meta is enforced *alongside*
@@ -42,7 +51,7 @@
     img-src 'self' data: blob: https: asset: asset://localhost http://asset.localhost;
     font-src 'self';
     media-src 'self' data: blob: https:;
-    frame-src 'self' blob: https:;
+    frame-src 'self' blob: https: http://127.0.0.1:47821;
     connect-src 'self' ipc: http://ipc.localhost https:;
     object-src 'none';
     base-uri 'none';

@@ -7171,12 +7171,17 @@
       // the settings field forces an https:// prefix, but a url that arrived in
       // a shared template never went through it
       const src = SageSanitize.frameUrl(w.props.url);
-      if (src) {
-        wrap.append(el('iframe', {
-          src,
-          sandbox: frameSandbox(src, ['allow-presentation']),
-          allow: 'autoplay; encrypted-media',
-        }));
+      // Its own settings hint suggests a YouTube embed link, so it needs the
+      // desktop bridge for exactly the reason the Video widget does.
+      const frame = (u) => el('iframe', {
+        src: u,
+        sandbox: frameSandbox(u, ['allow-presentation']),
+        allow: 'autoplay; encrypted-media',
+      });
+      if (src && isYouTubeEmbed(src)) {
+        mountYouTube(wrap, src, frame);
+      } else if (src) {
+        wrap.append(frame(src));
       } else if (w.props.url) {
         wrap.append(badUrlHint(''));
       } else {
@@ -7459,6 +7464,56 @@
     } catch (e) { return false; }
   }
 
+  // The id out of a URL isYouTubeEmbed() has already vouched for.
+  function youTubeId(u) {
+    try {
+      const id = new URL(u).pathname.slice('/embed/'.length).split('/')[0];
+      return /^[\w-]{1,64}$/.test(id) ? id : null;
+    } catch (e) { return null; }
+  }
+
+  // YouTube's player refuses to run unless the origin of the frame directly
+  // around it is http(s), and answers "Video player configuration error. Error
+  // 153" when it is not. A browser tab and the Windows build are http(s) and so
+  // frame it themselves; on macOS and Linux this app is served from
+  // `tauri://localhost`, and nothing about the iframe — referrerpolicy,
+  // youtube-nocookie, no sandbox at all — changes the player's mind, because
+  // what it objects to is the scheme. The desktop shell therefore serves one
+  // page on loopback whose whole body is the YouTube iframe, and we frame that:
+  // the player only ever inspects its IMMEDIATE parent. See the long note on
+  // `start_video_bridge` in src-tauri/src/lib.rs.
+  //
+  // `makeFrame` belongs to the caller because the Video and Embed widgets hand
+  // their frames different sandboxes, and the bridge must inherit whichever one
+  // the widget would have used on the real URL.
+  function mountYouTube(wrap, u, makeFrame) {
+    if (location.protocol === 'http:' || location.protocol === 'https:') {
+      wrap.append(makeFrame(u));
+      return;
+    }
+    const id = youTubeId(u);
+    Promise.resolve(window.SagePlatform && SagePlatform.videoBridge).then((base) => {
+      if (!wrap.isConnected) return; // screen switched while we were asking
+      if (base && id) {
+        const nocookie = new URL(u).hostname.replace(/^www\./, '') === 'youtube-nocookie.com';
+        wrap.append(makeFrame(base + '&v=' + id + (nocookie ? '&nc=1' : '')));
+        return;
+      }
+      // The bridge's port was taken. YouTube's own error card offers a "Watch
+      // video on YouTube" button that does nothing at all in this webview, so
+      // the honest thing is to say so and hand over a button that works.
+      const watch = id ? 'https://www.youtube.com/watch?v=' + id : u;
+      wrap.append(el('div', { style: 'text-align:center;display:grid;gap:8px;justify-items:center;--acc:#fecaca;' },
+        el('div', { style: 'font-size:38px;color:var(--ink-soft);' }, iconEl('video')),
+        el('button', {
+          class: 'btn',
+          onclick: () => { if (window.SagePlatform) SagePlatform.openExternal(watch); },
+        }, 'Open on YouTube'),
+        el('div', { class: 'hint' }, 'This video cannot play inside the app on this computer'),
+      ));
+    });
+  }
+
   WIDGETS.video = {
     title: 'Video', icon: 'video', accent: '#fecaca', w: 420, h: 300,
     defaults: () => ({ url: '' }),
@@ -7471,9 +7526,9 @@
           : el('div', { class: 'hint', style: 'text-align:center;padding:10px;' },
             'Open ⚙ settings and paste a YouTube link or a direct video URL (.mp4, .webm).'));
       } else if (isYouTubeEmbed(u)) {
-        wrap.append(el('iframe', {
-          src: u,
-          sandbox: frameSandbox(u, ['allow-presentation', 'allow-popups', 'allow-popups-to-escape-sandbox']),
+        mountYouTube(wrap, u, (src) => el('iframe', {
+          src,
+          sandbox: frameSandbox(src, ['allow-presentation', 'allow-popups', 'allow-popups-to-escape-sandbox']),
           allow: 'autoplay; fullscreen; encrypted-media',
           allowfullscreen: '',
         }));
