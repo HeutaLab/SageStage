@@ -6875,3 +6875,55 @@ unchanged. Empty-state message checked with Fix it over a singles-only topic.
 Add pressed twice from a cleared bank: "1 single filed", then "Already in your
 bank". `english-word.js?v=` 43 → 47, `copy-dist.mjs` run, 65 files. Desktop not
 run.
+
+## 8 September 2026 (fifth) — each face gets its own sentences
+
+The wart the V0.1 entry recorded and left standing, closed on Glenn's word:
+`p.srcs` was one array shared by every face, and it means something different in
+each. Combine reads all of it as up-to-three chips, Expand reads `[0]` as the
+sentence to grow, Fix it reads it POSITIONALLY as `[right, broken]`. So setting
+up a mend and then tapping Combine put the broken sentence on the board as one of
+the sentences the class is invited to work from — an error left up as a model,
+which is the one harm the fix-it design names in §4 and spends two settings hints
+guarding against. Combine's rail already carried a band-aid for the bleed, a
+filter with the comment "fixit-shaped `['', x]` must not render an empty chip",
+which is the sort of line that tells you where the real bug is.
+
+Each face owns its sources now. `p.srcsBy` holds `combine`, `expand` and `fixit`,
+each a `{ srcs, dealtSrcs }` — `dealtSrcs` travels with them because it indexes
+into `srcs`, and a face's dealt marks are meaningless against another's
+sentences. One helper swaps them on the way through a mode change, saving the
+outgoing face's pair and loading the incoming one's, so every existing read and
+write of `p.srcs` stays exactly as it was; the only two places that needed to
+know are the two mode switches, the bar's pill segment and the ⚙ select. Build
+and Roles have no sources of their own — they park on an empty pair and hand the
+others theirs back untouched, so the always-safe rule holds: a mode tap still
+creates and destroys nothing.
+
+Arriving in Expand is better for it too. The auto-seed reads `p.srcs[0]`, so
+before this it could deal the line from whatever the previous face happened to
+leave — a fix-it "done right" sentence, most easily. Now it seeds from Expand's
+own sentence or not at all.
+
+The migration is the honest one. A deck saved before today has one shared array
+and no `srcsBy`, and there is no way to tell a fix-it pair from two Combine
+sentences — both are two strings. So whatever is on `p.srcs` is handed to the
+face the deck was left in, which is the face the teacher was looking at: nothing
+on screen changes at the upgrade, and the faces are separate from the next tap
+onward. The store is sanitised on the way in like everything else, per face, with
+fix-it keeping its positional shape and the rest compacted.
+
+### Verified
+
+Browser build. Combine given two sentences of its own and Fix it a mend
+(`The dog barked all night.` / `the dog barked all night`), then walked: Combine
+shows its two, Expand shows none, Fix it shows its mend, and back to Combine
+restores its two — the broken sentence never appears outside Fix it. Both switch
+routes exercised separately, the bar's mode pills and the ⚙ Mode select, with the
+same result. Build and Roles show nothing and give Combine and Fix it theirs back
+intact. Survives a reload; the deck stores the three faces separately. Migration
+tested by forging a pre-upgrade deck — `srcsBy` deleted, `mode: 'combine'`, a
+fix-it-shaped pair on `srcs`: Combine keeps what was on screen, Fix it opens on
+its own ghost hint rather than inheriting, Expand opens empty.
+`english-word.js?v=` 47 → 48, `copy-dist.mjs` run, 65 files. The V0.1 note in
+docs/sentence-builder-design.md is struck through and dated. Desktop not run.
