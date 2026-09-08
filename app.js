@@ -373,18 +373,25 @@
   // One normalizer for every way data enters: load(), backup import, storage sync.
   // Accepts both the old flat shape (v1: screens/current/deckName at the top level)
   // and the deck shape (v2), returns a valid v2 state or null.
+  // The dashboard's year picker writes these or null, and age-aware widgets read
+  // them (phoneme tiles picks its phonics phase from it; the sentence builder
+  // bands its banks by it). Named here because normalize and the taster seed
+  // both have to agree on what counts as one.
+  const DECK_YEARS = ['R', '1', '2', '3', '4', '5', '6'];
   function normalize(data) {
     if (!data || typeof data !== 'object') return null;
     if (!Array.isArray(data.decks)) {
       if (!Array.isArray(data.screens) || data.screens.length === 0) return null;
       data.decks = [{
         id: uid(), name: data.deckName || 'My screen deck',
-        classList: null, subject: '', yearGroup: null, pinnedTop: false,
+        classList: null, subject: '',
+        yearGroup: DECK_YEARS.includes(data.yearGroup) ? data.yearGroup : null,
+        pinnedTop: false,
         createdAt: Date.now(), lastUsed: Date.now(),
         current: clamp(data.current || 0, 0, data.screens.length - 1),
         screens: data.screens,
       }];
-      delete data.screens; delete data.current; delete data.deckName;
+      delete data.screens; delete data.current; delete data.deckName; delete data.yearGroup;
     }
     data.version = 2;
     data.decks = data.decks.filter((d) => d && typeof d === 'object' && !Array.isArray(d));
@@ -394,6 +401,9 @@
       if (typeof d.name !== 'string') d.name = 'My screen deck';
       if (typeof d.subject !== 'string') d.subject = '';
       if (typeof d.classList !== 'string') d.classList = null;
+      // a number 5 from a hand-edited deck becomes '5'; anything else becomes
+      // none, so an age-aware widget never bands itself off a value it cannot read
+      d.yearGroup = DECK_YEARS.includes(String(d.yearGroup)) ? String(d.yearGroup) : null;
       if (typeof d.createdAt !== 'number') d.createdAt = Date.now();
       if (typeof d.lastUsed !== 'number') d.lastUsed = d.createdAt;
       const screens = (Array.isArray(d.screens) ? d.screens : []).map(normalizeScreen).filter(Boolean);
@@ -15383,6 +15393,7 @@
       // fresh browser: the chosen deck IS the state
       const next = normalize({
         deckName: spec.deckName || 'Try Sage Stage',
+        yearGroup: spec.yearGroup,
         lists: spec.lists && typeof spec.lists === 'object' ? spec.lists : {},
         screens: buildScreens(spec.screens),
       });
@@ -15400,7 +15411,8 @@
       if (!deck) {
         deck = {
           id: uid(), name: spec.deckName, classList: null, subject: '',
-          yearGroup: null, pinnedTop: false, createdAt: Date.now(),
+          yearGroup: DECK_YEARS.includes(spec.yearGroup) ? spec.yearGroup : null,
+          pinnedTop: false, createdAt: Date.now(),
           lastUsed: Date.now(), current: 0, screens: buildScreens(spec.screens),
         };
         state.decks.push(deck);

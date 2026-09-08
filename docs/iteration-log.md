@@ -7032,3 +7032,56 @@ line in board-sized cards where at 540x470 there was nothing on screen at all.
 Re-seeded from a cleared browser to confirm the 1.0 geometry rather than reading
 a deck built at the clamp. The change is in HeutaLab/sagestage-app (demo.js);
 docs/sagestage-app-design.md §seeding updated to say three screens.
+
+## 8 September 2026 (eighth) — the taster's English deck learns its year, and opens with something to press
+
+Checking the deck end to end after giving the sentence builder its own screen
+turned up two things that were never bugs in the app, only gaps in what the
+taster asks for — and one of them turned out to need the app's help anyway.
+
+**The deck had no year group.** `deck.yearGroup` was null, and it cost three
+visible things on a demo whose job is a good first thirty seconds. The story map
+carried an amber "No year group set" chip — `sm-bandchip none`, #94491a on
+#fdeee3 — on the first widget a visitor sees. The sentence builder fell back to
+`effYear()`'s Year 2 default, so an English deck built around a five-part story
+mountain offered The seaside, Romans and Rainforest. And its ⚙ opened on the
+below-Y4 honesty line: "Straight talk for below Year 4: this is a reasoned
+extrapolation, not a proven effect." All correct behaviour. All the wrong thing
+to meet first.
+
+Setting it needed a change here, not just in the seed: the demo path built its
+deck with `yearGroup: null` written in twice — once in `normalize`'s
+deckName-shaped branch for a fresh browser, once in the returning-visitor branch
+that adds a deck to existing work — so a `yearGroup` in demo.js would have been
+read and dropped. Both now take one, `DECK_YEARS` names what counts as one, and
+`normalize` coerces the field per deck the way it already coerces classList and
+subject: a hand-edited `5` becomes `'5'`, anything else becomes none. Worth
+having beyond the taster, because the two demo branches disagreeing would have
+meant the same seed behaving differently depending on whether the browser had
+been here before.
+
+**The sentence builder shipped empty.** Every other widget on that deck lands
+loaded — the story map with its arc and its word rows, modelled writing with a
+page — and the sentence builder landed saying "Put two short sentences in ⚙ — or
+pick a topic from its sentence banks." A visitor's first move was a form. It now
+seeds with two, and the walking lead reads "↓ Deal a sentence" instead of a
+passive Keep.
+
+The pair is "The lantern went out." / "The path ahead was dark." They want
+combining out loud — when, so and because are all on the pills — and they sit in
+the same tense register as the word bank next door (glanced, hesitated,
+whispered, edged), so the three screens read as one lesson rather than three
+widgets that happen to share a deck.
+
+### Verified
+
+Assembled the taster against this checkout and opened `try/?deck=english` from a
+cleared browser at 1280x720. The deck stores `yearGroup: '5'`; the story map's
+amber chip is gone, replaced by a calm "Years 5-6"; the sentence builder seeds
+its two sentences on the rail with a deal affordance each. Year banding follows —
+the joining words widen to the Y5-6 set (although, even though, since, who,
+which, where, whose join the shorter list) and the punctuation row grows with
+them. Pressing "↓ Deal a sentence" walks the first sentence's words into the
+waiting band and marks it "✓ out" on the rail, with the second still offering
+"↓ deal". `app.js?v=` 114 → 115, `copy-dist.mjs` run, 65 files. The seed change is
+in HeutaLab/sagestage-app. Desktop not run.
