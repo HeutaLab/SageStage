@@ -247,8 +247,11 @@ tester from the checklist in the draft release notes — Chrome fullscreen, a Po
 slideshow, pen/pointer, undo/clear, exit, and that the taskbar shows no extra entries.
 
 **Release:** version 0.2.0 in `tauri.conf.json` and `Cargo.toml`, tag `v0.2.0`,
-`desktop-build` attaches both installers to a **draft** release. Glenn shares the
-private link; the release is not published on the page (sagestage-app-design.md §4).
+`desktop-build` attaches both installers to a **draft** release. A GitHub draft is
+visible only to people with write access to the repo, so testers cannot open it: Glenn
+either publishes the release (a public URL that only the releases page and the tag
+reveal — the landing page never links it, sagestage-app-design.md §4) or hands testers
+the installer files directly. 0.1.1 went out published.
 
 ## 5. Hazards
 
