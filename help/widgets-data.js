@@ -86,7 +86,7 @@ window.SAGE_HELP = {
     'dock:maths': ['Maths shelf', 'Every maths widget — click to add, 📌 pins to the bar.'],
     'dock:english': ['English shelf', 'Every English widget — click to add, 📌 pins to the bar.'],
     'dock:games': ['Games shelf', 'The class games — click to add, 📌 pins to the bar.'],
-    'dock:annotate': ['Annotate', 'Draw over everything — the annotation layer.'],
+    'dock:annotate': ['Annotate', 'Draw over the whole board — ink on top of every widget (this window only, not other apps).'],
     'dock:hide': ['Hide the bar', 'Fold the bar away (B brings it back).'],
     minidock: ['Folded bar', 'Annotate, select, and bring the full bar back.'],
     'dash:decks': ['Screen decks', 'Your decks — most teachers keep one per class.'],

@@ -177,7 +177,7 @@ widget bodies keep their native titles — per-control synopses are v1.1 if test
 | addScreen | A new blank screen after this one. |
 | delScreen | Delete this screen (it asks first; the bin keeps its work). |
 | dock:more / maths / english / games | The full shelf of widgets in this category — click one to add it, 📌 pins it to the bar. |
-| dock:annotate | Draw over everything — the annotation layer. |
+| dock:annotate | Draw over the whole board — ink on top of every widget (this window only, not other apps). |
 | dock:hide | Fold the bar away (B brings it back). |
 | minidock | The folded bar: annotate, select, and bring the full bar back. |
 | dash:decks / templates / lists / wallpaper | Your decks · ready-made screens · class registers · the landing page's look. |

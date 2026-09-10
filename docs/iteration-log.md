@@ -7331,3 +7331,59 @@ under an isolated `HOME` so no real deck was touched: the real Video widget at
 listener is `127.0.0.1:47821` only; `/player` without a token and `/anything`
 both answer 404. With the port held by another process the widget falls back to
 the "Open on YouTube" card as intended. Rust builds clean, no warnings.
+
+## 10 September 2026 — "Draw over anything", and the two words that promised too much
+
+A tester asked how to get "Draw over anything" working — could they switch to a
+Chrome tab and annotate over the top of it? They half-expected the answer to be
+no, and it is, but the question is worth more than the answer.
+
+### What they read
+
+The Annotate entry in `help/widgets-data.js` said "Draw over everything — the
+annotation layer." *Everything* meant every widget on the board. Anyone who has
+used Epic Pen, ZoomIt or Presentify hears it as *the whole screen*, and that is a
+fair reading of the words, not a mistake by the tester. The line now says "Draw
+over the whole board — ink on top of every widget (this window only, not other
+apps)", and the same row in `docs/help-system-design.md` matches. One table
+feeds the app and the site, so that is the whole change.
+
+### What they actually asked for
+
+Screen-wide annotation. In the browser build it cannot be done: a page paints
+inside its own tab and nowhere else, and a Chrome extension would only ever
+reach other web pages. In the desktop build it can — a second Tauri window,
+borderless, transparent, always on top and sized to the projected display, with
+the existing draw overlay loaded into it. The pupil-window plumbing in
+`storage.js` is the precedent.
+
+The parts that need thinking rather than typing, noted so the spike knows what
+to prove:
+
+- **Pen versus pointer.** While the overlay catches input the teacher cannot
+  click what is underneath, so the mode is a toggle on cursor pass-through, with
+  the mini dock floated as its own tiny always-on-top window that stays clickable
+  while the ink layer is see-through.
+- **A hands-free toggle.** A global shortcut so a clicker key flips modes — the
+  first real job for the clicker keys that do not exist yet.
+- **Ink that does not follow the page.** Scroll the tab and the circle stays put.
+  Every tool accepts this and clears on toggle. Freezing a screenshot behind the
+  ink would need macOS Screen Recording permission, a frightening prompt on a
+  managed school Mac; prefer ephemeral ink plus an ink-only "Send to board".
+- **Fullscreen apps.** An always-on-top window does not sit above another app's
+  fullscreen Space on macOS by default — and fullscreen YouTube is the case that
+  matters. Needs the window level raised through the native handle; this is
+  where the spike will bite.
+- **Which screen.** Default to the display the board window is on, offer a swap.
+- **Transparency on macOS** needs Tauri's private-API flag. Only the Mac App
+  Store minds, and Developer ID already sidesteps the store.
+
+Not started. A one-day spike — transparent, always on top, click-through toggle,
+over a fullscreen Chrome on macOS — decides whether this is mostly reuse or a
+"not over other apps yet" line in the help. Either way it is a desktop-only
+feature and belongs in the licensing conversation.
+
+### Verified
+
+`grep` finds the old string nowhere outside the stale worktree copy. No code
+paths changed.
