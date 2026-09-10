@@ -7387,3 +7387,12 @@ feature and belongs in the licensing conversation.
 
 `grep` finds the old string nowhere outside the stale worktree copy. No code
 paths changed.
+
+Rebased onto the taster work that had landed on origin (fourteen commits, seven
+PRs) — the only conflicts were this log, appended from both sides, and the
+`app.js?v=` buster, which both sides had bumped; the merged file is new content
+so it is 117. Pushed, `deploy-taster` dispatched on HeutaLab/sagestage-app, run
+green in 24s. Live `/try/` serves `app.js?v=117`, `style.css?v=130`,
+`widgets-data.js?v=2` with the new Annotate line; the page boots with the demo
+flag set, two widgets on screen 1 and no console errors. Testers can be pointed
+at sagestage.app/try/ (apex, never www — see the sinkhole note).
