@@ -7490,3 +7490,8 @@ Version 0.2.0 in `tauri.conf.json` and `Cargo.toml`. The developer hooks
 `SAGE_INK_QUIT`) stay in the binary, inert unless set, because they are how this gets
 re-verified next time. `objc2` is a direct dependency now; `macOSPrivateApi` is on for the
 transparency.
+
+Tagged `v0.2.0`; `desktop-build` green in 9m14s, and the draft release carries the
+universal DMG, the Windows setup.exe and the MSI. Notes on the draft: what the feature
+is, the unsigned-install steps for each platform, and the seven-step hands-on checklist.
+Stays a draft — the link goes to testers privately, never the page.
