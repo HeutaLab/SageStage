@@ -572,6 +572,10 @@
   // is about STATE rather than about storage: rolling the snapshot trail, probing
   // headroom, and deciding what may be surrendered when there is no room left.
   function save() {
+    // The ink overlay draws into a scratch screen and nothing it does is the
+    // teacher's data; this is the only call into the backend, so one guard
+    // makes "the overlay never writes" true everywhere.
+    if (inkBoot) return;
     SageStorage.write(serializeState, { shed: shedBallast });
   }
 
@@ -685,6 +689,17 @@
   const soloBoot = hashWidgetId();
   let soloId = soloBoot;
 
+  // The desktop ink overlay (docs/desktop-ink-design.md §2.4): a transparent,
+  // always-on-top window Rust opens at index.html#ink. It boots the whole app,
+  // hides every piece of chrome (body.desktop-ink), switches the draw layer on
+  // and draws into a scratch screen that exists only in this window's memory.
+  // Third boot mode after #s= and #w=; consulted in a handful of guarded
+  // places and inert everywhere else. It never writes — see save().
+  const inkBoot = /(^#|&)ink(&|$)/.test(location.hash);
+  const inkDeck = inkBoot
+    ? { id: 'ink', name: 'Desktop ink', screens: [Object.assign(blankScreen(), { id: 'ink', ink: [] })], current: 0 }
+    : null;
+
   // A pop-out takes the chime for its widget and keeps saying so, because the
   // board stops believing a claim it has not heard renewed (see "one chime").
   if (soloBoot && soundBus) {
@@ -702,7 +717,7 @@
   // Guarded against re-entry: setCurrent() assigns location.hash itself, which
   // fires this, and re-rendering the screen we just rendered is wasted work.
   window.addEventListener('hashchange', () => {
-    if (soloBoot) return;   // a pop-out shows one widget for as long as it is open
+    if (soloBoot || inkBoot) return;   // a pop-out shows one widget for as long as it is open; the overlay its scratch screen
     const id = hashScreenId();
     if (id === viewId) return;
     viewId = id;
@@ -719,6 +734,7 @@
 
   // the deck this TAB is viewing: pinned tabs resolve their screen across all decks
   function viewDeck() {
+    if (inkBoot) return inkDeck;
     if (soloId) {
       const d = deckOfWidget(soloId);
       if (d) return d;
@@ -11244,6 +11260,8 @@
     // soloId so the class survives the widget being deleted underneath us — the
     // window must not sprout a toolbar at the moment it loses its contents.
     document.body.classList.toggle('solo', !!soloBoot);
+    document.body.classList.toggle('desktop-ink', inkBoot);
+    document.documentElement.classList.toggle('desktop-ink', inkBoot);
     if (soloBoot) {
       const only = soloId ? findWidgetById(soloId) : null;
       if (!only) { renderSoloGone(); return; }
@@ -13263,14 +13281,22 @@
       catTab('games', 'games', '#ddd6fe', 'Games'),
     ].filter(Boolean));
     // fixed switcher: annotation is always one tap away, never needs pinning
-    toolbar.append(
+    // Draw over the desktop is desktop-only — not withheld, unavailable: a web
+    // page cannot paint outside its own tab, so the button exists only where
+    // the platform seam does (docs/desktop-ink-design.md §0).
+    const P = window.SagePlatform;
+    toolbar.append(...[
       el('span', { class: 'dock-sep' }),
       el('button', {
         class: 'dock-annotate' + (drawLayer.classList.contains('active') ? ' active' : ''),
         title: 'Annotate the screen', 'data-help': 'dock:annotate', onclick: () => toggleDraw(),
       }, iconEl('scribble')),
+      P && P.openDesktopInk ? el('button', {
+        class: 'dock-annotate dock-desktop-ink', title: 'Draw over the desktop', 'data-help': 'dock:desktop-ink',
+        onclick: () => P.openDesktopInk(),
+      }, iconEl('desktop-ink')) : null,
       el('button', { class: 'dock-hide', title: 'Hide bar (B)', 'data-help': 'dock:hide', onclick: () => setDock('mini') }, iconEl('shrink')),
-    );
+    ].filter(Boolean));
     applyDock();
   }
 
@@ -14706,9 +14732,20 @@
     save();
   }
 
+  // A Clear is one gesture, so Undo brings the whole set back in one — held
+  // aside rather than pushed to the redo stack, where only Redo could reach it
+  // and the pill's promise ("undo brings it back") would be a lie.
+  let lastCleared = null;
   function undoInk() {
     const arr = screenInk(screen());
-    if (!arr.length) return;
+    if (!arr.length) {
+      if (!lastCleared) return;
+      arr.push(...lastCleared);
+      lastCleared = null;
+      deselect();
+      inkChanged();
+      return;
+    }
     redoInkStack.push(arr.pop());
     deselect();
     inkChanged();
@@ -14717,6 +14754,24 @@
     if (!redoInkStack.length) return;
     screenInk(screen()).push(redoInkStack.pop());
     inkChanged();
+  }
+  // The pill's Clear: no confirm, because undo exists and a modal on a
+  // transparent window over someone else's app is wrong. The board's own
+  // clear button keeps its confirm.
+  function clearScreenInk() {
+    const arr = screenInk(screen());
+    if (!arr.length) return;
+    lastCleared = arr.splice(0);
+    redoInkStack = [];
+    deselect();
+    inkChanged();
+  }
+  // Esc and the bar's ✕. On the board they leave draw mode; in the overlay
+  // window that would leave a transparent window still catching every click
+  // with nothing to say why, so there they drop to pointer mode instead.
+  function stopDrawing() {
+    if (inkBoot && window.SagePlatform) window.SagePlatform.inkMode(false);
+    else toggleDraw();
   }
 
   function setInkTool(tool) {
@@ -14878,7 +14933,7 @@
           else confirmDialog('Clear all annotations on this screen?', doClear, { label: 'Clear' });
         },
       }, iconEl('trash')),
-      el('button', { class: 'dt-btn dt-done', title: 'Stop drawing (Esc)', onclick: () => toggleDraw() }, iconEl('close')),
+      el('button', { class: 'dt-btn dt-done', title: 'Stop drawing (Esc)', onclick: () => stopDrawing() }, iconEl('close')),
     );
   }
 
@@ -15649,7 +15704,7 @@
       return;
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (k === 'escape') { if (geo) clearGeo(); else if (selected) deselect(); else toggleDraw(); }
+    if (k === 'escape') { if (geo) clearGeo(); else if (selected) deselect(); else stopDrawing(); }
     else if (k === 'v') setInkTool('select');
     else if (k === 'p') setInkTool('pen');
     else if (k === 'm') setInkTool('highlighter');
@@ -15676,6 +15731,7 @@
 
   // keep tabs in sync: adopt changes written by another tab instead of clobbering them
   SageStorage.onExternalChange((raw) => {
+    if (inkBoot) return;   // the overlay's screen is not in the file; a write elsewhere must not repaint it mid-stroke
     // A null payload is the erase in another window, not a write to skip past.
     // Ignoring it left this tab holding the only surviving copy — and then
     // writing it back. It says so out loud, because a display tab that empties
@@ -15899,7 +15955,7 @@
       demoSeeded = true;
     }
   }
-  if (!persisted.existed && !demoSeeded) {
+  if (!persisted.existed && !demoSeeded && !inkBoot) {
     // friendly first-run starter widgets. The floor matters: a window that
     // reports zero width at this instant would park the clock at x = -320,
     // wholly off-screen with nothing to grab (seen in the 2026-07-31 audit).
@@ -15914,7 +15970,23 @@
   if (persisted.notice) toast(persisted.notice);
   // A pop-out has no viewId either, and without naming it here the dashboard
   // opens straight over the widget the window was created to show.
-  if (!viewId && !soloBoot && !demoSeeded) openDashboard();
+  if (!viewId && !soloBoot && !demoSeeded && !inkBoot) openDashboard();
+  // The ink overlay: draw layer on, listen to the pill, then show the window
+  // Rust created hidden and ask for pen — so both windows hear the mode from
+  // the same place (docs/desktop-ink-design.md §2.4).
+  if (inkBoot) {
+    if (!drawLayer.classList.contains('active')) toggleDraw();
+    const P = window.SagePlatform;
+    if (P) {
+      P.onInkMode((pen) => { if (pen !== drawLayer.classList.contains('active')) toggleDraw(); });
+      P.onInkCmd((cmd) => {
+        if (cmd === 'undo') undoInk();
+        else if (cmd === 'redo') redoInk();
+        else if (cmd === 'clear') clearScreenInk();
+      });
+      P.showThisWindow().then(() => P.inkMode(true));
+    }
+  }
 })().catch((e) => {
   // Boot is async now, so a throw here is a promise rejection rather than a
   // console error with a half-drawn page behind it. A teacher at a board needs

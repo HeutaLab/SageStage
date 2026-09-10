@@ -6968,3 +6968,14 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
 /* A toast said "Could not save — storage is full" underneath an open deck menu,
    which is precisely when a teacher needs to see it. Toast wins. */
 #toast { z-index: 6600; }
+
+/* ---- desktop ink: the transparent overlay window (docs/desktop-ink-design.md §2.4)
+   The app boots whole at index.html#ink and hides everything but the draw
+   layer, its bar and the selection mini-bar. Transparent all the way down,
+   or the window paints the stage colour over the app underneath. */
+html.desktop-ink, body.desktop-ink { background: transparent !important; }
+body.desktop-ink > :not(#drawLayer):not(#drawTools):not(.sel-bar) { display: none !important; }
+/* The ink window covers the whole monitor, menu bar included, so the bar's
+   usual top offset would sit it across the menu bar. Only the default (top)
+   placement moves; a teacher who parked it left, right or bottom keeps that. */
+body.desktop-ink #drawTools:not(.side-left):not(.side-right):not(.side-bottom) { top: 44px; }

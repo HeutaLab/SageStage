@@ -246,10 +246,20 @@ static FLUSHED: AtomicBool = AtomicBool::new(false);
 /// count — an app that refuses to quit is worse than one that loses the last
 /// gesture, and the 1s debounce already bounds what that gesture can be.
 fn flush_all_and_exit(app: &tauri::AppHandle) {
+    // The overlay first, through the path that undoes its class swap; a
+    // teardown on the way out of the process must not throw either.
+    desktop_ink_close(app.clone());
     if FLUSHED.swap(true, Ordering::SeqCst) {
         return; // already handshaking; do not stack timers
     }
-    let want = app.webview_windows().len().max(1);
+    // The ink windows were just told to go and have nothing to flush; counting
+    // them would leave the quit waiting on an answer that never comes.
+    let want = app
+        .webview_windows()
+        .keys()
+        .filter(|l| l.as_str() != INK_LABEL && l.as_str() != INK_DOCK_LABEL)
+        .count()
+        .max(1);
     let seen = Arc::new(Mutex::new(0usize));
 
     let app_done = app.clone();
@@ -273,14 +283,354 @@ fn flush_all_and_exit(app: &tauri::AppHandle) {
     });
 }
 
+/* ---- Desktop ink: drawing over anything ------------------------------- */
+// Design: docs/desktop-ink-design.md. Two windows on the board's monitor: a
+// transparent, always-on-top window running the app in its `#ink` boot mode,
+// and a small pill of controls. Both are created here rather than from JS so
+// the native tweaks below can land before the windows are shown.
+
+const INK_LABEL: &str = "desktop-ink";
+const INK_DOCK_LABEL: &str = "desktop-ink-dock";
+
+/// The class each ink window had before its swap, by label. Key-value
+/// observing works by swapping an object's class under it — WebKit observes
+/// the window the moment the webview attaches, which is inside the builder —
+/// so the swap to SageInkPanel discards that bookkeeping, and tearing the
+/// window down then throws from inside WebKit ("cannot remove an observer")
+/// and aborts the process. Putting the original class back just before the
+/// window is destroyed makes the teardown the ordinary one. Every way the
+/// windows can go — the pill's ✕, Cmd+W, quit — passes through
+/// desktop_ink_close for exactly this reason.
+#[cfg(target_os = "macos")]
+static INK_ORIGINAL_CLASS: std::sync::Mutex<Vec<(String, usize)>> = std::sync::Mutex::new(Vec::new());
+
+// A borderless non-activating NSPanel answers "no" to canBecomeKeyWindow,
+// and then Escape and the tool keys never reach the ink window in pen mode.
+// This subclass answers yes — and no to main, so the board stays the app's
+// main window. No ivars, no Drop: the class swap below stays sound.
+#[cfg(target_os = "macos")]
+objc2::define_class!(
+    // SAFETY: NSPanel has no subclassing requirements beyond main-thread use;
+    // SageInkPanel declares no ivars and does not implement Drop.
+    #[unsafe(super(objc2_app_kit::NSPanel))]
+    #[name = "SageInkPanel"]
+    struct SageInkPanel;
+
+    impl SageInkPanel {
+        #[unsafe(method(canBecomeKeyWindow))]
+        fn can_become_key_window(&self) -> bool {
+            true
+        }
+        #[unsafe(method(canBecomeMainWindow))]
+        fn can_become_main_window(&self) -> bool {
+            false
+        }
+    }
+);
+
+/// What gets a window into ANOTHER app's fullscreen Space is being a
+/// non-activating NSPanel. Level and collection behaviour on their own leave
+/// it off-screen there — tested 10 Sep 2026 against a kiosk Chrome: levels 3,
+/// 25, 101, 1000 and the shielding level, with and without Stationary, all
+/// off-screen; the class swap alone put both windows on. tao creates
+/// NSWindows and offers no panel, so the class is swapped after the fact.
+/// NSPanel adds no instance variables, so the object's layout is untouched;
+/// the one method tao's subclass overrode (canBecomeKeyWindow, through its
+/// `focusable` ivar) is replaced by NSPanel's own answer, which for a
+/// non-activating panel is yes — the ink window can take Escape and the tool
+/// keys without our app ever becoming active.
+///
+/// `CanJoinAllSpaces` follows the teacher across Spaces, `FullScreenAuxiliary`
+/// admits it to a fullscreen one, `Stationary` keeps it out of Mission
+/// Control, `IgnoresCycle` keeps Cmd+` off it. 1000 is NSScreenSaverWindowLevel;
+/// the pill sits one above the ink.
+#[cfg(target_os = "macos")]
+fn float_above_everything(w: &tauri::WebviewWindow, level: isize) {
+    use objc2::runtime::AnyObject;
+    use objc2::ClassType;
+    use objc2_app_kit::{NSPanel, NSWindowCollectionBehavior, NSWindowStyleMask};
+    let Ok(ptr) = w.ns_window() else { return };
+    if ptr.is_null() {
+        return;
+    }
+    // SAFETY: ns_window() is the NSWindow tao owns for this window, alive for
+    // the duration of this call, and sync commands run on the main thread,
+    // which is the only thread AppKit accepts these calls from. The class
+    // swap is sound because NSPanel declares no ivars beyond NSWindow's.
+    let obj: &AnyObject = unsafe { &*(ptr as *const AnyObject) };
+    if let Ok(mut v) = INK_ORIGINAL_CLASS.lock() {
+        v.retain(|(l, _)| l != w.label());
+        v.push((w.label().to_string(), obj.class() as *const _ as usize));
+    }
+    unsafe { AnyObject::set_class(obj, SageInkPanel::class()) };
+    let panel: &NSPanel = unsafe { &*(ptr as *const NSPanel) };
+    panel.setStyleMask(panel.styleMask() | NSWindowStyleMask::NonactivatingPanel);
+    panel.setLevel(level);
+    panel.setCollectionBehavior(
+        NSWindowCollectionBehavior::CanJoinAllSpaces
+            | NSWindowCollectionBehavior::FullScreenAuxiliary
+            | NSWindowCollectionBehavior::Stationary
+            | NSWindowCollectionBehavior::IgnoresCycle,
+    );
+    if std::env::var_os("SAGE_STAGE_OPEN_INK").is_some() {
+        eprintln!(
+            "desktop ink: {} level {} behaviour {:?} style {:?} key-able {}",
+            w.label(),
+            panel.level(),
+            panel.collectionBehavior(),
+            panel.styleMask(),
+            panel.canBecomeKeyWindow()
+        );
+    }
+}
+
+/// Pen mode needs the ink window to be key — Escape and the tool keys — but
+/// Tauri's set_focus activates the app first, and activating an app from
+/// inside another app's fullscreen Space switches the teacher out of it.
+/// A non-activating panel can be made key on its own.
+#[cfg(target_os = "macos")]
+fn take_keyboard(w: &tauri::WebviewWindow) {
+    use objc2_app_kit::NSWindow;
+    let Ok(ptr) = w.ns_window() else { return };
+    if ptr.is_null() {
+        return;
+    }
+    // SAFETY: as in float_above_everything.
+    let ns: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
+    ns.makeKeyAndOrderFront(None);
+}
+
+#[cfg(not(target_os = "macos"))]
+fn take_keyboard(w: &tauri::WebviewWindow) {
+    let _ = w.set_focus();
+}
+
+/// Undo the class swap so the window tears down as the NSWindow it was built
+/// as — see INK_ORIGINAL_CLASS.
+#[cfg(target_os = "macos")]
+fn restore_class(w: &tauri::WebviewWindow) {
+    use objc2::runtime::{AnyClass, AnyObject};
+    let original = INK_ORIGINAL_CLASS.lock().ok().and_then(|mut v| {
+        let i = v.iter().position(|(l, _)| l == w.label())?;
+        Some(v.remove(i).1)
+    });
+    let (Some(original), Ok(ptr)) = (original, w.ns_window()) else { return };
+    if ptr.is_null() {
+        return;
+    }
+    // SAFETY: as in float_above_everything; the class pointer is the one read
+    // from this very object before the swap, and classes are never freed.
+    let obj: &AnyObject = unsafe { &*(ptr as *const AnyObject) };
+    let cls: &AnyClass = unsafe { &*(original as *const AnyClass) };
+    unsafe { AnyObject::set_class(obj, cls) };
+}
+
+#[cfg(not(target_os = "macos"))]
+fn restore_class(_w: &tauri::WebviewWindow) {}
+
+/// Pen: the ink window takes every pointer and the keyboard. Pointer: it
+/// ignores the cursor entirely (`setIgnoresMouseEvents:` / `WS_EX_TRANSPARENT`)
+/// so clicks fall through to whatever is underneath, and only the pill — its
+/// own window — stays clickable. Both windows are told, so they never disagree.
+fn set_ink_mode(app: &tauri::AppHandle, pen: bool) {
+    if let Some(ink) = app.get_webview_window(INK_LABEL) {
+        let _ = ink.set_ignore_cursor_events(!pen);
+        if pen {
+            take_keyboard(&ink);
+        }
+    }
+    for label in [INK_LABEL, INK_DOCK_LABEL] {
+        let _ = app.emit_to(label, "sage:ink-mode", pen);
+    }
+}
+
+/// Sync on purpose: window creation and the AppKit calls belong on the main
+/// thread. `window` is the board that pressed the button — its monitor is the
+/// one the overlay covers.
+#[tauri::command]
+fn desktop_ink_open(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    use tauri::{WebviewUrl, WebviewWindowBuilder};
+
+    // Already open: a second press must never open a second overlay.
+    if let Some(dock) = app.get_webview_window(INK_DOCK_LABEL) {
+        let _ = dock.set_focus();
+        return Ok(());
+    }
+
+    let monitor = match window.current_monitor().map_err(err)? {
+        Some(m) => m,
+        None => window
+            .primary_monitor()
+            .map_err(err)?
+            .ok_or_else(|| "no monitor to draw over".to_string())?,
+    };
+    // The builder takes logical pixels; the monitor reports physical ones.
+    let scale = monitor.scale_factor();
+    let x = monitor.position().x as f64 / scale;
+    let y = monitor.position().y as f64 / scale;
+    let w = monitor.size().width as f64 / scale;
+    let h = monitor.size().height as f64 / scale;
+
+    // Hidden until app.js has booted and hidden its own chrome — a transparent
+    // window must never flash the topbar. `focused(false)` for the same reason:
+    // the teacher is about to switch to another app.
+    let ink = WebviewWindowBuilder::new(&app, INK_LABEL, WebviewUrl::App("index.html#ink".into()))
+        .title("Sage Stage — ink")
+        .transparent(true)
+        .decorations(false)
+        .shadow(false)
+        .always_on_top(true)
+        .visible_on_all_workspaces(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .focused(false)
+        .accept_first_mouse(true)
+        .visible(false)
+        .position(x, y)
+        .inner_size(w, h)
+        .build()
+        .map_err(err)?;
+
+    let (dw, dh) = (330.0, 62.0);
+    let dock = WebviewWindowBuilder::new(
+        &app,
+        INK_DOCK_LABEL,
+        WebviewUrl::App("desktop-ink-dock.html".into()),
+    )
+    .title("Sage Stage — ink controls")
+    .transparent(true)
+    .decorations(false)
+    .shadow(false)
+    .always_on_top(true)
+    .visible_on_all_workspaces(true)
+    .skip_taskbar(true)
+    .resizable(false)
+    .focused(false)
+    .accept_first_mouse(true)
+    .position(x + (w - dw) / 2.0, y + h - dh - 28.0)
+    .inner_size(dw, dh)
+    .build()
+    .map_err(err)?;
+
+    #[cfg(target_os = "macos")]
+    {
+        float_above_everything(&ink, 1000);
+        float_above_everything(&dock, 1001);
+    }
+
+    // Pen from the start, but no focus yet — set_focus on a hidden window
+    // would show it. The ink window asks for pen itself once it is visible.
+    let _ = ink.set_ignore_cursor_events(false);
+    Ok(())
+}
+
+#[tauri::command]
+fn desktop_ink_mode(app: tauri::AppHandle, pen: bool) {
+    set_ink_mode(&app, pen);
+}
+
+/// The pill's undo / redo / clear, forwarded to the ink window.
+#[tauri::command]
+fn desktop_ink_cmd(app: tauri::AppHandle, cmd: String) -> Result<(), String> {
+    if !matches!(cmd.as_str(), "undo" | "redo" | "clear") {
+        return Err(format!("unknown ink command: {cmd}"));
+    }
+    app.emit_to(INK_LABEL, "sage:ink-cmd", cmd).map_err(err)
+}
+
+/// Both windows, and the ink with them. destroy() rather than close(): there
+/// is nothing to flush, and nothing may hold the window open.
+#[tauri::command]
+fn desktop_ink_close(app: tauri::AppHandle) {
+    for label in [INK_LABEL, INK_DOCK_LABEL] {
+        if let Some(w) = app.get_webview_window(label) {
+            restore_class(&w);
+            if let Err(e) = w.destroy() {
+                eprintln!("desktop ink: could not close {label}: {e}");
+            }
+        }
+    }
+}
+
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![save_state, state_file_path, video_bridge_url])
+        .invoke_handler(tauri::generate_handler![
+            save_state,
+            state_file_path,
+            video_bridge_url,
+            desktop_ink_open,
+            desktop_ink_mode,
+            desktop_ink_cmd,
+            desktop_ink_close
+        ])
         .setup(|app| {
             app.manage(VideoBridge(start_video_bridge()));
+
+            // Developer hook, inert unless the variable is set: open the ink
+            // overlay as soon as the board is up, so the native side —
+            // transparency, level, the fullscreen-Space behaviour — can be
+            // looked at on a machine where nothing is allowed to move the
+            // mouse. Two seconds is only so the board window has settled.
+            if std::env::var_os("SAGE_STAGE_OPEN_INK").is_some() {
+                if let Some(main) = app.get_webview_window("main") {
+                    let handle = app.handle().clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_secs(2));
+                        let h = handle.clone();
+                        let m = main.clone();
+                        let _ = handle.run_on_main_thread(move || {
+                            if let Err(e) = desktop_ink_open(h, m) {
+                                eprintln!("desktop ink open failed: {e}");
+                            }
+                        });
+                        // SAGE_INK_REPEN=<secs>: flip to pointer and back to pen
+                        // that many seconds after launch, so "pen mode does
+                        // not pull the teacher out of a fullscreen Space" can
+                        // be checked with nobody at the mouse.
+                        if let Some(secs) = std::env::var("SAGE_INK_REPEN").ok().and_then(|v| v.parse::<u64>().ok()) {
+                            std::thread::sleep(std::time::Duration::from_secs(secs));
+                            let h = handle.clone();
+                            let _ = handle.run_on_main_thread(move || set_ink_mode(&h, false));
+                            std::thread::sleep(std::time::Duration::from_secs(2));
+                            let h = handle.clone();
+                            let _ = handle.run_on_main_thread(move || set_ink_mode(&h, true));
+                        }
+                        // SAGE_INK_CLOSE=<secs>: close the overlay that many
+                        // seconds after launch — destroying a class-swapped
+                        // panel is the one native path nothing else exercises.
+                        if let Some(secs) = std::env::var("SAGE_INK_CLOSE").ok().and_then(|v| v.parse::<u64>().ok()) {
+                            std::thread::sleep(std::time::Duration::from_secs(secs));
+                            let h = handle.clone();
+                            let _ = handle.run_on_main_thread(move || desktop_ink_close(h));
+                            // SAGE_INK_REOPEN=1: open again three seconds later and
+                            // close five after that — the second cycle in one process.
+                            if std::env::var_os("SAGE_INK_REOPEN").is_some() {
+                                std::thread::sleep(std::time::Duration::from_secs(3));
+                                let h = handle.clone();
+                                let m = main.clone();
+                                let _ = handle.run_on_main_thread(move || {
+                                    if let Err(e) = desktop_ink_open(h, m) {
+                                        eprintln!("desktop ink reopen failed: {e}");
+                                    }
+                                });
+                                std::thread::sleep(std::time::Duration::from_secs(5));
+                                let h = handle.clone();
+                                let _ = handle.run_on_main_thread(move || desktop_ink_close(h));
+                            }
+                        }
+                        // SAGE_INK_QUIT=<secs>: quit the app with the overlay open,
+                        // the way Cmd+Q would.
+                        if let Some(secs) = std::env::var("SAGE_INK_QUIT").ok().and_then(|v| v.parse::<u64>().ok()) {
+                            std::thread::sleep(std::time::Duration::from_secs(secs));
+                            let h = handle.clone();
+                            let _ = handle.run_on_main_thread(move || flush_all_and_exit(&h));
+                        }
+                    });
+                }
+            }
 
             // macOS: replace the default Quit item with one that flushes first.
             // ExitRequested is documented as unreliable on macOS (tauri#9198), so
@@ -334,6 +684,15 @@ pub fn run() {
         .expect("error while building Sage Stage");
 
     app.run(|app, event| {
+        // Cmd+W on the ink window (it is key in pen mode) or the pill: close
+        // the overlay as a pair, through the path that undoes the class swap.
+        if let tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::CloseRequested { api, .. }, .. } = &event {
+            if label == INK_LABEL || label == INK_DOCK_LABEL {
+                api.prevent_close();
+                desktop_ink_close(app.clone());
+                return;
+            }
+        }
         if let tauri::RunEvent::ExitRequested { api, .. } = &event {
             // Covers Windows shutdown/logoff and any macOS path that does fire
             // this. The FLUSHED guard lets the exit(0) that ENDS the handshake

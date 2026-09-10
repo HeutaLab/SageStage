@@ -1,6 +1,6 @@
 [package]
 name = "sage-stage"
-version = "0.1.1"
+version = "0.2.0"
 description = "Sage Stage — a fully local classroom screen"
 authors = ["Sage Stage"]
 edition = "2021"
@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset"] }
+tauri = { version = "2", features = ["protocol-asset", "macos-private-api"] }
 tauri-plugin-fs = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
@@ -31,3 +31,11 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# The desktop ink overlay (docs/desktop-ink-design.md §2.5) raises its window
+# level and sets the collection behaviour that puts a window over another app's
+# fullscreen Space. Tauri does not expose either; objc2-app-kit is already in
+# the lock file as tao's dependency, so this adds no native stack.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSResponder", "NSPanel"] }

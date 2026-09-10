@@ -21,7 +21,7 @@
   // reload; nothing under test depends on that.
   const blobs = new Map();
 
-  const calls = { saveState: 0, stateFilePath: 0, dialogSave: [], openUrl: [], reveal: [], windows: [], print: 0, emits: [], errors: [] };
+  const calls = { ink: [], saveState: 0, stateFilePath: 0, dialogSave: [], openUrl: [], reveal: [], windows: [], print: 0, emits: [], errors: [] };
 
   // path resolution: plugin-style calls pass a relative path + baseDir option;
   // saveExport passes an absolute path with no options at all
@@ -120,6 +120,7 @@
       if (!prevented) calls.emits.push({ name: 'mock:closed' });
     },
     async setFocus() {},
+    async show() { calls.emits.push({ name: 'mock:show' }); },
     async setFullscreen(v) { fullscreen = !!v; calls.emits.push({ name: 'mock:fullscreen', payload: v }); },
     async isFullscreen() { return fullscreen; },
   };
@@ -157,6 +158,13 @@
         }
         if (cmd === 'state_file_path') { calls.stateFilePath++; return DOC + 'Sage Stage/sage-stage.json'; }
         if (cmd === 'plugin:webview|print') { calls.print++; return; }
+        // Desktop ink (docs/desktop-ink-design.md): the mock cannot open a
+        // transparent window, so it records the calls and echoes the mode
+        // event back, which is all the #ink boot mode needs to be clicked.
+        if (cmd === 'desktop_ink_open') { calls.ink.push('open'); return; }
+        if (cmd === 'desktop_ink_mode') { calls.ink.push('mode:' + (args && args.pen ? 'pen' : 'pointer')); event.emit('sage:ink-mode', !!(args && args.pen)); return; }
+        if (cmd === 'desktop_ink_cmd') { calls.ink.push('cmd:' + (args && args.cmd)); event.emit('sage:ink-cmd', args && args.cmd); return; }
+        if (cmd === 'desktop_ink_close') { calls.ink.push('close'); return; }
         throw new Error('mock invoke: unknown command ' + cmd);
       },
     },

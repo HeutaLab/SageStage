@@ -773,6 +773,36 @@
       // src-tauri/src/lib.rs for why a YouTube frame needs an http parent.
       videoBridge: T.core.invoke('video_bridge_url').catch(() => null),
 
+      // ---- Desktop ink: drawing over anything (docs/desktop-ink-design.md) ----
+      // Rust owns the two windows and the pen/pointer state; these are the
+      // three verbs and the two events. Every failure is REPORTED, for the
+      // same reason closeThisWindow's is — a button that does nothing in this
+      // webview is this repo's recurring desktop bug.
+      openDesktopInk() {
+        return T.core.invoke('desktop_ink_open').catch((e) => console.error('desktop ink open failed', e));
+      },
+      inkMode(pen) {
+        return T.core.invoke('desktop_ink_mode', { pen: !!pen }).catch((e) => console.error('ink mode failed', e));
+      },
+      inkCmd(cmd) {
+        return T.core.invoke('desktop_ink_cmd', { cmd }).catch((e) => console.error('ink command failed', e));
+      },
+      closeDesktopInk() {
+        return T.core.invoke('desktop_ink_close').catch((e) => console.error('desktop ink close failed', e));
+      },
+      onInkMode(fn) {
+        T.event.listen('sage:ink-mode', (e) => fn(!!(e && e.payload))).catch((e) => console.error('ink mode listen failed', e));
+      },
+      onInkCmd(fn) {
+        T.event.listen('sage:ink-cmd', (e) => { if (e) fn(String(e.payload)); }).catch((e) => console.error('ink command listen failed', e));
+      },
+      // The ink window is created hidden so a transparent window never flashes
+      // the topbar; it shows itself once app.js has hidden its chrome.
+      async showThisWindow() {
+        try { await T.window.getCurrentWindow().show(); return true; }
+        catch (e) { console.error('window show failed', e); return false; }
+      },
+
       openExternal(url) {
         // The system browser, not a webview with no chrome and no way back.
         try { T.opener.openUrl(url); } catch (e) { /* nothing sensible to fall back to */ }

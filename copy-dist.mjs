@@ -72,6 +72,19 @@ for (const dir of ['community', 'vendor']) {
   }
 }
 
+// Pages Rust opens DIRECTLY as their own windows — nothing in index.html
+// references them, so the derivation above cannot see them either. The ink
+// overlay's pill (docs/desktop-ink-design.md §2.8) is the first; a missing one
+// is a window that opens blank, so it fails the build like a missing script.
+for (const rel of ['desktop-ink-dock.html', 'desktop-ink-dock.js']) {
+  const src = join(ROOT, rel);
+  if (!existsSync(src)) {
+    console.error(`copy-dist: window page not on disk: ${rel}`);
+    process.exit(1);
+  }
+  copyFileSync(src, join(OUT, rel));
+}
+
 const count = (function walk(d) {
   let n = 0;
   for (const e of readdirSync(d)) {

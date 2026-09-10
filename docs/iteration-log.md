@@ -7396,3 +7396,97 @@ green in 24s. Live `/try/` serves `app.js?v=117`, `style.css?v=130`,
 `widgets-data.js?v=2` with the new Annotate line; the page boots with the demo
 flag set, two widgets on screen 1 and no console errors. Testers can be pointed
 at sagestage.app/try/ (apex, never www — see the sinkhole note).
+
+## 10 September 2026 (later) — drawing over anything, and the window that had to stop being a window
+
+The tester's question from this morning — *can I annotate over a Chrome tab?* — is
+now a feature of the desktop app. Design in `docs/desktop-ink-design.md`, approved by
+Glenn before a line was written; macOS and Windows testers get it together, his call.
+
+### What it is
+
+A dock button beside Annotate, "Draw over the desktop", rendered only where
+`window.SagePlatform` exists — the browser build and the taster never see it. It asks
+Rust for two windows on the board's monitor: a transparent, borderless, always-on-top
+window running **the app itself** at `index.html#ink`, and a small pill — Pen, Pointer,
+Undo, Clear, Exit — that is its own window so it stays clickable while the ink window
+ignores the cursor. The `#ink` boot mode is the third hash mode after `#s=` and `#w=`:
+`viewDeck()` answers with a scratch deck that exists only in that window's memory,
+`save()` returns at once (the single write path, so one guard makes "never writes"
+true), the chrome is hidden by one CSS rule, the draw layer is switched on, and only
+then does the window show itself — Rust creates it hidden so a transparent window never
+flashes the topbar. Escape drops to pointer rather than leaving; the bar's ✕ does the
+same; Clear from the pill needs no confirm because Undo brings the whole set back (a
+first cut parked cleared strokes on the redo stack, where only Redo could reach them —
+caught by the mock harness, fixed).
+
+### The finding that cost the afternoon
+
+The design said level plus collection behaviour would put the overlay over another
+app's fullscreen Space: `CanJoinAllSpaces | FullScreenAuxiliary`, level 1000. It does
+not. Against a kiosk Chrome — a real fullscreen Space — the window server's own list
+(`CGWindowListCopyWindowInfo`, a twenty-line Swift tool, because a screenshot cannot tell
+an off-screen window from a transparent one) showed both windows **off-screen** at
+levels 3, 25, 101, 1000 and the shielding level, with and without `Stationary`, with the
+non-activating style bit on a plain NSWindow (AppKit strips it), and with the app
+switched to the accessory activation policy. The one thing that worked was making the
+window an **NSPanel with `NonactivatingPanel`** — after which the level did not matter.
+macOS admits another app's windows to a fullscreen Space only if they cannot activate
+that app.
+
+tao only makes NSWindows, so `float_above_everything` swaps the object's class after
+creation to `SageInkPanel`, an NSPanel subclass whose `canBecomeKeyWindow` says yes (a
+plain non-activating panel says no, and then Escape never arrives). Pen mode takes the
+keyboard with `makeKeyAndOrderFront`, never Tauri's `set_focus` — that activates the app,
+and activating an app from inside another app's fullscreen Space throws the teacher out
+of it. Verified: flipping pointer → pen with Chrome fullscreen in front leaves Chrome
+frontmost and on-screen. A side effect worth having: clicking the overlay or the pill
+never activates Sage Stage, so the board is never dragged in front of what is being drawn
+over, and the exit hazard in the design is moot.
+
+### The crash the swap caused, and its rule
+
+Closing the overlay then aborted the process: *"Rust cannot catch foreign exceptions"*.
+`OBJC_PRINT_EXCEPTION_THROW=YES` gave the backtrace — WebKit's window-visibility observer
+removing its key-value observers on teardown. KVO works by swapping an object's class
+under it, WebKit observes the window the moment the webview attaches (inside the
+builder, before any hook), and the swap to `SageInkPanel` threw that bookkeeping away.
+The fix is to put the original class back just before the window is destroyed, and the
+rule that follows is that **every** way the windows can go — the pill's ✕, Cmd+W on
+either window (intercepted in `RunEvent::WindowEvent`), and quit (`flush_all_and_exit`
+closes the overlay first, and no longer counts its windows in the flush handshake) —
+passes through `desktop_ink_close`. Two open/close cycles in one process and a quit
+with the overlay open now run clean, with exception tracing on.
+
+Closed windows linger as off-screen NSWindow objects in the window server's list. Tested
+without the swap: identical. That is Tauri's own destroy behaviour, noted in the design's
+hazards, not fixed here.
+
+### Verified
+
+JS, in a browser tab: `index.html#ink` boots to exactly the draw layer and its bar on a
+transparent page, no dashboard; under the Tauri mock (`.desktop-mock.html#ink`) the
+window shows itself, asks for pen, two strokes paint, pointer hides the bar and keeps the
+ink, clear empties it, undo restores it, a second undo removes one stroke, and the mock's
+save counter stays at zero throughout. The board under the mock renders the new dock
+button.
+
+Native, debug build on an isolated `HOME` (the real state file's mtime never moved; it
+was read once by mistake before the isolation and not written): the overlay and pill
+float over Firefox and the dashboard; over a kiosk Chrome both windows are on the
+fullscreen Space with `key-able true`; pen re-entry keeps Chrome frontmost; close leaves
+the app alive and a reopen works; quit with the overlay open exits 0. Captures by
+`screencapture -x` at each step. The release bundle builds, and `dist/` carries the pill's
+two files through copy-dist's new explicit list.
+
+**Not yet verified, needs a hand on the mouse** (this machine refuses assistive access to
+scripts): drawing a stroke in the real overlay, pointer-mode click-through to the app
+underneath, Escape from the keyboard, dragging the pill, two displays, Keynote. And all
+of Windows — the installer comes from CI, and a Windows machine runs the checklist in the
+draft release notes before anyone else gets the link.
+
+Version 0.2.0 in `tauri.conf.json` and `Cargo.toml`. The developer hooks
+(`SAGE_STAGE_OPEN_INK`, `SAGE_INK_REPEN`, `SAGE_INK_CLOSE`, `SAGE_INK_REOPEN`,
+`SAGE_INK_QUIT`) stay in the binary, inert unless set, because they are how this gets
+re-verified next time. `objc2` is a direct dependency now; `macOSPrivateApi` is on for the
+transparency.
