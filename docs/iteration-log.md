@@ -7633,3 +7633,20 @@ This goes out as 0.3.1, the throwaway, on its own: the first automatic update an
 receives should be trivial. The big upgrade is 0.4.0, after, under three rules recorded
 in the design doc — add fields, never restructure; screenshots to `assets/` by hash,
 never inline; and nothing lost in either direction between a 0.3.x file and 0.4.0.
+
+## 14 September 2026 (night) — 0.3.1 cut, the first update anyone will receive
+
+Glenn, with 0.3.0 published: *now it's time to start updating this with the new
+features.* The runbook's answer to that is the throwaway first: `desktop-build` green in
+7m56s on `v0.3.1`, the draft carrying the DMG, the `.app.tar.gz`, the setup.exe, the MSI
+and a `latest.json` that names 0.3.1 with a signature on both platform entries. The live
+manifest at `releases/latest/download/latest.json` still says 0.3.0, which is the gate
+working: nothing moves until the draft is published. Notes on the draft ask testers for
+the two things that matter — did it arrive on its own, and when.
+
+Both version files bumped (the manifest job refuses a mismatch), `Cargo.lock` refreshed
+with them. The release carries the pre-upgrade copy and nothing else, per the runbook:
+the first automatic update must be trivial so a fault in the updater and a fault in a
+feature can never be mistaken for each other. 0.4.0 — the writing, screenshots and
+annotation upgrade in flight in another chat — waits for this to land on one machine per
+platform.
