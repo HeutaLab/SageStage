@@ -349,6 +349,9 @@ tools sees eleven maths widgets exist. That is the prompt, and it is enough.
 
 ## 9. Updates and releases
 
+> **Built 14 September 2026** — what shipped, the runbook and the decisions are in
+> [updater-design.md](updater-design.md). This section is the original sketch.
+
 ### 9.1 What you do
 
 1. Fix the bug; bump the version.

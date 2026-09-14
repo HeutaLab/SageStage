@@ -1,4 +1,5 @@
-# Builds the desktop app for macOS and Windows.
+# Builds the desktop app for macOS and Windows, and on a tag writes the
+# manifest every installed copy reads to update itself.
 #
 # Windows cannot be cross-compiled from a Mac in any way worth relying on, so
 # the only honest answer is a Windows machine — either Glenn's, or this one.
@@ -8,18 +9,25 @@
 # is a layer of guessing between him and a failure. `npx @tauri-apps/cli build`
 # is what works on his machine; it is what runs here.
 #
-# UNSIGNED, deliberately — see licensing-design.md §9.5. On macOS that means
-# Gatekeeper blocks it on any Mac but the one that built it; on Windows,
-# SmartScreen shows "unknown publisher", which the first bullet of §9.5 says
-# happens with or without a certificate until download volume earns reputation.
-# Signing slots in here later as two extra steps and a handful of secrets.
+# UNSIGNED by Apple and Microsoft, deliberately — see licensing-design.md §9.5.
+# On macOS that means Gatekeeper blocks the first install on any Mac but the
+# one that built it; on Windows, SmartScreen shows "unknown publisher", which
+# the first bullet of §9.5 says happens with or without a certificate until
+# download volume earns reputation. Signing slots in here later as two extra
+# steps and a handful of secrets.
+#
+# SIGNED for the updater, always — docs/updater-design.md. The minisign key
+# generated on 14 Sep 2026 lives in two repository secrets and nowhere in this
+# repo. Without them `tauri build` refuses to produce updater artifacts and the
+# run goes red, which is right: an update no installed app will accept is not
+# worth a green run.
 name: desktop-build
 on:
   workflow_dispatch:
   push:
     tags: ['v*']
 permissions:
-  contents: write        # needed only by the release step, and only on a tag
+  contents: write        # needed only by the release steps, and only on a tag
 concurrency:
   group: desktop-build-${{ github.ref }}
   cancel-in-progress: true
@@ -32,24 +40,33 @@ jobs:
         include:
           - os: macos-latest
             name: macos-universal
-            # Universal rather than the arm64-only build made locally. Not
-            # urgent — Glenn is currently the only Mac user, and he is on
-            # Apple Silicon — but an Intel Mac cannot run an aarch64 bundle at
-            # all, and the cost is CI minutes on a manually-triggered workflow
-            # rather than anything anyone waits for. UNTESTED: no universal
-            # build has been run; the local one is arm64 and lands in
-            # target/release/bundle, not target/universal-apple-darwin/. The
-            # path below is the documented layout, not an observed one, and the
-            # first run of this workflow is what proves it.
+            # Universal rather than the arm64-only build made locally: an
+            # Intel Mac cannot run an aarch64 bundle at all, and the cost is CI
+            # minutes rather than anything anyone waits for. Proven by the
+            # 0.2.0 run (9m14s).
             targets: aarch64-apple-darwin,x86_64-apple-darwin
             args: --target universal-apple-darwin
+            # The DMG is what a person downloads. The .app.tar.gz is what an
+            # installed app downloads, and its .sig is what the manifest
+            # carries — kept as a run artifact for the manifest job, never
+            # attached to the release.
             artifacts: |
               src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+              src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
+              src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
+            release: |
+              src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+              src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
           - os: windows-latest
             name: windows-x64
             targets: x86_64-pc-windows-msvc
             args: ''
             artifacts: |
+              src-tauri/target/release/bundle/msi/*.msi
+              src-tauri/target/release/bundle/msi/*.msi.sig
+              src-tauri/target/release/bundle/nsis/*.exe
+              src-tauri/target/release/bundle/nsis/*.exe.sig
+            release: |
               src-tauri/target/release/bundle/msi/*.msi
               src-tauri/target/release/bundle/nsis/*.exe
 
@@ -77,6 +94,9 @@ jobs:
           key: ${{ matrix.name }}
 
       - name: Build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx @tauri-apps/cli@2 build ${{ matrix.args }}
 
       - uses: actions/upload-artifact@v4
@@ -91,6 +111,32 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.artifacts }}
+          files: ${{ matrix.release }}
           draft: true                # never publish a download without looking at it
+          fail_on_unmatched_files: true
+
+  # latest.json, once both platforms are in. Installed apps read it from
+  # .../releases/latest/download/latest.json, and GitHub's "latest" skips
+  # drafts and pre-releases — so the draft is still the gate, and the moment
+  # Glenn publishes it is the moment every teacher's next launch moves.
+  manifest:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sage-stage-*
+          merge-multiple: true
+          path: bundles
+      - name: Write latest.json
+        run: node release-manifest.mjs bundles latest.json
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: latest.json
+          draft: true
           fail_on_unmatched_files: true

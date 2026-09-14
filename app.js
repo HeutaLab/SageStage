@@ -15987,6 +15987,19 @@
       P.showThisWindow().then(() => P.inkMode(true));
     }
   }
+  // The desktop app updates itself in the background (docs/updater-design.md).
+  // Rust says when a new version has landed and the board passes it on in one
+  // sentence — the board only, or a screen window and every pop-out would say
+  // it too. Never a dialog: the update has already cost the teacher nothing,
+  // and the sentence is only so nobody is surprised next time.
+  if (!viewId && !soloBoot && !inkBoot && window.SagePlatform && SagePlatform.onUpdate) {
+    SagePlatform.onUpdate((u) => {
+      const v = 'Sage Stage ' + u.version;
+      if (u.state === 'installed') toast(v + ' is ready. It will start next time you open the app.', { ms: 8000 });
+      else if (u.state === 'ready') toast(v + ' is ready. It will install when you quit.', { ms: 8000 });
+      else if (u.state === 'needs-admin') toast(v + ' is available, but this Mac needs an administrator to install it.', { ms: 9000 });
+    });
+  }
 })().catch((e) => {
   // Boot is async now, so a throw here is a promise rejection rather than a
   // console error with a half-drawn page behind it. A teacher at a board needs

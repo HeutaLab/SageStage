@@ -7495,3 +7495,92 @@ Tagged `v0.2.0`; `desktop-build` green in 9m14s, and the draft release carries t
 universal DMG, the Windows setup.exe and the MSI. Notes on the draft: what the feature
 is, the unsigned-install steps for each platform, and the seven-step hands-on checklist.
 Stays a draft — the link goes to testers privately, never the page.
+
+## 14 September 2026 — the app that fetches its own next version
+
+Glenn's question — *how do I make sure everyone is on the same version?* — has one
+answer for a Tauri app, and the licensing doc had sketched it in §9 a month ago:
+`tauri-plugin-updater`, a minisign keypair, and a `latest.json` on GitHub Releases.
+Design and runbook in `docs/updater-design.md`; §9 of the licensing doc now points there.
+
+### The key
+
+Generated on Glenn's Mac with `npx @tauri-apps/cli@2 signer generate`, after one
+false start: the tool asks for the password twice and a password manager that clears
+the clipboard after the first paste hands the second prompt nothing ("passwords don't
+match!"). Private half in `~/.tauri/`, his password manager and an offline copy; public
+half in `tauri.conf.json`. The two repository secrets the build needs
+(`TAURI_SIGNING_PRIVATE_KEY`, `..._PASSWORD`) are his to add, and until they exist the
+tagged build goes red on purpose rather than producing an update no app would accept.
+
+### What was built
+
+**Rust does all of it.** The plugin is registered in `lib.rs` and never reaches the
+webview: no capability, no updater API in JS, nothing for a template to touch, CSP
+untouched. Twenty seconds after launch — and every six hours after, for the laptop that
+is never quit — `update_loop` reads the manifest, downloads the platform's file, verifies
+its signature, and then does the platform-appropriate thing: **macOS installs at once**
+(the bundle on disk is swapped, the running process is untouched, the next launch is the
+new version); **Windows installs at quit**, because the plugin's install launches the
+installer and exits the process itself, so it has to sit after the flush handshake.
+`flush_all_and_exit`'s two `exit(0)`s became `finish_exit`, which takes the pending
+update on Windows and is guarded against the handshake and the two-second backstop
+arriving together and killing the installer half-written. `restart_after_install(false)`:
+a quit is a quit.
+
+`bundle_is_writable` asks `access(2)` about the bundle and its folder before any install,
+because the plugin's answer to "permission denied" is an AppleScript administrator
+prompt — a dialog in the middle of a lesson. "No" means not installed and a different
+sentence. A dev binary has no `.app` ancestor and gets the same "no", which keeps the
+updater away from `target/`.
+
+The board hears one event, `sage:update`, through a new `SagePlatform.onUpdate` seam,
+and says one sentence — an eight-second toast, no button, the board only (a screen
+window or pop-out would say it too). Never a dialog.
+
+`release.yml` now passes the two secrets to the build, keeps the `.app.tar.gz` and
+every `.sig` as run artifacts, attaches only what a person downloads to the draft, and
+gains a `manifest` job that waits for both platforms and writes `latest.json` with
+`release-manifest.mjs`. The script refuses a tag that disagrees with `tauri.conf.json`
+(one would move nobody, the other would move everyone on every check), renames assets
+the way GitHub does (a space becomes a dot — `Sage.Stage.app.tar.gz`), and writes
+`darwin-aarch64` and `darwin-x86_64` (both the universal tarball) and
+`windows-x86_64-nsis`. **No MSI entry**: it installs per machine and would want an
+administrator at the moment the teacher quits; IT deploys those and moves them itself.
+The plugin looks up `{os}-{arch}-{installer}` before `{os}-{arch}`, and the installer
+type is baked into the binary by the bundler, so an MSI-installed app finds nothing and
+stays quiet.
+
+The endpoint is `releases/latest/download/latest.json`. GitHub's *latest* skips drafts
+and pre-releases, so the draft is still the gate, and publishing it is the switch.
+`native-tls` rather than the plugin's default rustls, for the school whose firewall
+inspects TLS with a root certificate only the OS store knows about.
+
+Two things the compiler taught: a `plugins` block in `tauri.conf.json` makes
+`generate_context!()` want `serde_json` in the crate root; and `SAGE_INK_QUIT` only fires
+under `SAGE_STAGE_OPEN_INK`, so a verification run without the overlay has to be killed.
+
+### Verified
+
+Debug binary on an isolated `HOME`, `SAGE_STAGE_UPDATE_CHECK=1` and
+`SAGE_STAGE_UPDATE_URL` pointed at a local server claiming 9.9.9 with a bogus signature:
+twenty seconds after launch the manifest was fetched, *"update: 9.9.9 available (running
+0.2.0)"*, the tarball was fetched, and the check failed on the signature — every step up
+to the one that needs the private key. Under the Tauri mock, emitting `sage:update`
+puts the sentence on the dashboard as a toast and nothing else moves. `release-manifest.mjs`
+against a fake bundle tree: the right three keys and URLs; a mismatched tag and a missing
+setup.exe both fail loudly. Rust builds clean.
+
+**Not yet verified:** an update landing on a real machine, either platform. That is the
+throwaway release the checklist's P2 calls for.
+
+### Shipped the same evening
+
+The secrets went in (one false start: GitHub had stored the first as
+`AURI_SIGNING_PRIVATE_KEY`, the T lost somewhere between clipboard and browser; a secret
+cannot be renamed, so a new one and a deletion). Glenn's count of people running the
+desktop app is now eighteen in his school and four in others, all of whom have been
+installing each build by hand — so this is tagged `v0.3.0` at once rather than waiting
+for the next feature, version bumped in both files in the same commit. The mock and the
+print page, modified before today, stay out. 0.3.0 is the last install anyone does by
+hand; 0.3.1, the throwaway, is the proof.

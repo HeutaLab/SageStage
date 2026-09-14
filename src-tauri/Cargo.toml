@@ -1,6 +1,6 @@
 [package]
 name = "sage-stage"
-version = "0.2.0"
+version = "0.3.0"
 description = "Sage Stage — a fully local classroom screen"
 authors = ["Sage Stage"]
 edition = "2021"
@@ -22,6 +22,18 @@ tauri = { version = "2", features = ["protocol-asset", "macos-private-api"] }
 tauri-plugin-fs = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+# Self-update (docs/updater-design.md). Rust does the whole job — check,
+# download, verify, install — so no capability reaches JS and the webview's CSP
+# is untouched. serde only so the one event the board hears can carry a struct.
+# native-tls rather than the default rustls: a school that inspects TLS puts
+# its own root certificate in the operating system's store, and only the OS
+# stack (SecureTransport, SChannel) looks there. The proxy feature is for the
+# same room.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy"] }
+serde = { version = "1", features = ["derive"] }
+# generate_context!() embeds the plugins block of tauri.conf.json as a
+# serde_json::Value and expects the crate to have it in scope.
+serde_json = "1"
 
 # A desktop app that takes a second longer to compile and starts faster is the
 # right trade for something a teacher opens at 8:40am with a class coming in.
@@ -39,3 +51,6 @@ strip = true
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSResponder", "NSPanel"] }
+# access(2), for asking whether the app bundle is the teacher's to replace
+# before the updater would otherwise ask for an administrator password.
+libc = "0.2"

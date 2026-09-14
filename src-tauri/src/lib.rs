@@ -10,6 +10,7 @@ use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Listener, Manager};
+use tauri_plugin_updater::UpdaterExt;
 
 fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
@@ -268,7 +269,7 @@ fn flush_all_and_exit(app: &tauri::AppHandle) {
         let mut n = seen_done.lock().unwrap();
         *n += 1;
         if *n >= want {
-            app_done.exit(0);
+            finish_exit(&app_done);
         }
     });
 
@@ -279,8 +280,150 @@ fn flush_all_and_exit(app: &tauri::AppHandle) {
     let app_timeout = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(2000));
-        app_timeout.exit(0);
+        finish_exit(&app_timeout);
     });
+}
+
+/* ---- Updates: everyone on the same version ----------------------------- */
+// Design: docs/updater-design.md. A while after launch the app reads one
+// manifest on GitHub Releases, downloads a newer version in the background,
+// checks its signature against the public key in tauri.conf.json, and installs
+// it when that costs the teacher nothing: at once on macOS, where the bundle on
+// disk is swapped and the running app is untouched (the next launch is the new
+// version), and at quit on Windows, where the installer needs the app closed
+// and so runs after the flush handshake. Nothing here opens a dialog, and
+// nothing here touches the data file.
+
+/// A downloaded, signature-verified update waiting for the quit path. Only
+/// Windows ever fills it; macOS installs the moment the download lands.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+struct PendingUpdate(Mutex<Option<(tauri_plugin_updater::Update, Vec<u8>)>>);
+
+/// What the board is told, so it can say one quiet sentence (app.js, boot).
+#[derive(Clone, serde::Serialize)]
+struct UpdateNotice {
+    version: String,
+    /// `installed` — macOS, the next launch runs it. `ready` — Windows, it
+    /// installs at quit. `needs-admin` — macOS, the app folder is not the
+    /// teacher's to write, so an administrator installs it by hand.
+    state: &'static str,
+}
+
+/// The first caller of `finish_exit` does the exiting.
+static EXITING: AtomicBool = AtomicBool::new(false);
+
+/// The last step of a quit. On Windows a downloaded update installs here —
+/// the installer needs the app closed, and this is the one moment the flush
+/// has landed and there is nothing left to lose. `install` launches the
+/// installer and exits the process itself; it returns only on failure, and a
+/// failed install must never stop a quit.
+fn finish_exit(app: &tauri::AppHandle) {
+    if EXITING.swap(true, Ordering::SeqCst) {
+        // The handshake completed just as the backstop fired, or the other way
+        // round. Whoever got here first may be handing the installer its file;
+        // give that a moment rather than killing it half-written.
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        app.exit(0);
+        return;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let pending = app.state::<PendingUpdate>().0.lock().unwrap().take();
+        if let Some((update, bytes)) = pending {
+            if let Err(e) = update.install(&bytes) {
+                eprintln!("update: install at quit failed: {e}");
+            }
+        }
+    }
+    app.exit(0);
+}
+
+fn update_check_wanted() -> bool {
+    if std::env::var_os("SAGE_STAGE_NO_UPDATE").is_some() {
+        return false;
+    }
+    // A dev binary has no bundle to replace, and a verification run on an
+    // isolated HOME must not reach out to GitHub unasked.
+    !cfg!(debug_assertions) || std::env::var_os("SAGE_STAGE_UPDATE_CHECK").is_some()
+}
+
+/// First look twenty seconds after launch — the board has settled, and the
+/// class is not waiting on the download — then every six hours, because a
+/// laptop that is never quit would otherwise never move.
+fn update_loop(app: tauri::AppHandle) {
+    let mut handled: Option<String> = None;
+    std::thread::sleep(std::time::Duration::from_secs(20));
+    loop {
+        if let Err(e) = tauri::async_runtime::block_on(check_for_update(&app, &mut handled)) {
+            eprintln!("update: check failed: {e}");
+        }
+        std::thread::sleep(std::time::Duration::from_secs(6 * 60 * 60));
+    }
+}
+
+async fn check_for_update(
+    app: &tauri::AppHandle,
+    handled: &mut Option<String>,
+) -> tauri_plugin_updater::Result<()> {
+    let mut builder = app
+        .updater_builder()
+        .timeout(std::time::Duration::from_secs(30))
+        // A quit is a quit; the installer must not bring the app back.
+        .restart_after_install(false);
+    // Developer hook: a local manifest, to watch an update land without
+    // publishing one. Plain http is accepted by debug builds only.
+    if let Some(url) = std::env::var("SAGE_STAGE_UPDATE_URL").ok().and_then(|u| u.parse().ok()) {
+        builder = builder.endpoints(vec![url])?;
+    }
+    let update = match builder.build()?.check().await? {
+        Some(u) => u,
+        None => return Ok(()),
+    };
+    if handled.as_deref() == Some(update.version.as_str()) {
+        // Already installed, or waiting for the quit. The running app still
+        // reports the old version, so the manifest would say so every six hours.
+        return Ok(());
+    }
+    eprintln!("update: {} available (running {})", update.version, update.current_version);
+    let bytes = update.download(|_, _| {}, || {}).await?;
+    let version = update.version.clone();
+    #[cfg(target_os = "macos")]
+    let state = if bundle_is_writable() {
+        update.install(&bytes)?;
+        "installed"
+    } else {
+        "needs-admin"
+    };
+    #[cfg(not(target_os = "macos"))]
+    let state = {
+        *app.state::<PendingUpdate>().0.lock().unwrap() = Some((update, bytes));
+        "ready"
+    };
+    eprintln!("update: {version} {state}");
+    *handled = Some(version.clone());
+    let _ = app.emit("sage:update", UpdateNotice { version, state });
+    Ok(())
+}
+
+/// The updater renames the bundle aside and moves the new one into its place,
+/// so it needs to write both the bundle and the folder it sits in. Where it
+/// can do neither it would ask for an administrator password — a dialog in the
+/// middle of a lesson — so the question is asked here first, and the answer
+/// "no" means the update is simply not installed. A dev binary has no bundle
+/// and gets the same "no", which keeps the updater away from target/.
+#[cfg(target_os = "macos")]
+fn bundle_is_writable() -> bool {
+    use std::os::unix::ffi::OsStrExt;
+    let Ok(exe) = std::env::current_exe() else { return false };
+    let Some(bundle) = exe.ancestors().find(|p| p.extension().is_some_and(|e| e == "app")) else {
+        return false;
+    };
+    let Some(parent) = bundle.parent() else { return false };
+    [bundle, parent].iter().all(|p| {
+        let Ok(c) = std::ffi::CString::new(p.as_os_str().as_bytes()) else { return false };
+        // SAFETY: a valid NUL-terminated path; access(2) reads it and nothing else.
+        unsafe { libc::access(c.as_ptr(), libc::W_OK) == 0 }
+    })
 }
 
 /* ---- Desktop ink: drawing over anything ------------------------------- */
@@ -557,6 +700,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             save_state,
             state_file_path,
@@ -568,6 +712,13 @@ pub fn run() {
         ])
         .setup(|app| {
             app.manage(VideoBridge(start_video_bridge()));
+
+            // Self-update, off the main thread and off the critical path.
+            app.manage(PendingUpdate(Mutex::new(None)));
+            if update_check_wanted() {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || update_loop(handle));
+            }
 
             // Developer hook, inert unless the variable is set: open the ink
             // overlay as soon as the board is up, so the native side —

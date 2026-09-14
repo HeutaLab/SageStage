@@ -747,6 +747,17 @@
         }).catch(() => { /* single window */ });
       },
 
+      // Rust reports a background update once it has landed (lib.rs, "Updates";
+      // docs/updater-design.md): { version, state } with state 'installed'
+      // (macOS — the next launch is the new version), 'ready' (Windows — it
+      // installs at quit) or 'needs-admin' (macOS — the app folder is not the
+      // teacher's to write). Fired at every window; the board decides who speaks.
+      onUpdate(fn) {
+        T.event.listen('sage:update', (e) => {
+          if (e && e.payload && e.payload.version) fn(e.payload);
+        }).catch(() => { /* nothing to hear */ });
+      },
+
       // The ✕ in a pop-out. close() rather than destroy() precisely SO the file
       // backend's onCloseRequested hook runs: a pop-out holding an unsaved edit
       // flushes it before the window goes.
