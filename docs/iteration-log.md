@@ -7596,3 +7596,40 @@ on the binary went from arm64-only to the universal CI build while the process s
 up. The swapped-in release binary then booted to a window of its own, confirmed by
 `CGWindowListCopyWindowInfo` rather than a screenshot, because the screenshot showed
 Glenn's own Sage Stage in front. Windows remains untested; 0.3.1 is for both.
+
+## 14 September 2026 (evening) — the copy made before a new version touches the file
+
+Glenn, with 0.3.0 waiting to be published: *I want to make sure the slide decks are not
+going to be overwritten by the next release* — and the next release but one is the large
+upgrade in flight in another chat, writing and screenshots and annotation on any screen,
+saved into the deck. The updater cannot reach a deck; the first save a new version makes
+can, if its migration is wrong. The file already had a daily copy, a two-versions guard,
+a defensive loader and quarantine-not-delete. The gap was the same day: the daily copy is
+taken before the first save of the day, which the old version may already have made that
+morning, so an update landing at nine would put the new version's first write over the
+only copy of the morning's work.
+
+So the shell now copies the file the first time a version runs on a machine, before any
+window has read it: `backups/<date>_before-<version>.json`, byte-for-byte, the newest
+five kept, the daily rotation blind to them. Which version last ran is a marker in the
+app's own data folder — bookkeeping about the machine, not the teacher's work, so a file
+arriving by OneDrive or a restore is still copied. A failed copy is retried next launch
+rather than forgotten. The date is local (`chrono`, already in the tree), because
+storage.js orders backups by that date and a UTC label would put an evening copy in
+Bangkok on tomorrow. `recoveryCandidates` learned the name, and because `_` sorts after
+`.`, the same day's pre-upgrade copy is tried before its daily: the daily may predate the
+morning's work; the pre-upgrade copy cannot.
+
+### Verified
+
+Debug binary on an isolated `HOME`: first run — the copy appears, `cmp` says identical,
+the marker says 0.3.0; second run — nothing; marker rewritten to 0.2.0 with seven fake
+old copies on disk — a fresh copy "after 0.2.0", and the seven rotate to four plus it. A
+second home with a damaged main file, a daily copy naming its deck FROM THE DAILY COPY
+and a pre-upgrade copy naming it FROM THE PRE-UPGRADE COPY: the app quarantined the
+damaged file and came up with the pre-upgrade copy's name in `sage-stage.json`.
+
+This goes out as 0.3.1, the throwaway, on its own: the first automatic update anyone
+receives should be trivial. The big upgrade is 0.4.0, after, under three rules recorded
+in the design doc — add fields, never restructure; screenshots to `assets/` by hash,
+never inline; and nothing lost in either direction between a 0.3.x file and 0.4.0.

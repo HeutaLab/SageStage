@@ -34,6 +34,11 @@ serde = { version = "1", features = ["derive"] }
 # generate_context!() embeds the plugins block of tauri.conf.json as a
 # serde_json::Value and expects the crate to have it in scope.
 serde_json = "1"
+# The date in a pre-upgrade copy's name, in LOCAL time — toISOString-style
+# UTC would label an evening copy in Bangkok with tomorrow and a morning one
+# in Toronto with yesterday, and storage.js orders backups by that date.
+# Already in the tree; default features off keeps it to the clock.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 # A desktop app that takes a second longer to compile and starts faster is the
 # right trade for something a teacher opens at 8:40am with a class coming in.

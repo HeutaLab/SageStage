@@ -53,6 +53,25 @@ quit would otherwise never move:
 Decks are not involved at any point: they live in `Documents/Sage Stage`,
 outside the bundle.
 
+### The file, before a new version touches it
+
+An update can never reach a deck. The first save a **new version** makes can,
+if a migration is wrong — and it lands on the only copy, because the daily
+backup is taken before the first save of the *day*, which the old version may
+already have made that morning. So the first time a version runs on a
+machine, before any window has read the file, the shell copies it to
+`backups/<date>_before-<version>.json`: the file exactly as the previous
+version left it. The newest five are kept; the daily rotation never touches
+them. Which version last ran is a marker in the app's own data folder, not
+in Documents — bookkeeping about the machine, not the teacher's work — so a
+file that arrives from elsewhere is still copied the first time a version
+meets it. A failed copy is retried at the next launch rather than forgotten.
+
+storage.js's recovery knows the name. If the file is ever unreadable, the
+same day's pre-upgrade copy is tried **before** its daily copy (`_` sorts
+after `.`): the daily may predate that morning's work; the pre-upgrade copy
+cannot.
+
 ### Managed machines
 
 Where the app folder is not the teacher's to write — an IT-installed Mac —
@@ -93,7 +112,15 @@ The copies of 0.1.1 and 0.2.0 already installed have no updater. The first
 version that carries it is installed by hand once, and after that never again.
 
 **Before relying on it:** ship a throwaway `x.y.1` and watch it land on one
-test machine per platform — the go-to-market checklist's P2 gate.
+test machine per platform — the go-to-market checklist's P2 gate. 0.3.1 is
+that: it carries the pre-upgrade copy and nothing else. The first automatic
+update anyone receives must be trivial, so a fault in the updater and a fault
+in a feature can never be mistaken for each other. The large upgrade in
+flight elsewhere (writing, screenshots and annotation on any screen, saved
+into the deck) is 0.4.0, after 0.3.1 has landed, and it obeys three rules:
+fields are added, never restructured; screenshots go to `assets/` by hash,
+never inline in the deck; and a 0.3.x file opened and saved by 0.4.0, and a
+0.4.0 file opened by 0.3.x, both lose nothing.
 
 ## 4. Decisions
 
@@ -131,6 +158,13 @@ test machine per platform — the go-to-market checklist's P2 gate.
   running — `file` on the bundle's binary went from arm64-only to the
   universal CI binary. Launched afterwards, the swapped-in release binary put
   its 1280×800 window on screen under its own process id.
+
+- **The pre-upgrade copy**, debug binary on an isolated `HOME`: the first
+  run of a version copies the file byte-for-byte and writes the marker; the
+  second run does nothing; a run after a different version's marker copies
+  again and rotates seven old copies down to five. A damaged file beside a
+  daily copy and a pre-upgrade copy that disagreed on a deck name came back
+  from the pre-upgrade copy.
 
 **Not yet:**
 

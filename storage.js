@@ -389,10 +389,21 @@
       try {
         const now = today();
         const entries = await fs.readDir(BACKUPS, D);
+        // Two shapes. `<date>.json` is the daily copy. `<date>_before-<version>.json`
+        // is the file as the previous version left it, copied by the shell the
+        // first time a version runs (lib.rs, "Before a new version touches the
+        // file"). '_' sorts after '.', so reversed, the same day's pre-upgrade
+        // copy is tried before its daily: the daily may predate that morning's
+        // work; the pre-upgrade copy cannot.
         const names = entries.map((e) => e.name)
-          .filter((n) => /^\d{4}-\d{2}-\d{2}\.json$/.test(n) && n.slice(0, 10) <= now)
+          .filter((n) => /^\d{4}-\d{2}-\d{2}(_before-[^/]+)?\.json$/.test(n) && n.slice(0, 10) <= now)
           .sort().reverse();
-        for (const n of names) out.push({ path: BACKUPS + '/' + n, label: 'restored the backup from ' + n.slice(0, 10) });
+        for (const n of names) {
+          const m = n.match(/_before-(.+)\.json$/);
+          out.push({ path: BACKUPS + '/' + n, label: m
+            ? 'restored the copy made before ' + m[1] + ' first ran, from ' + n.slice(0, 10)
+            : 'restored the backup from ' + n.slice(0, 10) });
+        }
       } catch (e) { /* no backups dir */ }
       try {
         // OneDrive conflict copies sit beside the main file

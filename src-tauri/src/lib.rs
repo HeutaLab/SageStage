@@ -284,6 +284,88 @@ fn flush_all_and_exit(app: &tauri::AppHandle) {
     });
 }
 
+/* ---- Before a new version touches the file ----------------------------- */
+// An update can never reach a deck — decks live under Documents, outside the
+// bundle — but the first save a NEW version makes can, if a migration is wrong,
+// and it lands on the only copy: the daily backup is taken before the first
+// save of the day, which the OLD version may already have made that morning.
+// So the first time a version runs on a machine, before any window has read
+// the file, it is copied to backups/<date>_before-<version>.json: the file
+// exactly as the previous version left it. storage.js's recovery knows the
+// name and tries it ahead of the same day's daily copy. The newest
+// KEEP_UPGRADE_COPIES are kept; the daily rotation never touches them.
+//
+// Which version last ran here is a marker in the app's own data folder, not in
+// Documents: it is bookkeeping about this machine, not the teacher's work, and
+// it means a file that arrives from elsewhere (OneDrive, a restore) is still
+// copied the first time this version meets it.
+
+const KEEP_UPGRADE_COPIES: usize = 5;
+
+/// `2026-09-15_before-0.3.1.json`
+fn is_upgrade_copy(name: &str) -> bool {
+    let b = name.as_bytes();
+    name.len() > 24
+        && b[..10]
+            .iter()
+            .enumerate()
+            .all(|(i, c)| if i == 4 || i == 7 { *c == b'-' } else { c.is_ascii_digit() })
+        && name[10..].starts_with("_before-")
+        && name.ends_with(".json")
+}
+
+fn pre_upgrade_backup(app: &tauri::AppHandle) -> Result<(), String> {
+    let version = app.package_info().version.to_string();
+    let data_dir = app.path().app_data_dir().map_err(err)?;
+    let marker = data_dir.join("last-version");
+    let last = std::fs::read_to_string(&marker).ok().map(|s| s.trim().to_string());
+    if last.as_deref() == Some(version.as_str()) {
+        return Ok(()); // this version has run here before
+    }
+    let dir = app.path().document_dir().map_err(err)?.join("Sage Stage");
+    let main = dir.join("sage-stage.json");
+    if main.is_file() {
+        let backups = dir.join("backups");
+        std::fs::create_dir_all(&backups).map_err(err)?;
+        let name = format!("{}_before-{}.json", chrono::Local::now().format("%Y-%m-%d"), version);
+        let dest = backups.join(&name);
+        if dest.exists() {
+            eprintln!("upgrade: backups/{name} is already there");
+        } else {
+            let expect = std::fs::metadata(&main).map_err(err)?.len();
+            let n = std::fs::copy(&main, &dest).map_err(err)?;
+            if n != expect {
+                let _ = std::fs::remove_file(&dest);
+                return Err(format!("short copy of the data file: {n} of {expect} bytes"));
+            }
+            eprintln!(
+                "upgrade: first run of {version} here, after {}; the data file is copied to backups/{name}",
+                last.as_deref().unwrap_or("a version that left no record")
+            );
+        }
+        rotate_upgrade_copies(&backups);
+    }
+    // Only once the copy is safely there — a failed copy means trying again
+    // at the next launch, not forgetting.
+    std::fs::create_dir_all(&data_dir).map_err(err)?;
+    std::fs::write(&marker, &version).map_err(err)?;
+    Ok(())
+}
+
+fn rotate_upgrade_copies(backups: &std::path::Path) {
+    let Ok(entries) = std::fs::read_dir(backups) else { return };
+    let mut names: Vec<String> = entries
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| is_upgrade_copy(n))
+        .collect();
+    names.sort();
+    names.reverse();
+    for old in names.iter().skip(KEEP_UPGRADE_COPIES) {
+        let _ = std::fs::remove_file(backups.join(old));
+    }
+}
+
 /* ---- Updates: everyone on the same version ----------------------------- */
 // Design: docs/updater-design.md. A while after launch the app reads one
 // manifest on GitHub Releases, downloads a newer version in the background,
@@ -711,6 +793,11 @@ pub fn run() {
             desktop_ink_close
         ])
         .setup(|app| {
+            // Before anything else, and before any window has read the file.
+            if let Err(e) = pre_upgrade_backup(app.handle()) {
+                eprintln!("upgrade: backup skipped: {e}");
+            }
+
             app.manage(VideoBridge(start_video_bridge()));
 
             // Self-update, off the main thread and off the critical path.
