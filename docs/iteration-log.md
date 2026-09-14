@@ -7584,3 +7584,15 @@ installing each build by hand — so this is tagged `v0.3.0` at once rather than
 for the next feature, version bumped in both files in the same commit. The mock and the
 print page, modified before today, stay out. 0.3.0 is the last install anyone does by
 hand; 0.3.1, the throwaway, is the proof.
+
+`desktop-build` went green in eleven minutes, all three jobs, and the draft carries the
+DMG, the tarball, the setup.exe, the MSI and a `latest.json` whose every URL names a
+real asset — the space-becomes-dot guess was right. Then the test that could be run
+without publishing anything: the real 0.3.0 tarball unpacked into a scratch folder, its
+binary swapped for the debug build, that bundle run on an isolated `HOME` against a
+local manifest claiming 9.9.9 with the real signature. It fetched, downloaded, verified
+against the public key in the config, and swapped the bundle under its own feet — `file`
+on the binary went from arm64-only to the universal CI build while the process stayed
+up. The swapped-in release binary then booted to a window of its own, confirmed by
+`CGWindowListCopyWindowInfo` rather than a screenshot, because the screenshot showed
+Glenn's own Sage Stage in front. Windows remains untested; 0.3.1 is for both.

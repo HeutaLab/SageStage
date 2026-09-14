@@ -114,12 +114,27 @@ test machine per platform — the go-to-market checklist's P2 gate.
 - **Rust does all of it.** No permission in `capabilities/default.json`, no
   updater API in the webview, nothing for a template to reach.
 
-## 5. Not yet verified
+## 5. Verified, and not yet
 
-- An update landing on a real machine, either platform. Needs the two
-  secrets in the repo, a tagged build, and then a second tag.
-- The `.app.tar.gz` name for the universal target (`Sage Stage.app.tar.gz` is
-  the documented layout; the first run proves it, and the manifest job fails
-  loudly if it is not there).
-- Windows at quit: that the `/P /UPDATE` install with no `/R` leaves the app
+**Verified on 14 September 2026, the evening `v0.3.0` was tagged:**
+
+- The tagged build signed both platforms with the repository secrets, and the
+  manifest job wrote `latest.json` whose three URLs name real assets on the
+  draft. The universal target does produce `Sage Stage.app.tar.gz`, and
+  GitHub does rename it `Sage.Stage.app.tar.gz`.
+- **The macOS update path, end to end, with the real signed artifact.** The
+  0.3.0 tarball was unpacked into a scratch folder, its binary replaced by a
+  debug build, and that bundle run on an isolated `HOME` against a local
+  manifest claiming 9.9.9 and pointing at the real tarball with its real
+  signature. Twenty seconds in: fetched, downloaded, signature verified
+  against the public key in the config, bundle swapped while the process kept
+  running — `file` on the bundle's binary went from arm64-only to the
+  universal CI binary. Launched afterwards, the swapped-in release binary put
+  its 1280×800 window on screen under its own process id.
+
+**Not yet:**
+
+- An update landing on a real installed copy through the published endpoint.
+  0.3.1, the throwaway, is that.
+- Windows, at all: that the `/P /UPDATE` install with no `/R` leaves the app
   closed and the new version in place.
