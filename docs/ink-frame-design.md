@@ -129,6 +129,13 @@ and no new Rust dependency. The pill also offers a **Paste shot** button that tr
 Cmd+V — because a button that silently does nothing is this repo's recurring desktop
 bug and is not getting a new member.
 
+**Observed 15 Sep, first build:** the button's `clipboard.read()` does work, but macOS
+answers it with its own small **Paste** confirmation button, because an app reading the
+pasteboard without a paste gesture is precisely what that prompt exists to police. A
+real Cmd+V raises no prompt at all. So the button is the two-click path and Cmd+V is the
+one-key path; both are offered and the toast says so. Reading the pasteboard natively
+from Rust would not avoid it — it is the read that is policed, not the API.
+
 When the Developer ID lands, one button replaces the teacher's keystroke and **nothing
 else in this design changes**: the same backdrop, the same tools, the same save path.
 
