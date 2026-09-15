@@ -6991,6 +6991,17 @@ body.desktop-ink > :not(#drawLayer):not(#drawTools):not(.sel-bar):not(#inkFrame)
   width: 100%; height: 100%; object-fit: contain;
   pointer-events: none; user-select: none;
 }
+/* A whole-screen shot cropped to the frame IS the frame, to the pixel, so it
+   fills rather than fits — anything else would float the picture inside a
+   margin and the ink would no longer sit where it was drawn. */
+#inkShot.exact { object-fit: fill; }
+/* Snap mode: the frame is completely invisible so the teacher's screenshot
+   catches the page and none of ours. Visibility rather than display, so the
+   canvas keeps its size and the ink comes back exactly where it was. */
+body.ink-snapping #drawLayer,
+body.ink-snapping #inkShot,
+body.ink-snapping #inkFrame,
+body.ink-snapping #drawTools { visibility: hidden; }
 #inkFrame {
   position: fixed; inset: 0; z-index: 3100; pointer-events: none;
   box-shadow: inset 0 0 0 2px rgba(15, 118, 110, 0.85), inset 0 0 0 3px rgba(255, 255, 255, 0.55);

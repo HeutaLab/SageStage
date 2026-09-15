@@ -44,7 +44,7 @@
   button.exit:hover { background: rgba(220, 38, 38, 0.1); color: #b91c1c; }
   .sep { width: 1px; height: 24px; background: rgba(15, 23, 42, 0.12); margin: 0 4px; }
   .label { display: none; }
-  @media (min-width: 320px) { button.mode .label, #save .label, #exit .label { display: inline; } }
+  @media (min-width: 320px) { button.mode .label, #save .label, #exit .label, #snap .label { display: inline; } }
   select {
     appearance: none; border: 1px solid rgba(15,23,42,.18); background: rgba(255,255,255,.9);
     color: #0f172a; font: 600 12px/1 'Quicksand', system-ui, sans-serif;
@@ -67,8 +67,9 @@
     <button id="place" title="Move or resize the frame — or drag its top strip">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="13" rx="2" fill="#bae6fd"/><path d="M4 9h16"/><path d="M9 14.5h6M12 12v5"/></svg>
     </button>
-    <button id="paste" title="Bring in a screenshot — take one with ⌘⌃⇧4 first">
+    <button id="snap" title="Hide the frame so you can take a clean screenshot of what is underneath">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" fill="#fde68a"/><circle cx="12" cy="12" r="3.2"/><path d="M8.5 5V3.6h7V5"/></svg>
+      <span class="label" id="snapLabel">Snap</span>
     </button>
     <span class="sep"></span>
     <button id="undo" title="Undo the last stroke">
@@ -89,6 +90,6 @@
       <span class="label">Done</span>
     </button>
   </div>
-  <script src="desktop-ink-dock.js?v=4"></script>
+  <script src="desktop-ink-dock.js?v=5"></script>
 </body>
 </html>

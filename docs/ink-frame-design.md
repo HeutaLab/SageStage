@@ -117,11 +117,29 @@ divides across them:
 | **see-through** | ink floating over the real screen | pen, highlighter, shapes, bin, undo, clear |
 | **holding a picture** | a screenshot fills the frame | all of the above, plus blur, magnifier, snip |
 
-The bridge between them is the clipboard. The teacher presses Cmd+Control+Shift+4 (or,
-on Windows, the pill's own button), drags over the region, and the shot becomes the
-frame's backdrop — ink and all, because the system photographs the composited screen
-including our overlay. From that moment blur and magnifier have something to work on,
-**snip** means crop, and Save has a finished picture to send to the deck.
+The bridge between them is the clipboard, and **the picture goes UNDERNEATH the
+annotation without disturbing it**. Corrected with Glenn on 15 Sep after the first
+build had pasting clear the ink: a teacher may have been drawing over a static page in
+front of a class for ten minutes before deciding they want it in a deck, and that work is
+the whole point. Both directions have to work:
+
+1. *Find it, snap it, then annotate* — the likely one. Nothing is drawn yet, the shot
+   fills the frame, and the teacher marks it up afterwards.
+2. *Annotate for ten minutes, then decide to keep it.* The shot slides under the existing
+   ink and changes nothing about it.
+
+Two mechanisms make that possible. **Snap mode** hides the frame completely — ink, edge,
+grip, draw bar and any picture already in it — so the teacher's screenshot catches the
+page and nothing of ours; it is the reason nothing has to be cleared to avoid printing
+the ink twice. And a **whole-screen shot is cropped to the frame's own rectangle**, using
+the frame's position on its monitor, so the picture lands exactly under the ink. The
+teacher never drags a selection to match the frame: the alignment is arithmetic rather
+than aim, and ⌘⌃⇧3 is easier to press than ⌘⌃⇧4 anyway. A region shot that is not the
+whole screen still works, and is fitted rather than cropped.
+
+The pill's camera is therefore two-state: **Snap** hides the frame, **Bring it in**
+fetches the shot and restores it. From that moment blur and magnifier have something to
+work on, **snip** means crop, and Save has a finished picture to send to the deck.
 
 The paste arrives through the webview's ordinary `paste` event, so no clipboard plugin
 and no new Rust dependency. The pill also offers a **Paste shot** button that tries
@@ -244,6 +262,11 @@ side through the loop recorded in the desktop-verification memory:
   Accessibility, a larger permission with the identical update problem. Windows gets the
   button; the Mac gets a line of instruction.
 - **Live blur and live magnification**, for the same reason as capture.
+- **The lesson's framing alongside the picture.** Glenn, 15 Sep: the saved screen should
+  be able to carry the learning intention (WALT, or whatever wording the school uses) and
+  the success criteria next to the image, because that is what makes it a teaching
+  artefact rather than a snapshot. Not in these passes; it wants its own thinking about
+  where that text comes from and whether it is per-deck, per-screen or a template.
 - **Open:** whether the frame should be offered on the board as well, so a teacher can
   blur or magnify part of a screen they have built. It costs little once the picture
   tools exist, but it is not what was asked for and is not in these three passes.

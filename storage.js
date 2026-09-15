@@ -850,6 +850,22 @@
         catch (e) { console.error('sizeInkWindow failed', e); return false; }
       },
 
+      // Which display the frame is on, and where — so a whole-screen shot can be
+      // cropped to exactly the frame's rectangle. Logical pixels, plus the
+      // physical size, because a screenshot is in physical ones.
+      async inkMonitor() {
+        try {
+          const m = await T.window.getCurrentWindow().currentMonitor();
+          if (!m) return null;
+          const f = m.scaleFactor || 1;
+          return {
+            x: m.position.x / f, y: m.position.y / f,
+            w: m.size.width / f, h: m.size.height / f,
+            pw: m.size.width, ph: m.size.height, scale: f,
+          };
+        } catch (e) { console.error('inkMonitor failed', e); return null; }
+      },
+
       // ---- getting a picture into a deck (§4) ----
       // The frame writes the PNG into the asset store itself — that is not the
       // deck file, so the promise in §0 holds — and sends the board the
@@ -873,6 +889,17 @@
       inkDecks(list) {
         try { T.event.emit('sage:ink-decks', list); } catch (e) { console.error('deck list failed', e); }
       },
+      // Snap mode: the frame makes itself invisible so the teacher's screenshot
+      // catches the page and not our own ink and edge. Both windows have to
+      // agree about it, so it is broadcast rather than held in one of them.
+      inkSnap(on) {
+        try { T.event.emit('sage:ink-snap', !!on); } catch (e) { console.error('snap state failed', e); }
+      },
+      onInkSnap(fn) {
+        T.event.listen('sage:ink-snap', (e) => fn(!!(e && e.payload)))
+          .catch((er) => console.error('snap listen failed', er));
+      },
+
       // The pill knows which deck the teacher chose; the frame knows what is on
       // screen. Rust carries the one to the other.
       onInkSaveRequest(fn) {

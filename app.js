@@ -16112,22 +16112,69 @@
   // The picture the teacher brought in with ⌘⌃⇧4 (or Win+Shift+S). It sits
   // BEHIND the ink, so a stroke drawn before the screenshot arrived still reads
   // as being on top of it.
-  function setInkShot(src) {
+  // A picture arriving in the frame goes UNDERNEATH the annotation and never
+  // disturbs it: a teacher may have been drawing over a static page in front of
+  // a class for ten minutes before deciding they want it in a deck, and that
+  // work is the point. Snap mode (below) is what keeps the ink out of the
+  // screenshot in the first place, so nothing has to be cleared to avoid
+  // printing it twice.
+  //
+  // A WHOLE-SCREEN shot is cropped to the frame's own rectangle, which lands it
+  // exactly under the ink — the teacher never has to drag a selection to match
+  // the frame, and the alignment is arithmetic rather than aim.
+  async function setInkShot(src) {
+    const P = window.SagePlatform;
+    let img;
+    try {
+      img = await new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => res(im);
+        im.onerror = () => rej(new Error('picture would not load'));
+        im.src = src;
+      });
+    } catch (e) { toast('That picture would not open.'); return; }
+
+    let finalSrc = src, exact = false;
+    try {
+      const mon = P && P.inkMonitor ? await P.inkMonitor() : null;
+      if (mon && inkRect && Math.abs(img.naturalWidth - mon.pw) <= 4 && Math.abs(img.naturalHeight - mon.ph) <= 4) {
+        const k = img.naturalWidth / mon.w;                 // logical px → shot px
+        const cx = (inkRect.x - mon.x) * k, cy = (inkRect.y - mon.y) * k;
+        const cw = inkRect.w * k, ch = inkRect.h * k;
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(cw));
+        c.height = Math.max(1, Math.round(ch));
+        c.getContext('2d').drawImage(img, cx, cy, cw, ch, 0, 0, c.width, c.height);
+        finalSrc = c.toDataURL('image/png');
+        exact = true;
+      }
+    } catch (e) { console.error('could not crop the screenshot to the frame', e); }
+
     if (!inkShot) {
       inkShot = el('img', { id: 'inkShot', alt: '' });
       document.body.append(inkShot);
     }
-    inkShot.src = src;
     inkShot.onload = () => { buildDrawTools(); blit(); };
+    inkShot.classList.toggle('exact', exact);
+    inkShot.src = finalSrc;
     document.body.classList.add('ink-has-shot');
-    // The teacher's own screenshot photographs the composited screen, so the
-    // ink that was on display is ALREADY in the picture. Compositing it again
-    // would print every stroke twice, a hair out of register — which is exactly
-    // what "the annotation doesn't match" looked like. Clear it; undo brings it
-    // straight back for the case where the picture came from somewhere else.
-    if (screenInk(screen()).length) {
-      clearScreenInk();
-      toast('Your drawing is already in that picture — draw on top to add more.', { ms: 5000 });
+    setInkSnapping(false);
+    toast(exact
+      ? 'Your screen is in the frame, underneath your drawing.'
+      : 'Picture brought in, underneath your drawing.', { ms: 4000 });
+  }
+
+  // While snapping, the frame makes itself invisible — no ink, no edge, no
+  // picture — so the teacher's screenshot catches the page and nothing of ours.
+  // That is what lets the shot go under the annotation without the annotation
+  // also being inside it.
+  let inkSnapping = false;
+  function setInkSnapping(on) {
+    inkSnapping = !!on;
+    document.body.classList.toggle('ink-snapping', inkSnapping);
+    if (window.SagePlatform && window.SagePlatform.inkSnap) window.SagePlatform.inkSnap(inkSnapping);
+    if (inkSnapping) {
+      toast('Frame hidden — press ⌘⌃⇧3 for the whole screen, then press the camera again.', { ms: 12000 });
     }
   }
 
@@ -16341,6 +16388,12 @@
         else if (cmd === 'redo') redoInk();
         else if (cmd === 'clear') clearScreenInk();
         else if (cmd === 'paste') pasteInkShot();
+        else if (cmd === 'snap') setInkSnapping(!inkSnapping);
+        else if (cmd === 'testshot') {
+          // developer hook only — see SAGE_INK_TESTSHOT
+          const u = SageStorage.assetUrl ? SageStorage.assetUrl('testshot.png') : '';
+          if (u) setInkShot(u); else console.error('testshot: no asset url');
+        }
         else if (cmd === 'place') setInkPlacing(!inkPlacing);
       });
       P.onInkSaveRequest((deckId) => { saveInkToDeck(deckId); });

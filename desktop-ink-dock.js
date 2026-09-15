@@ -56,7 +56,20 @@
   $('pen').onclick = () => T.core.invoke('desktop_ink_mode', { pen: true }).catch(report('pen'));
   $('pointer').onclick = () => T.core.invoke('desktop_ink_mode', { pen: false }).catch(report('pointer'));
   $('place').onclick = () => cmd('place');
-  $('paste').onclick = () => cmd('paste');
+  // Two states, one button. First press hides the frame so the teacher can take
+  // a clean shot of the page; second press brings that shot in, underneath
+  // whatever they had already drawn.
+  let snapping = false;
+  $('snap').onclick = () => cmd(snapping ? 'paste' : 'snap');
+  T.event.listen('sage:ink-snap', (e) => {
+    snapping = !!(e && e.payload);
+    $('snap').classList.toggle('active', snapping);
+    $('snapLabel').textContent = snapping ? 'Bring it in' : 'Snap';
+    $('snap').title = snapping
+      ? 'Bring your screenshot in, underneath your drawing'
+      : 'Hide the frame so you can take a clean screenshot of what is underneath';
+    fitWindowToPill();
+  }).catch(report('snap listen'));
   $('undo').onclick = () => cmd('undo');
   $('clear').onclick = () => cmd('clear');
   $('exit').onclick = () => T.core.invoke('desktop_ink_close').catch(report('exit'));

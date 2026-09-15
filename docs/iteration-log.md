@@ -7873,3 +7873,43 @@ comes out short.
 
 Verified: opened at the 820-point guess, settled to 664×50 and re-centred, and the row
 reads through to "Done" with nothing clipped.
+
+## 15 September 2026 (night, later) — the screenshot goes underneath
+
+Glenn described the interaction he actually wants, and the first build had it backwards.
+Pasting cleared the ink, on the reasoning that the teacher's screenshot already contained
+it. His model:
+
+> *"they can go and put a static page underneath the translucent window … then they
+> annotate because the page underneath is static … and then the teacher goes, oh, hang on
+> a second, I need to go and put this into the page. They then take a screenshot and it
+> goes under the annotation. It does not ruin the annotations that are there. Because the
+> teacher has just been in front of the class annotating for the past ten minutes."*
+
+Two directions, both of which must work: find it and snap it and then annotate, which is
+the likely one; or annotate for ten minutes over something static and only then decide to
+keep it. The second is the one that was broken, and it is the one where the work is.
+
+**Snap mode** is what makes it possible. Pressing the camera hides the frame completely —
+ink, edge, grip, draw bar, and any picture already in it — so the teacher's screenshot
+catches the page and nothing of ours. Nothing then needs clearing to avoid printing the
+ink twice, and the shot can slide underneath the annotation with the annotation untouched.
+The camera is two-state: **Snap**, then **Bring it in**.
+
+**And the alignment is arithmetic rather than aim.** A whole-screen shot is cropped to the
+frame's own rectangle, from the frame's position on its monitor, so the picture lands
+exactly under the ink that was drawn over it. The teacher never has to drag a selection
+that matches the frame — and ⌘⌃⇧3 is an easier thing to ask of someone in front of a class
+than ⌘⌃⇧4. A region shot that is not the whole screen is fitted instead.
+
+### Verified
+
+With a whole-screen PNG fed in through a new `SAGE_INK_TESTSHOT` hook — a real paste stops
+on macOS's own confirmation button, which nothing here may click — the frame measured
+1459×705 points and the picture it produced was **2918×1410**: exactly that rectangle at
+retina resolution, cropped from a 2940×1912 screen. It saved to a new screen at the end of
+the deck (six → seven) with an image widget in the right proportions.
+
+Also noted for later, from the same description: the saved screen should be able to carry
+the learning intention and success criteria beside the picture. Recorded in the design as
+an open item; it wants its own thinking rather than being bolted on.

@@ -770,7 +770,7 @@ fn desktop_ink_mode(app: tauri::AppHandle, pen: bool) {
 /// The pill's undo / redo / clear, forwarded to the ink window.
 #[tauri::command]
 fn desktop_ink_cmd(app: tauri::AppHandle, cmd: String) -> Result<(), String> {
-    if !matches!(cmd.as_str(), "undo" | "redo" | "clear" | "paste" | "place") {
+    if !matches!(cmd.as_str(), "undo" | "redo" | "clear" | "paste" | "place" | "snap" | "testshot") {
         return Err(format!("unknown ink command: {cmd}"));
     }
     app.emit_to(INK_LABEL, "sage:ink-cmd", cmd).map_err(err)
@@ -881,6 +881,19 @@ pub fn run() {
                                 let h = handle.clone();
                                 let _ = handle.run_on_main_thread(move || desktop_ink_close(h));
                             }
+                        }
+                        // SAGE_INK_TESTSHOT=<secs>: load Documents/Sage Stage/testshot.png
+                        // into the frame as if it had been pasted. The only way to
+                        // exercise the crop arithmetic here, since a real paste stops
+                        // on macOS's own confirmation button.
+                        if let Some(secs) = std::env::var("SAGE_INK_TESTSHOT").ok().and_then(|v| v.parse::<u64>().ok()) {
+                            std::thread::sleep(std::time::Duration::from_secs(secs));
+                            let h = handle.clone();
+                            let _ = handle.run_on_main_thread(move || {
+                                if let Err(e) = desktop_ink_cmd(h, "testshot".into()) {
+                                    eprintln!("desktop ink testshot failed: {e}");
+                                }
+                            });
                         }
                         // SAGE_INK_PASTE=<secs>: press the pill's Paste, to find out
                         // whether this webview will read an image off the clipboard
