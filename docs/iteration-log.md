@@ -7766,3 +7766,65 @@ the asset store's de-duplication doing its job. No console errors, no panics.
 **Not yet exercised, because they need a hand on the mouse:** drawing a stroke inside the
 frame, dragging the strip to move it, tapping for handles and resizing by a corner, and
 Cmd+V with a real screenshot. All of Windows, as ever.
+
+## 15 September 2026 (evening) — the bug that made the drawing land somewhere else
+
+Glenn took the frame for a real run, over a diagram and over a photograph, with a second
+display attached through an Apple TV. Verdict on the drawing itself: *"very smooth, very,
+very little jitter on the diagonals"*. Everything else he found was right, and one of it
+was a genuine correctness bug that had been in the app long before this frame existed.
+
+### The ink landed away from the cursor
+
+*"that arrow is actually pointing to where the cursor is"* — the strokes were offset from
+where he was drawing, and the saved picture inherited the offset, which is what "the
+annotation doesn't match" meant.
+
+Strokes are stored in **CSS** pixels and painted through a context scaled by
+`devicePixelRatio`; the canvas backing store is allocated in **device** pixels and only
+resized on a `resize` event. Drag a window to a display with a different pixel ratio and
+macOS fires no resize — so the canvas stays sized for the old ratio while the transform
+uses the new one, and every stroke is drawn scaled by the ratio between them. Near the
+top-left corner it looks fine; the further out you draw, the further the ink drifts. His
+Apple TV display is the second ratio, hence a bug that had never shown up on one screen.
+
+`matchMedia('(resolution: Ndppx)')` is the only notification macOS offers, and the query
+names the ratio it is watching, so it has to be re-armed after every change. Fixed
+globally rather than in the frame: **the board has always had this too**, for any teacher
+who drags the window onto a projector of a different density.
+
+### The screenshot never arrived, which was the whole point
+
+*"the screenshot doesn't bring a screenshot into the transparent window which is kind of
+the point"* — a teacher app-switches to a PowerPoint, draws over it, and wants that in a
+deck.
+
+`⌘V` reaches a webview only when something **editable** holds focus, and a transparent
+overlay has nothing of the kind, so the `paste` event never fired. The frame now parks a
+one-pixel `contenteditable` in the corner and keeps focus in it; the keyboard handler
+learned to ignore that one element so the tool keys still work. The pill's own Paste
+button raises macOS's **Paste** confirmation instead — which is also why it cannot be
+tested from here: the system sits waiting for a click nothing may give it.
+
+### And the ink would have printed twice
+
+Following from the above: the teacher's screenshot photographs the composited screen, so
+the ink on display is **already in the picture**. Compositing it again would print every
+stroke twice, a hair out of register. Pasting now clears the ink and says so; undo brings
+it back for a picture that came from somewhere else.
+
+### Also
+
+- **The eraser takes a whole object on a tap** — *"tap it and then remove the object"* —
+  while rubbing still rubs. A tap that lands on a stroke removes that stroke and leaves no
+  eraser mark behind to have rubbed a hole in anything underneath.
+- **Closing** got a labelled **Done** button rather than a bare cross, and Escape closes
+  the frame when the pill has focus — the second rung of the ladder whose first rung
+  (Escape drops pen to pointer) already existed. Glenn called the close "cumbersome" and
+  this may not be the whole of what he meant; asked.
+
+### Verified
+
+Save still lands after the changes: deck four screens → five, the new screen carrying an
+image widget sized from the picture. The pixel-ratio fix and the ⌘V path both need a
+second display and a keystroke, so they are Glenn's to confirm.

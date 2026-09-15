@@ -29,6 +29,13 @@
   $('exit').onclick = () => T.core.invoke('desktop_ink_close').catch(report('exit'));
   $('save').onclick = () => T.core.invoke('desktop_ink_save', { deckId: $('deck').value || null }).catch(report('save'));
 
+  // Escape closes when the pill has focus. The frame itself uses Escape to drop
+  // from pen to pointer, so this is the second rung of the same ladder rather
+  // than a competing shortcut.
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') T.core.invoke('desktop_ink_close').catch(report('exit'));
+  });
+
   T.event.listen('sage:ink-mode', (e) => reflect(!!(e && e.payload))).catch(report('mode listen'));
 
   // The pill has no state, so it asks the board which decks exist. If the board

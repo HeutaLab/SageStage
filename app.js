@@ -15115,9 +15115,15 @@
     }
     if (liveStrokes.size >= MAX_TOUCH_STROKES) return;
     const freehand = ['pen', 'highlighter', 'eraser'].includes(ink.tool);
-    liveStrokes.set(e.pointerId, freehand
+    const live = freehand
       ? { tool: ink.tool, color: ink.color, size: ink.size, pts: [[e.clientX, e.clientY]] }
-      : { tool: ink.tool, color: ink.color, size: ink.size, x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY });
+      : { tool: ink.tool, color: ink.color, size: ink.size, x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY };
+    // Tapping something with the eraser takes the WHOLE object, which is what a
+    // teacher means by "get rid of that arrow"; rubbing still rubs.
+    if (ink.tool === 'eraser' && e.isPrimary) {
+      live.tapTarget = inkRenderList().reverse().find(({ s: st }) => hitStroke(st, e.clientX, e.clientY)) || null;
+    }
+    liveStrokes.set(e.pointerId, live);
   });
   drawLayer.addEventListener('pointermove', (e) => {
     if (dragState && selected && e.isPrimary) {
@@ -15185,6 +15191,14 @@
     const s = liveStrokes.get(e.pointerId);
     if (!s) return;
     liveStrokes.delete(e.pointerId);
+    // The eraser tapped an object rather than rubbing across the screen: take
+    // the object itself, and leave no eraser stroke behind to have rubbed a
+    // hole in whatever was underneath.
+    if (s.tapTarget && s.pts && s.pts.length <= 2) {
+      const arr = screenInk(s.tapTarget.home);
+      const i = arr.indexOf(s.tapTarget.s);
+      if (i >= 0) { redoInkStack.push(arr.splice(i, 1)[0]); inkChanged(); return; }
+    }
     // a shape needs some extent; a bare click with the pen still leaves a dot
     if (s.pts || Math.hypot(s.x1 - s.x0, s.y1 - s.y0) >= 3) {
       screenInk(screen()).push(roundStroke(s));
@@ -15201,6 +15215,25 @@
     blit();
   });
   window.addEventListener('resize', () => sizeDrawLayer());
+  // Dragging a window to another display changes devicePixelRatio and fires NO
+  // resize. Strokes are stored in CSS pixels and painted through a context
+  // scaled by that ratio, while the canvas was allocated in device pixels for
+  // the OLD one — so the two silently disagree and every stroke lands away from
+  // the cursor, further out the further it is from the top-left corner. Found
+  // on Glenn's Apple TV second display, 15 Sep 2026, in the ink frame; the
+  // board has always had it too, for a window dragged onto a projector.
+  // matchMedia is the only notification macOS offers, and the query names the
+  // ratio it watches, so it has to be re-armed after every change.
+  (function watchPixelRatio() {
+    let mq = null;
+    const changed = () => { sizeDrawLayer(); arm(); };
+    function arm() {
+      if (mq) mq.removeEventListener('change', changed);
+      mq = window.matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)');
+      mq.addEventListener('change', changed);
+    }
+    arm();
+  })();
 
   // ================================================================
   // Geometry tools — ruler, protractor (full + 180°) and set square.
@@ -15695,7 +15728,9 @@
   // ---- keyboard shortcuts while annotating ----
   window.addEventListener('keydown', (e) => {
     const t = e.target;
-    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    // The ink frame parks focus in a 1px contenteditable so ⌘V reaches us at
+    // all; it is not somewhere anyone is typing, so the tool keys still apply.
+    if (t && t.id !== 'inkPasteCatcher' && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
     if (!drawLayer.classList.contains('active')) return;
     const k = e.key.toLowerCase();
     if ((e.metaKey || e.ctrlKey) && k === 'z') {
@@ -16010,6 +16045,15 @@
     }
     inkShot.src = src;
     document.body.classList.add('ink-has-shot');
+    // The teacher's own screenshot photographs the composited screen, so the
+    // ink that was on display is ALREADY in the picture. Compositing it again
+    // would print every stroke twice, a hair out of register — which is exactly
+    // what "the annotation doesn't match" looked like. Clear it; undo brings it
+    // straight back for the case where the picture came from somewhere else.
+    if (screenInk(screen()).length) {
+      clearScreenInk();
+      toast('Your drawing is already in that picture — draw on top to add more.', { ms: 5000 });
+    }
   }
 
   // Where the picture actually lands inside the frame — object-fit: contain, in
@@ -16151,6 +16195,18 @@
         if (r) { inkRect = r; rememberInkRect(); }
       }, 250);
     });
+
+    // ⌘V only reaches a webview when something editable has focus, so the frame
+    // parks a one-pixel contenteditable off in the corner and keeps focus in it.
+    // Without this the paste event never fired and the screenshot never arrived,
+    // which made the whole point of the frame not work.
+    const catcher = el('div', { id: 'inkPasteCatcher', contenteditable: 'true', spellcheck: 'false' });
+    document.body.append(catcher);
+    const takeFocus = () => { try { catcher.focus({ preventScroll: true }); } catch (e) { /* not focusable yet */ } };
+    takeFocus();
+    window.addEventListener('focus', takeFocus);
+    drawLayer.addEventListener('pointerup', takeFocus);
+    P.onInkMode((pen) => { if (pen) setTimeout(takeFocus, 60); });
 
     // The fallback that always works, whatever the clipboard API decides.
     window.addEventListener('paste', (e) => {

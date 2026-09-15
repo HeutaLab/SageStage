@@ -6974,12 +6974,18 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
    layer, its bar and the selection mini-bar. Transparent all the way down,
    or the window paints the stage colour over the app underneath. */
 html.desktop-ink, body.desktop-ink { background: transparent !important; }
-body.desktop-ink > :not(#drawLayer):not(#drawTools):not(.sel-bar):not(#inkFrame):not(#inkShot):not(#toast) { display: none !important; }
+body.desktop-ink > :not(#drawLayer):not(#drawTools):not(.sel-bar):not(#inkFrame):not(#inkShot):not(#toast):not(#inkPasteCatcher) { display: none !important; }
 
 /* ---- the ink frame's own chrome (docs/ink-frame-design.md §2.1)
    A borderless window gets no titlebar and no edge resizing from the OS, so the
    frame draws its own: an edge so the teacher can see what is inkable, a grab
    strip to move it by, and corner handles that appear on a tap. */
+/* ⌘V reaches a webview only when something editable holds focus. One pixel,
+   invisible, out of the way of every pointer — see app.js. */
+#inkPasteCatcher {
+  position: fixed; left: 0; top: 0; width: 1px; height: 1px;
+  opacity: 0; pointer-events: none; outline: none; overflow: hidden;
+}
 #inkShot {
   position: fixed; inset: 0; z-index: 2900;
   width: 100%; height: 100%; object-fit: contain;

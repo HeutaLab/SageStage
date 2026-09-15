@@ -39,7 +39,7 @@
   button.exit:hover { background: rgba(220, 38, 38, 0.1); color: #b91c1c; }
   .sep { width: 1px; height: 24px; background: rgba(15, 23, 42, 0.12); margin: 0 4px; }
   .label { display: none; }
-  @media (min-width: 320px) { button.mode .label, #save .label { display: inline; } }
+  @media (min-width: 320px) { button.mode .label, #save .label, #exit .label { display: inline; } }
   select {
     appearance: none; border: 1px solid rgba(15,23,42,.18); background: rgba(255,255,255,.9);
     color: #0f172a; font: 600 12px/1 'Quicksand', system-ui, sans-serif;
@@ -79,10 +79,11 @@
       <span class="label">Save</span>
     </button>
     <span class="sep"></span>
-    <button class="exit" id="exit" title="Close the frame — the ink goes with it">
+    <button class="exit" id="exit" title="Close the frame (Esc) — the ink goes with it">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>
+      <span class="label">Done</span>
     </button>
   </div>
-  <script src="desktop-ink-dock.js?v=2"></script>
+  <script src="desktop-ink-dock.js?v=3"></script>
 </body>
 </html>
