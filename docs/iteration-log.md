@@ -7856,3 +7856,20 @@ resolution, and crops the ink-only case too.
 Save still lands after the changes: deck five screens → six. The tools themselves draw
 from a picture that has to be pasted, and pasting needs either a keystroke or a click on
 macOS's own Paste confirmation, so blur, magnifier and crop are Glenn's to try.
+
+## 15 September 2026 (later still) — the toolbar that was clipped by its own window
+
+Glenn: *"the ends of the tool bar are truncated at the edges by an invisible overlapping
+object."* The invisible object was the pill's own window. Rust opens it at a guessed
+width, and the row had outgrown that guess when Save, the deck chooser and Done were
+added — so the ends were cut off by the window edge, with nothing on screen to say why.
+
+The guess is now only a guess. The pill's row is `width: max-content`, so it reports its
+true width rather than shrinking into whatever window it was handed, and the page then
+sizes its own window to fit and keeps the same centre. It re-measures when the deck list
+arrives, because a long deck name widens the chooser, and again when `document.fonts`
+settles, because a row measured before Quicksand loads is measured in a fallback face and
+comes out short.
+
+Verified: opened at the 820-point guess, settled to 664×50 and re-centred, and the row
+reads through to "Done" with nothing clipped.

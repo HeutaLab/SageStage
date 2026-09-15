@@ -18,6 +18,11 @@
     -webkit-user-select: none; user-select: none;
   }
   .pill {
+    /* max-content so the row reports its TRUE width — the window is then sized
+       to it. Without this the pill shrinks to whatever window it was given and
+       the ends are clipped by the frame, invisibly, which is what happened when
+       Save and Done were added. */
+    width: max-content; flex: 0 0 auto;
     display: flex; align-items: center; gap: 2px; padding: 6px 8px;
     background: rgba(255, 255, 255, 0.94);
     border: 1px solid rgba(15, 23, 42, 0.12);
@@ -84,6 +89,6 @@
       <span class="label">Done</span>
     </button>
   </div>
-  <script src="desktop-ink-dock.js?v=3"></script>
+  <script src="desktop-ink-dock.js?v=4"></script>
 </body>
 </html>

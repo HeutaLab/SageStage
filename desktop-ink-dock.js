@@ -15,6 +15,39 @@
   const report = (what) => (e) => console.error(what + ' failed', e);
   const cmd = (name) => T.core.invoke('desktop_ink_cmd', { cmd: name }).catch(report(name));
 
+  // The window Rust opens is a guess; the row's real width depends on the deck
+  // name in the chooser and on the fonts that loaded. So the pill measures
+  // itself and sizes its own window to fit, keeping the same centre — otherwise
+  // the ends are clipped by the window edge with nothing on screen to say why.
+  const dpi = () => {
+    const d = T.dpi || T.window || {};
+    return { P: d.LogicalPosition, S: d.LogicalSize };
+  };
+  let fitting = false;
+  async function fitWindowToPill() {
+    if (fitting) return;
+    fitting = true;
+    try {
+      const pill = document.querySelector('.pill');
+      const r = pill.getBoundingClientRect();
+      const w = Math.ceil(r.width) + 2;
+      const h = Math.ceil(r.height) + 2;
+      const win = T.window.getCurrentWindow();
+      const f = await win.scaleFactor();
+      const before = await win.innerSize();
+      const pos = await win.outerPosition();
+      const oldW = before.toLogical ? before.toLogical(f).width : before.width / f;
+      if (Math.abs(oldW - w) < 2) return;
+      const { P, S } = dpi();
+      await win.setSize(S ? new S(w, h) : { type: 'Logical', width: w, height: h });
+      const lp = pos.toLogical ? pos.toLogical(f) : { x: pos.x / f, y: pos.y / f };
+      const x = Math.round(lp.x + (oldW - w) / 2);
+      await win.setPosition(P ? new P(x, Math.round(lp.y)) : { type: 'Logical', x, y: Math.round(lp.y) });
+    } catch (e) {
+      console.error('pill could not size itself', e);
+    } finally { fitting = false; }
+  }
+
   const reflect = (pen) => {
     $('pen').classList.toggle('active', pen);
     $('pointer').classList.toggle('active', !pen);
@@ -54,6 +87,13 @@
       sel.append(o);
     }
     if (keep) sel.value = keep;
+    fitWindowToPill();   // a long deck name changes the row's width
   }).catch(report('deck list listen'));
   T.event.emit('sage:ink-decks-please', {}).catch(report('deck request'));
+
+  // Once, at load, and again when the webfonts settle — a row measured before
+  // Quicksand arrives is measured in a fallback face and comes out short.
+  fitWindowToPill();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitWindowToPill);
+  window.addEventListener('load', fitWindowToPill);
 })();

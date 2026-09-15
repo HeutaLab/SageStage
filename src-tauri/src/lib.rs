@@ -725,7 +725,11 @@ fn desktop_ink_open(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Resu
         .build()
         .map_err(err)?;
 
-    let (dw, dh) = (600.0, 62.0);
+    // A starting guess only: the pill measures its own row once the fonts and
+    // the deck names have landed and sizes this window to fit (see
+    // desktop-ink-dock.js), because a row clipped by its own window edge gives
+    // the teacher no clue why the buttons end.
+    let (dw, dh) = (820.0, 64.0);
     let dock = WebviewWindowBuilder::new(
         &app,
         INK_DOCK_LABEL,
