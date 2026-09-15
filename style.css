@@ -6974,8 +6974,43 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
    layer, its bar and the selection mini-bar. Transparent all the way down,
    or the window paints the stage colour over the app underneath. */
 html.desktop-ink, body.desktop-ink { background: transparent !important; }
-body.desktop-ink > :not(#drawLayer):not(#drawTools):not(.sel-bar) { display: none !important; }
-/* The ink window covers the whole monitor, menu bar included, so the bar's
-   usual top offset would sit it across the menu bar. Only the default (top)
-   placement moves; a teacher who parked it left, right or bottom keeps that. */
-body.desktop-ink #drawTools:not(.side-left):not(.side-right):not(.side-bottom) { top: 44px; }
+body.desktop-ink > :not(#drawLayer):not(#drawTools):not(.sel-bar):not(#inkFrame):not(#inkShot):not(#toast) { display: none !important; }
+
+/* ---- the ink frame's own chrome (docs/ink-frame-design.md §2.1)
+   A borderless window gets no titlebar and no edge resizing from the OS, so the
+   frame draws its own: an edge so the teacher can see what is inkable, a grab
+   strip to move it by, and corner handles that appear on a tap. */
+#inkShot {
+  position: fixed; inset: 0; z-index: 2900;
+  width: 100%; height: 100%; object-fit: contain;
+  pointer-events: none; user-select: none;
+}
+#inkFrame {
+  position: fixed; inset: 0; z-index: 3100; pointer-events: none;
+  box-shadow: inset 0 0 0 2px rgba(15, 118, 110, 0.85), inset 0 0 0 3px rgba(255, 255, 255, 0.55);
+  border-radius: 10px;
+}
+.ink-grip {
+  pointer-events: auto; position: absolute; top: 0; left: 0; right: 0; height: 26px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: rgba(15, 118, 110, 0.85); color: #fff; cursor: grab;
+  border-radius: 8px 8px 0 0; touch-action: none;
+  font: 600 11px/1 'Quicksand', system-ui, sans-serif; letter-spacing: 0.02em;
+}
+.ink-grip:active { cursor: grabbing; }
+.ink-grip-bar { width: 26px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.75); }
+.ink-grip-label { opacity: 0.85; }
+.ink-handle {
+  pointer-events: auto; position: absolute; width: 18px; height: 18px;
+  background: #fff; border: 2px solid rgba(15, 118, 110, 0.9); border-radius: 4px;
+  display: none; touch-action: none;
+}
+body.ink-placing .ink-handle { display: block; }
+/* dim the ink while placing, so the teacher can see what they are aiming at */
+body.ink-placing #drawLayer { opacity: 0.45; pointer-events: none !important; }
+.ink-nw { left: -2px; top: 24px; cursor: nwse-resize; }
+.ink-ne { right: -2px; top: 24px; cursor: nesw-resize; }
+.ink-sw { left: -2px; bottom: -2px; cursor: nesw-resize; }
+.ink-se { right: -2px; bottom: -2px; cursor: nwse-resize; }
+/* the draw bar clears the grab strip rather than sitting under it */
+body.desktop-ink #drawTools:not(.side-left):not(.side-right):not(.side-bottom) { top: 34px; }

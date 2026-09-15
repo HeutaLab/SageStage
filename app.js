@@ -15974,6 +15974,213 @@
   // The ink overlay: draw layer on, listen to the pill, then show the window
   // Rust created hidden and ask for pen — so both windows hear the mode from
   // the same place (docs/desktop-ink-design.md §2.4).
+  // ------------------------------------------------------------- the ink frame
+  // docs/ink-frame-design.md. The overlay window is a RECTANGLE the teacher
+  // places over what they want to annotate, not the whole display, so it has to
+  // draw the chrome a borderless window never gets from the OS: an edge, a grab
+  // strip and corner handles. Dragging inside the frame means DRAW, so moving
+  // and resizing live on the strip and the handles instead of a modifier key
+  // nobody would remember.
+  const INK_RECT_KEY = 'sage-ink-frame';
+  const INK_MIN_W = 240, INK_MIN_H = 180;
+  // Our own bookkeeping of where the window is, in logical pixels. Kept here
+  // rather than asked for during a drag, because the answer arrives a promise
+  // later and a drag cannot wait for it.
+  let inkRect = null;
+  let inkShot = null;     // the pasted picture, an <img>, or null
+  let inkPlacing = false;
+
+  function rememberInkRect() {
+    if (!inkRect) return;
+    try { localStorage.setItem(INK_RECT_KEY, JSON.stringify(inkRect)); } catch (e) { /* private window; the default place is fine */ }
+  }
+
+  function setInkPlacing(on) {
+    inkPlacing = !!on;
+    document.body.classList.toggle('ink-placing', inkPlacing);
+  }
+
+  // The picture the teacher brought in with ⌘⌃⇧4 (or Win+Shift+S). It sits
+  // BEHIND the ink, so a stroke drawn before the screenshot arrived still reads
+  // as being on top of it.
+  function setInkShot(src) {
+    if (!inkShot) {
+      inkShot = el('img', { id: 'inkShot', alt: '' });
+      document.body.append(inkShot);
+    }
+    inkShot.src = src;
+    document.body.classList.add('ink-has-shot');
+  }
+
+  // Where the picture actually lands inside the frame — object-fit: contain, in
+  // CSS pixels. The save composite has to agree with what the teacher saw, so
+  // both read this one function.
+  function inkShotRect() {
+    if (!inkShot || !inkShot.naturalWidth) return null;
+    const fw = window.innerWidth, fh = window.innerHeight;
+    const sc = Math.min(fw / inkShot.naturalWidth, fh / inkShot.naturalHeight);
+    const w = inkShot.naturalWidth * sc, h = inkShot.naturalHeight * sc;
+    return { x: (fw - w) / 2, y: (fh - h) / 2, w, h };
+  }
+
+  async function pasteInkShot() {
+    // The button. The paste EVENT below is the fallback that always works;
+    // this is the one-press path where the webview allows it.
+    try {
+      const items = await navigator.clipboard.read();
+      for (const it of items) {
+        const type = (it.types || []).find((t) => t.startsWith('image/'));
+        if (!type) continue;
+        setInkShot(URL.createObjectURL(await it.getType(type)));
+        return true;
+      }
+      toast('Nothing on the clipboard yet — take a screenshot first, then press this again.', { ms: 5000 });
+    } catch (e) {
+      // Reading the clipboard without a gesture is refused in some webviews.
+      // Say what to do instead; a button that silently does nothing is this
+      // repo's recurring desktop bug and is not gaining a new member.
+      toast('Press ⌘V to bring your screenshot in.', { ms: 5000 });
+    }
+    return false;
+  }
+
+  // Backdrop and ink flattened into one picture. With a screenshot in the frame
+  // the composite is made at the screenshot's own resolution and cropped to it,
+  // because the picture IS the deliverable; without one it is the ink alone on
+  // transparency, at the frame's size.
+  function inkComposite() {
+    const dpr = window.devicePixelRatio || 1;
+    const c = document.createElement('canvas');
+    const g = c.getContext('2d');
+    const r = inkShotRect();
+    if (r && inkShot) {
+      c.width = inkShot.naturalWidth;
+      c.height = inkShot.naturalHeight;
+      g.drawImage(inkShot, 0, 0);
+      g.drawImage(drawLayer, r.x * dpr, r.y * dpr, r.w * dpr, r.h * dpr, 0, 0, c.width, c.height);
+    } else {
+      c.width = drawLayer.width;
+      c.height = drawLayer.height;
+      g.drawImage(drawLayer, 0, 0);
+    }
+    return c;
+  }
+
+  async function saveInkToDeck(deckId) {
+    deselect();
+    const canvas = inkComposite();
+    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+    if (!blob) { toast('Could not make the picture.'); return; }
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    // The frame writes the picture into the ASSET store, which is not the deck
+    // file, so "the frame never writes to a deck" still holds. The board is
+    // then told a name, not a megabyte of base64.
+    const ref = SageStorage.putAsset ? await SageStorage.putAsset(bytes, 'png') : null;
+    if (!ref) { toast('Could not save the picture to your Sage Stage folder.'); return; }
+    window.SagePlatform.inkSave(ref, deckId || null);
+    toast('Sent to your deck.');
+  }
+
+  function setupInkFrame() {
+    const P = window.SagePlatform;
+    if (!P) return;
+
+    const frame = el('div', { id: 'inkFrame' });
+    const grip = el('div', { class: 'ink-grip', title: 'Drag to move · tap for handles' },
+      el('span', { class: 'ink-grip-bar' }),
+      el('span', { class: 'ink-grip-label' }, 'drag to move · tap for handles'));
+    frame.append(grip);
+    for (const c of ['nw', 'ne', 'sw', 'se']) frame.append(el('div', { class: 'ink-handle ink-' + c, 'data-corner': c }));
+    document.body.append(frame);
+
+    let drag = null;
+    const begin = (e, corner) => {
+      if (!inkRect) return;
+      e.preventDefault();
+      e.target.setPointerCapture(e.pointerId);
+      drag = { corner, sx: e.screenX, sy: e.screenY, from: { ...inkRect }, moved: false };
+    };
+    const move = (e) => {
+      if (!drag) return;
+      const dx = e.screenX - drag.sx, dy = e.screenY - drag.sy;
+      if (!drag.moved && Math.hypot(dx, dy) < 3) return;   // a tap is not a drag
+      drag.moved = true;
+      const f = drag.from;
+      if (!drag.corner) {
+        inkRect.x = f.x + dx; inkRect.y = f.y + dy;
+        P.moveInkWindow(inkRect.x, inkRect.y);
+        return;
+      }
+      const west = drag.corner[1] === 'w', north = drag.corner[0] === 'n';
+      let w = Math.max(INK_MIN_W, f.w + (west ? -dx : dx));
+      let h = Math.max(INK_MIN_H, f.h + (north ? -dy : dy));
+      inkRect.w = w; inkRect.h = h;
+      inkRect.x = west ? f.x + (f.w - w) : f.x;
+      inkRect.y = north ? f.y + (f.h - h) : f.y;
+      P.sizeInkWindow(w, h);
+      P.moveInkWindow(inkRect.x, inkRect.y);
+    };
+    const end = (e) => {
+      if (!drag) return;
+      const wasTap = !drag.moved;
+      drag = null;
+      if (wasTap) setInkPlacing(!inkPlacing);   // tap the strip: show the handles
+      else rememberInkRect();
+    };
+    grip.addEventListener('pointerdown', (e) => begin(e, null));
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
+    for (const h of frame.querySelectorAll('.ink-handle')) {
+      h.addEventListener('pointerdown', (e) => begin(e, h.dataset.corner));
+      h.addEventListener('pointermove', move);
+      h.addEventListener('pointerup', end);
+      h.addEventListener('pointercancel', end);
+    }
+
+    // The OS can resize the window too (it is resizable), so the bookkeeping
+    // follows the window rather than only leading it. It re-reads the real
+    // rectangle rather than trusting innerWidth: the two disagree by a dozen
+    // pixels, and writing one back as the other shrank the frame a little on
+    // every launch.
+    let settle = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(settle);
+      settle = setTimeout(async () => {
+        const r = await P.inkWindowRect();
+        if (r) { inkRect = r; rememberInkRect(); }
+      }, 250);
+    });
+
+    // The fallback that always works, whatever the clipboard API decides.
+    window.addEventListener('paste', (e) => {
+      const items = (e.clipboardData && e.clipboardData.items) || [];
+      for (const it of items) {
+        if (!it.type || !it.type.startsWith('image/')) continue;
+        const f = it.getAsFile();
+        if (!f) continue;
+        e.preventDefault();
+        setInkShot(URL.createObjectURL(f));
+        return;
+      }
+    });
+  }
+
+  async function bootInkFrame() {
+    const P = window.SagePlatform;
+    if (!P) return;
+    // Put the frame back where it was left BEFORE the window is shown, so it
+    // never appears in one place and jumps to another.
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(INK_RECT_KEY) || 'null'); } catch (e) { saved = null; }
+    if (saved && saved.w >= INK_MIN_W && saved.h >= INK_MIN_H) {
+      await P.sizeInkWindow(saved.w, saved.h);
+      await P.moveInkWindow(saved.x, saved.y);
+    }
+    inkRect = (await P.inkWindowRect()) || { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+    setupInkFrame();
+  }
+
   if (inkBoot) {
     if (!drawLayer.classList.contains('active')) toggleDraw();
     const P = window.SagePlatform;
@@ -15983,10 +16190,63 @@
         if (cmd === 'undo') undoInk();
         else if (cmd === 'redo') redoInk();
         else if (cmd === 'clear') clearScreenInk();
+        else if (cmd === 'paste') pasteInkShot();
+        else if (cmd === 'place') setInkPlacing(!inkPlacing);
       });
-      P.showThisWindow().then(() => P.inkMode(true));
+      P.onInkSaveRequest((deckId) => { saveInkToDeck(deckId); });
+      bootInkFrame().then(() => P.showThisWindow()).then(() => P.inkMode(true));
     }
   }
+  // A picture arriving from the ink frame (docs/ink-frame-design.md §4). The
+  // board is the only window allowed to write a deck, so the frame sends a name
+  // and this does the writing. The teacher is NEVER navigated anywhere: the
+  // picture is waiting on a new screen at the END of the deck, and nothing they
+  // already arranged has moved.
+  if (!viewId && !soloBoot && !inkBoot && window.SagePlatform && SagePlatform.onInkSave) {
+    SagePlatform.onInkDecksRequest(() => {
+      SagePlatform.inkDecks(state.decks.map((d) => ({ id: d.id, name: d.name || 'Untitled deck' })));
+    });
+    SagePlatform.onInkSave((msg) => {
+      const ref = msg && msg.ref;
+      if (!ref) return;
+      const deck = deckById(msg.deckId) || deckById(state.activeDeck) || state.decks[0];
+      if (!deck) return;
+      const last = deck.screens[deck.screens.length - 1];
+      const sc = { id: uid(), background: last ? { ...last.background } : blankScreen().background, widgets: [] };
+
+      // Sized from the picture's own proportions, which means loading it; a
+      // picture that will not load still lands, at a sensible default, rather
+      // than being dropped on the floor.
+      const place = (nw, nh) => {
+        const maxW = Math.max(240, window.innerWidth - 80);
+        const maxH = Math.max(180, window.innerHeight - 190);
+        const k = Math.min(maxW / nw, maxH / nh);
+        const w = Math.max(160, Math.round(nw * k));
+        const h = Math.max(120, Math.round(nh * k));
+        sc.widgets.push({
+          id: uid(), type: 'image',
+          x: Math.round((window.innerWidth - w) / 2),
+          y: Math.max(80, Math.round((window.innerHeight - h) / 2)),
+          w, h, z: ++zTop,
+          props: { src: ref, fit: 'contain' },
+        });
+        deck.screens.push(sc);
+        deck.lastUsed = Date.now();
+        save();
+        // The pager's "3 / 4" is now wrong if this is the deck on screen.
+        if (deck === viewDeck()) renderScreen();
+        toast('Your picture is on a new screen at the end of “' + (deck.name || 'your deck') + '”.', { ms: 7000 });
+      };
+
+      const url = SageStorage.assetUrl ? SageStorage.assetUrl(ref) : '';
+      if (!url) { place(1280, 800); return; }
+      const probe = new Image();
+      probe.onload = () => place(probe.naturalWidth || 1280, probe.naturalHeight || 800);
+      probe.onerror = () => place(1280, 800);
+      probe.src = url;
+    });
+  }
+
   // The desktop app updates itself in the background (docs/updater-design.md).
   // Rust says when a new version has landed and the board passes it on in one
   // sentence — the board only, or a screen window and every pop-out would say

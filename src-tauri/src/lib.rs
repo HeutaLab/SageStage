@@ -691,10 +691,19 @@ fn desktop_ink_open(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Resu
     };
     // The builder takes logical pixels; the monitor reports physical ones.
     let scale = monitor.scale_factor();
-    let x = monitor.position().x as f64 / scale;
-    let y = monitor.position().y as f64 / scale;
-    let w = monitor.size().width as f64 / scale;
-    let h = monitor.size().height as f64 / scale;
+    let mx = monitor.position().x as f64 / scale;
+    let my = monitor.position().y as f64 / scale;
+    let mw = monitor.size().width as f64 / scale;
+    let mh = monitor.size().height as f64 / scale;
+    // A FRAME, not the whole display (docs/ink-frame-design.md §2.1): a
+    // rectangle the teacher drags over the thing they want to annotate. This
+    // is only the opening default — the window reads its remembered place from
+    // its own storage and moves itself before it shows, so the teacher's last
+    // position wins and nothing flashes in the wrong spot.
+    let w = (mw * 0.62).round();
+    let h = (mh * 0.62).round();
+    let x = mx + (mw - w) / 2.0;
+    let y = my + (mh - h) / 2.0;
 
     // Hidden until app.js has booted and hidden its own chrome — a transparent
     // window must never flash the topbar. `focused(false)` for the same reason:
@@ -707,7 +716,7 @@ fn desktop_ink_open(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Resu
         .always_on_top(true)
         .visible_on_all_workspaces(true)
         .skip_taskbar(true)
-        .resizable(false)
+        .resizable(true)
         .focused(false)
         .accept_first_mouse(true)
         .visible(false)
@@ -716,7 +725,7 @@ fn desktop_ink_open(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Resu
         .build()
         .map_err(err)?;
 
-    let (dw, dh) = (330.0, 62.0);
+    let (dw, dh) = (600.0, 62.0);
     let dock = WebviewWindowBuilder::new(
         &app,
         INK_DOCK_LABEL,
@@ -732,7 +741,7 @@ fn desktop_ink_open(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Resu
     .resizable(false)
     .focused(false)
     .accept_first_mouse(true)
-    .position(x + (w - dw) / 2.0, y + h - dh - 28.0)
+    .position(mx + (mw - dw) / 2.0, my + mh - dh - 28.0)
     .inner_size(dw, dh)
     .build()
     .map_err(err)?;
@@ -757,10 +766,19 @@ fn desktop_ink_mode(app: tauri::AppHandle, pen: bool) {
 /// The pill's undo / redo / clear, forwarded to the ink window.
 #[tauri::command]
 fn desktop_ink_cmd(app: tauri::AppHandle, cmd: String) -> Result<(), String> {
-    if !matches!(cmd.as_str(), "undo" | "redo" | "clear") {
+    if !matches!(cmd.as_str(), "undo" | "redo" | "clear" | "paste" | "place") {
         return Err(format!("unknown ink command: {cmd}"));
     }
     app.emit_to(INK_LABEL, "sage:ink-cmd", cmd).map_err(err)
+}
+
+/// Save carries which deck the picture is for, so it is its own command rather
+/// than a member of the verb list above. The frame does the writing — into the
+/// asset store, never the deck file — and then tells the board.
+#[tauri::command]
+fn desktop_ink_save(app: tauri::AppHandle, deck_id: String) -> Result<(), String> {
+    app.emit_to(INK_LABEL, "sage:ink-save-request", deck_id)
+        .map_err(err)
 }
 
 /// Both windows, and the ink with them. destroy() rather than close(): there
@@ -790,6 +808,7 @@ pub fn run() {
             desktop_ink_open,
             desktop_ink_mode,
             desktop_ink_cmd,
+            desktop_ink_save,
             desktop_ink_close
         ])
         .setup(|app| {
@@ -858,6 +877,30 @@ pub fn run() {
                                 let h = handle.clone();
                                 let _ = handle.run_on_main_thread(move || desktop_ink_close(h));
                             }
+                        }
+                        // SAGE_INK_PASTE=<secs>: press the pill's Paste, to find out
+                        // whether this webview will read an image off the clipboard
+                        // without a keystroke.
+                        if let Some(secs) = std::env::var("SAGE_INK_PASTE").ok().and_then(|v| v.parse::<u64>().ok()) {
+                            std::thread::sleep(std::time::Duration::from_secs(secs));
+                            let h = handle.clone();
+                            let _ = handle.run_on_main_thread(move || {
+                                if let Err(e) = desktop_ink_cmd(h, "paste".into()) {
+                                    eprintln!("desktop ink paste failed: {e}");
+                                }
+                            });
+                        }
+                        // SAGE_INK_SAVE=<secs>: press the pill's Save that many
+                        // seconds in, so the whole picture-into-a-deck path can
+                        // be proved on a machine where nothing may click.
+                        if let Some(secs) = std::env::var("SAGE_INK_SAVE").ok().and_then(|v| v.parse::<u64>().ok()) {
+                            std::thread::sleep(std::time::Duration::from_secs(secs));
+                            let h = handle.clone();
+                            let _ = handle.run_on_main_thread(move || {
+                                if let Err(e) = desktop_ink_save(h, String::new()) {
+                                    eprintln!("desktop ink save failed: {e}");
+                                }
+                            });
                         }
                         // SAGE_INK_QUIT=<secs>: quit the app with the overlay open,
                         // the way Cmd+Q would.

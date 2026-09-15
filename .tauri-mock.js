@@ -21,7 +21,8 @@
   // reload; nothing under test depends on that.
   const blobs = new Map();
 
-  const calls = { ink: [], saveState: 0, stateFilePath: 0, dialogSave: [], openUrl: [], reveal: [], windows: [], print: 0, emits: [], errors: [] };
+  const mockRect = { x: 120, y: 90, w: 900, h: 600 };
+  const calls = { ink: [], rects: [], saveState: 0, stateFilePath: 0, dialogSave: [], openUrl: [], reveal: [], windows: [], print: 0, emits: [], errors: [] };
 
   // path resolution: plugin-style calls pass a relative path + baseDir option;
   // saveExport passes an absolute path with no options at all
@@ -121,6 +122,14 @@
     },
     async setFocus() {},
     async show() { calls.emits.push({ name: 'mock:show' }); },
+    // The ink frame places itself, so the mock keeps a rectangle. Logical
+    // pixels, scale factor 1 — the point is to prove the arithmetic, not the
+    // display.
+    async scaleFactor() { return 1; },
+    async outerPosition() { return { x: mockRect.x, y: mockRect.y, toLogical: (f) => ({ x: mockRect.x / f, y: mockRect.y / f }) }; },
+    async innerSize() { return { width: mockRect.w, height: mockRect.h, toLogical: (f) => ({ width: mockRect.w / f, height: mockRect.h / f }) }; },
+    async setPosition(p) { mockRect.x = p.x; mockRect.y = p.y; calls.rects.push({ move: [p.x, p.y] }); },
+    async setSize(z) { mockRect.w = z.width; mockRect.h = z.height; calls.rects.push({ size: [z.width, z.height] }); },
     async setFullscreen(v) { fullscreen = !!v; calls.emits.push({ name: 'mock:fullscreen', payload: v }); },
     async isFullscreen() { return fullscreen; },
   };
@@ -165,11 +174,12 @@
         if (cmd === 'desktop_ink_mode') { calls.ink.push('mode:' + (args && args.pen ? 'pen' : 'pointer')); event.emit('sage:ink-mode', !!(args && args.pen)); return; }
         if (cmd === 'desktop_ink_cmd') { calls.ink.push('cmd:' + (args && args.cmd)); event.emit('sage:ink-cmd', args && args.cmd); return; }
         if (cmd === 'desktop_ink_close') { calls.ink.push('close'); return; }
+        if (cmd === 'desktop_ink_save') { calls.ink.push('save:' + ((args && args.deckId) || 'active')); event.emit('sage:ink-save-request', (args && args.deckId) || null); return; }
         throw new Error('mock invoke: unknown command ' + cmd);
       },
     },
     event,
-    window: { getCurrentWindow: () => currentWindow },
+    window: { getCurrentWindow: () => currentWindow, LogicalPosition: function (x, y) { this.x = x; this.y = y; }, LogicalSize: function (width, height) { this.width = width; this.height = height; } },
     webviewWindow: { WebviewWindow, getCurrentWebviewWindow: () => currentWebviewWindow },
     webview: { getCurrentWebview: () => currentWebviewWindow },
     dialog: {

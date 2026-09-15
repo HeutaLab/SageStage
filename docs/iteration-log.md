@@ -7713,3 +7713,56 @@ the capture button, which on Windows can land with the first.
 
 Nothing built yet. Spec written, the overlay's superseded line marked as such, and
 Glenn's review next.
+
+## 15 September 2026 (later) — the frame, built
+
+Pass one of `docs/ink-frame-design.md`, running.
+
+The overlay window stops being the size of the display. `desktop_ink_open` now opens a
+rectangle — 62% of the monitor, centred, resizable — and the window moves and sizes
+itself from JS through two new capabilities (`allow-set-position`, `allow-set-size`).
+Because a borderless window gets no titlebar and no edge resizing from macOS, the frame
+draws its own: a teal edge, a grab strip that says *drag to move · tap for handles*, and
+four corner handles that appear on a tap and dim the ink while you aim. Where it was
+left is remembered in the window's own `localStorage`, never in a deck.
+
+A screenshot pasted into the frame becomes its backdrop, behind the ink, so a stroke
+drawn before the picture arrived still reads as being on top of it. Save flattens
+backdrop and ink into one PNG **at the screenshot's own resolution**, writes it through
+the existing asset store — which is not the deck file, so the frame's promise holds —
+and sends the board a name rather than a megabyte of base64. The board does the one
+thing only it may do: appends a new screen at the end of the chosen deck, puts the
+picture on it sized from its own proportions, saves, and toasts. The teacher is never
+navigated anywhere.
+
+### Three bugs and a discovery, all found by running it
+
+- **The deck chooser stayed empty.** The pill asks the board what decks exist over an
+  event named `sage:ink-decks?`, and Tauri validates event names: `?` is not in the
+  allowed set, so the request never left the window. Renamed, and the chooser fills.
+- **The frame shrank fifteen pixels every launch.** `inkWindowRect()` reads the *outer*
+  position and the *inner* size, and the resize handler was writing `window.innerWidth`
+  back as the same field. It now re-reads the authoritative rectangle after the resize
+  settles instead of trusting a measurement taken from the other side of the frame.
+- **A phantom second frame** in the first screenshot turned out to be Glenn's installed
+  0.3.1 sitting behind the debug build. Two apps, not two windows. `CGWindowListCopyWindowInfo`
+  settled it in one line.
+- **macOS asks before an app may read the clipboard.** The pill's Paste button does work,
+  but the system answers it with its own **Paste** confirmation button, which is exactly
+  what that prompt is for. A real Cmd+V raises nothing. So the button is the two-click
+  path, Cmd+V is the one-key path, and reading the pasteboard from Rust would not help
+  because it is the read that is policed, not the API. Recorded in the design.
+
+### Verified
+
+Debug binary on an isolated `HOME`, through new inert hooks in the established family —
+`SAGE_INK_PASTE=<s>` and `SAGE_INK_SAVE=<s>`, because nothing on this machine may click.
+The frame opens at its remembered rectangle and the window-server list agrees with it to
+the pixel. Save twice: the deck went one screen → two → three → four, each new screen
+carrying an `image` widget whose `src` is a hash-named asset that exists on disk, and the
+second save of identical ink produced the *same* hash and wrote no second file, which is
+the asset store's de-duplication doing its job. No console errors, no panics.
+
+**Not yet exercised, because they need a hand on the mouse:** drawing a stroke inside the
+frame, dragging the strip to move it, tapping for handles and resizing by a corner, and
+Cmd+V with a real screenshot. All of Windows, as ever.

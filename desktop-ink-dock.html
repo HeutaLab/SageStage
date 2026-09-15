@@ -39,19 +39,31 @@
   button.exit:hover { background: rgba(220, 38, 38, 0.1); color: #b91c1c; }
   .sep { width: 1px; height: 24px; background: rgba(15, 23, 42, 0.12); margin: 0 4px; }
   .label { display: none; }
-  @media (min-width: 320px) { button.mode .label { display: inline; } }
+  @media (min-width: 320px) { button.mode .label, #save .label { display: inline; } }
+  select {
+    appearance: none; border: 1px solid rgba(15,23,42,.18); background: rgba(255,255,255,.9);
+    color: #0f172a; font: 600 12px/1 'Quicksand', system-ui, sans-serif;
+    border-radius: 10px; padding: 6px 8px; max-width: 130px; cursor: pointer;
+  }
 </style>
 </head>
 <body>
   <div class="pill" data-tauri-drag-region>
     <span class="grip" data-tauri-drag-region aria-hidden="true"></span>
-    <button class="mode active" id="pen" title="Pen — draw over the screen (Esc drops to pointer)">
+    <button class="mode active" id="pen" title="Pen — draw inside the frame (Esc drops to pointer)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 16.5c3.5-7 5.8-9.6 7-8.4 1.3 1.3-2.6 5.6-1.2 6.8 1.4 1.2 4-4.4 6.4-5.6 1.6-.8 2.9-.2 3.8 1.2"/></svg>
       <span class="label">Pen</span>
     </button>
     <button class="mode" id="pointer" title="Pointer — click through to what is underneath; the ink stays">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4.5l12 5.6-5.2 1.9 3 5.6-2.6 1.4-3-5.6-4.2 3.6V4.5z" fill="#c7d2fe"/></svg>
       <span class="label">Pointer</span>
+    </button>
+    <span class="sep"></span>
+    <button id="place" title="Move or resize the frame — or drag its top strip">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="13" rx="2" fill="#bae6fd"/><path d="M4 9h16"/><path d="M9 14.5h6M12 12v5"/></svg>
+    </button>
+    <button id="paste" title="Bring in a screenshot — take one with ⌘⌃⇧4 first">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" fill="#fde68a"/><circle cx="12" cy="12" r="3.2"/><path d="M8.5 5V3.6h7V5"/></svg>
     </button>
     <span class="sep"></span>
     <button id="undo" title="Undo the last stroke">
@@ -61,10 +73,16 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l.8 12.1A1.6 1.6 0 0 0 9.4 20.6h5.2a1.6 1.6 0 0 0 1.6-1.5L17 7" fill="#fecaca"/><path d="M5 7h14"/><path d="M9.5 7V5.7A1.7 1.7 0 0 1 11.2 4h1.6a1.7 1.7 0 0 1 1.7 1.7V7"/><path d="M10.2 10.8v6M13.8 10.8v6"/></svg>
     </button>
     <span class="sep"></span>
-    <button class="exit" id="exit" title="Close the overlay — the ink goes with it">
+    <select id="deck" title="Which deck the picture goes to"><option value="">your deck</option></select>
+    <button id="save" title="Send what is in the frame to a new screen at the end of that deck">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5.5h11L19 8.5v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z" fill="#bbf7d0"/><path d="M8.5 5.5v4h6v-4M8.5 19.5v-5h7v5"/></svg>
+      <span class="label">Save</span>
+    </button>
+    <span class="sep"></span>
+    <button class="exit" id="exit" title="Close the frame — the ink goes with it">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>
     </button>
   </div>
-  <script src="desktop-ink-dock.js?v=1"></script>
+  <script src="desktop-ink-dock.js?v=2"></script>
 </body>
 </html>

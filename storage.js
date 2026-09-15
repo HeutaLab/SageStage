@@ -818,6 +818,72 @@
       onInkCmd(fn) {
         T.event.listen('sage:ink-cmd', (e) => { if (e) fn(String(e.payload)); }).catch((e) => console.error('ink command listen failed', e));
       },
+      // ---- the ink FRAME (docs/ink-frame-design.md §2.1) ----
+      // The frame is a rectangle the teacher places, so it moves and resizes
+      // itself rather than filling a display. Logical pixels throughout: the
+      // window builder uses them, so a 150% laptop display needs no arithmetic
+      // here. LogicalPosition/LogicalSize moved package between Tauri betas, so
+      // look in both places rather than assuming.
+      _dpi() {
+        const d = T.dpi || T.window || {};
+        return { P: d.LogicalPosition, S: d.LogicalSize };
+      },
+      async inkWindowRect() {
+        try {
+          const win = T.window.getCurrentWindow();
+          const f = await win.scaleFactor();
+          const p = await win.outerPosition();
+          const z = await win.innerSize();
+          const lp = p.toLogical ? p.toLogical(f) : { x: p.x / f, y: p.y / f };
+          const ls = z.toLogical ? z.toLogical(f) : { width: z.width / f, height: z.height / f };
+          return { x: lp.x, y: lp.y, w: ls.width, h: ls.height };
+        } catch (e) { console.error('inkWindowRect failed', e); return null; }
+      },
+      async moveInkWindow(x, y) {
+        const { P } = this._dpi();
+        try { await T.window.getCurrentWindow().setPosition(P ? new P(x, y) : { type: 'Logical', x, y }); return true; }
+        catch (e) { console.error('moveInkWindow failed', e); return false; }
+      },
+      async sizeInkWindow(w, h) {
+        const { S } = this._dpi();
+        try { await T.window.getCurrentWindow().setSize(S ? new S(w, h) : { type: 'Logical', width: w, height: h }); return true; }
+        catch (e) { console.error('sizeInkWindow failed', e); return false; }
+      },
+
+      // ---- getting a picture into a deck (§4) ----
+      // The frame writes the PNG into the asset store itself — that is not the
+      // deck file, so the promise in §0 holds — and sends the board the
+      // reference. Megabytes of base64 never cross an event, and the board does
+      // the one thing only it may do: append a screen and save.
+      inkSave(ref, deckId) {
+        try { T.event.emit('sage:ink-save', { ref, deckId }); return true; }
+        catch (e) { console.error('inkSave failed', e); return false; }
+      },
+      onInkSave(fn) {
+        T.event.listen('sage:ink-save', (e) => { if (e && e.payload) fn(e.payload); })
+          .catch((e) => console.error('ink save listen failed', e));
+      },
+      // The pill has no state of its own, so it asks the board what decks exist.
+      inkDecksRequest() {
+        try { T.event.emit('sage:ink-decks-please', {}); } catch (e) { console.error('deck request failed', e); }
+      },
+      onInkDecksRequest(fn) {
+        T.event.listen('sage:ink-decks-please', () => fn()).catch((e) => console.error('deck request listen failed', e));
+      },
+      inkDecks(list) {
+        try { T.event.emit('sage:ink-decks', list); } catch (e) { console.error('deck list failed', e); }
+      },
+      // The pill knows which deck the teacher chose; the frame knows what is on
+      // screen. Rust carries the one to the other.
+      onInkSaveRequest(fn) {
+        T.event.listen('sage:ink-save-request', (e) => fn(e && e.payload))
+          .catch((er) => console.error('ink save request listen failed', er));
+      },
+      onInkDecks(fn) {
+        T.event.listen('sage:ink-decks', (e) => { if (e) fn(e.payload || []); })
+          .catch((e) => console.error('deck list listen failed', e));
+      },
+
       // The ink window is created hidden so a transparent window never flashes
       // the topbar; it shows itself once app.js has hidden its chrome.
       async showThisWindow() {
