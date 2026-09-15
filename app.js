@@ -14499,6 +14499,11 @@
   }
 
   const effWidth = (s) => (s.tool === 'highlighter' ? s.size * 2.5 : s.tool === 'eraser' ? s.size * 4 : s.tool === 'text' ? 2 : s.size);
+  // A crop is a statement about the export, not a mark, so only ONE may exist —
+  // a second replaces the first rather than quietly fighting with it.
+  function replaceSnip(arr) {
+    for (let i = arr.length - 1; i >= 0; i--) if (arr[i].tool === 'snip') arr.splice(i, 1);
+  }
 
   // unpadded, unrotated extent of a stroke / shape / text object
   function strokeGeom(s) {
@@ -14653,7 +14658,66 @@
     }
   }
 
+  // Blur, magnifier and snip work on the picture in the frame rather than on
+  // ink, so they are painted from the backdrop rather than stroked. They live in
+  // the same array as everything else, which means undo, redo, select and the
+  // bin all apply to them without knowing what they are.
+  function paintPictureTool(c, s) {
+    const r = (typeof inkShotRect === 'function') ? inkShotRect() : null;
+    const x = Math.min(s.x0, s.x1), y = Math.min(s.y0, s.y1);
+    const w = Math.abs(s.x1 - s.x0), h = Math.abs(s.y1 - s.y0);
+    if (w < 2 || h < 2) return;
+    if (s.tool === 'snip') {
+      // Not a mark on the picture — a statement about what Save will keep, so
+      // it is drawn for the teacher and never for the export.
+      if (inkExporting) return;
+      // Dim everything outside it so the crop is visible before committing.
+      c.save();
+      c.fillStyle = 'rgba(15, 23, 42, 0.45)';
+      c.beginPath();
+      c.rect(0, 0, window.innerWidth, window.innerHeight);
+      c.rect(x, y, w, h);
+      c.fill('evenodd');
+      c.strokeStyle = '#0f766e'; c.lineWidth = 2; c.setLineDash([7, 5]);
+      c.strokeRect(x, y, w, h);
+      c.restore();
+      return;
+    }
+    if (!r || !inkShot || !inkShot.naturalWidth) return;
+    // CSS pixels in the frame → pixels in the picture
+    const k = inkShot.naturalWidth / r.w;
+    const sx = (x - r.x) * k, sy = (y - r.y) * k, sw = w * k, sh = h * k;
+    if (sw < 1 || sh < 1) return;
+    c.save();
+    if (s.tool === 'blur') {
+      // Canvas blur samples beyond the edges of what it is given, so the crop is
+      // taken with a margin and the result clipped back — without it the blurred
+      // patch has a pale halo where the filter ran out of picture.
+      const pad = Math.max(8, (s.size || 6) * 2);
+      c.beginPath(); c.rect(x, y, w, h); c.clip();
+      c.filter = 'blur(' + Math.max(3, (s.size || 6) * 1.6) + 'px)';
+      c.drawImage(inkShot, Math.max(0, sx - pad * k), Math.max(0, sy - pad * k),
+        sw + pad * 2 * k, sh + pad * 2 * k, x - pad, y - pad, w + pad * 2, h + pad * 2);
+      c.filter = 'none';
+    } else if (s.tool === 'magnify') {
+      const zoom = 2;
+      const cx = x + w / 2, cy = y + h / 2;
+      c.beginPath(); c.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2); c.clip();
+      c.drawImage(inkShot, sx + sw / 2 - sw / (2 * zoom), sy + sh / 2 - sh / (2 * zoom),
+        sw / zoom, sh / zoom, x, y, w, h);
+      c.restore(); c.save();
+      c.strokeStyle = s.color || '#0f172a';
+      c.lineWidth = Math.max(2, (s.size || 6) * 0.6);
+      c.beginPath(); c.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2); c.stroke();
+    }
+    c.restore();
+  }
+
+  const PICTURE_TOOLS = ['blur', 'magnify', 'snip'];
+  let inkExporting = false;
+
   function paintStroke(c, s) {
+    if (PICTURE_TOOLS.includes(s.tool)) { paintPictureTool(c, s); return; }
     c.save();
     if (s.rot) {
       const g = strokeGeom(s);
@@ -14915,8 +14979,17 @@
       toolBtn('pen', 'draw', 'Pen (P)'),
       toolBtn('highlighter', 'marker', 'Marker (M)'),
       shapeBtn,
-      toolBtn('eraser', 'eraser', 'Eraser (E)'),
+      toolBtn('eraser', 'eraser', 'Eraser (E) — tap something to remove it, or rub'),
       geoBtn,
+      // Blur, magnifier and crop need a picture beneath them, so they appear
+      // only in the ink frame and only once a screenshot is in it. Offering
+      // them over a see-through window would be offering nothing.
+      ...(inkBoot && inkShot ? [
+        el('span', { class: 'dt-sep' }),
+        toolBtn('blur', 'blur', 'Blur — drag over anything that should not be read'),
+        toolBtn('magnify', 'magnify', 'Magnifier — drag over the detail to enlarge'),
+        toolBtn('snip', 'snip', 'Crop — drag the part of the picture to keep'),
+      ] : []),
       el('span', { class: 'dt-sep' }),
       swatches,
       el('span', { class: 'dt-sep' }),
@@ -15201,6 +15274,7 @@
     }
     // a shape needs some extent; a bare click with the pen still leaves a dot
     if (s.pts || Math.hypot(s.x1 - s.x0, s.y1 - s.y0) >= 3) {
+      if (s.tool === 'snip') replaceSnip(screenInk(screen()));
       screenInk(screen()).push(roundStroke(s));
       redoInkStack = [];
       paintStroke(inkCtx(inkBoard), s);
@@ -16044,6 +16118,7 @@
       document.body.append(inkShot);
     }
     inkShot.src = src;
+    inkShot.onload = () => { buildDrawTools(); blit(); };
     document.body.classList.add('ink-has-shot');
     // The teacher's own screenshot photographs the composited screen, so the
     // ink that was on display is ALREADY in the picture. Compositing it again
@@ -16097,15 +16172,34 @@
     const c = document.createElement('canvas');
     const g = c.getContext('2d');
     const r = inkShotRect();
-    if (r && inkShot) {
-      c.width = inkShot.naturalWidth;
-      c.height = inkShot.naturalHeight;
-      g.drawImage(inkShot, 0, 0);
-      g.drawImage(drawLayer, r.x * dpr, r.y * dpr, r.w * dpr, r.h * dpr, 0, 0, c.width, c.height);
-    } else {
-      c.width = drawLayer.width;
-      c.height = drawLayer.height;
-      g.drawImage(drawLayer, 0, 0);
+    const snip = screenInk(screen()).find((x) => x.tool === 'snip') || null;
+    // Repaint without the crop's own dimming, which is guidance for the teacher
+    // and has no business in the picture they keep.
+    inkExporting = true; repaintBoard(); blit();
+    try {
+      if (r && inkShot && inkShot.naturalWidth) {
+        const k = inkShot.naturalWidth / r.w;          // frame CSS px → picture px
+        let ex = r.x, ey = r.y, ew = r.w, eh = r.h;
+        if (snip) {
+          ex = Math.min(snip.x0, snip.x1); ey = Math.min(snip.y0, snip.y1);
+          ew = Math.abs(snip.x1 - snip.x0); eh = Math.abs(snip.y1 - snip.y0);
+        }
+        c.width = Math.max(1, Math.round(ew * k));
+        c.height = Math.max(1, Math.round(eh * k));
+        g.drawImage(inkShot, (ex - r.x) * k, (ey - r.y) * k, ew * k, eh * k, 0, 0, c.width, c.height);
+        g.drawImage(drawLayer, ex * dpr, ey * dpr, ew * dpr, eh * dpr, 0, 0, c.width, c.height);
+      } else {
+        // No picture: the ink alone, on transparency, cropped if asked.
+        const ex = snip ? Math.min(snip.x0, snip.x1) : 0;
+        const ey = snip ? Math.min(snip.y0, snip.y1) : 0;
+        const ew = snip ? Math.abs(snip.x1 - snip.x0) : window.innerWidth;
+        const eh = snip ? Math.abs(snip.y1 - snip.y0) : window.innerHeight;
+        c.width = Math.max(1, Math.round(ew * dpr));
+        c.height = Math.max(1, Math.round(eh * dpr));
+        g.drawImage(drawLayer, ex * dpr, ey * dpr, ew * dpr, eh * dpr, 0, 0, c.width, c.height);
+      }
+    } finally {
+      inkExporting = false; repaintBoard(); blit();
     }
     return c;
   }

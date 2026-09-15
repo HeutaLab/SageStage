@@ -206,6 +206,14 @@ teacher can annotate a webpage, press Cmd+Control+Shift+4, and have the result l
 deck.
 
 **Pass two — the picture tools.** Blur, magnifier, snip, operating on the backdrop.
+They appear in the draw bar only inside the frame and only once a picture is in it,
+because offering them over a see-through window would be offering nothing. All three
+live in the same array as every stroke, so undo, redo, select and the bin apply to them
+without knowing what they are. Blur crops the picture with a margin and clips the result
+back, or the filter runs out of picture and leaves a pale halo. The magnifier draws a
+scaled crop inside an ellipse with a ring. **Snip is not a mark but a statement about the
+export**: only one may exist, a second replaces the first, it dims everything outside
+itself for the teacher, and it is never painted into the picture it is cropping.
 
 **Pass three — direct capture**, the day a Developer ID signature exists. On Windows,
 pass three can land with pass one, since nothing gates it there.

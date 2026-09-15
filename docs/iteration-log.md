@@ -7828,3 +7828,31 @@ it back for a picture that came from somewhere else.
 Save still lands after the changes: deck four screens → five, the new screen carrying an
 image widget sized from the picture. The pixel-ratio fix and the ⌘V path both need a
 second display and a keystroke, so they are Glenn's to confirm.
+
+## 15 September 2026 (night) — blur, magnifier and crop
+
+Pass two of the ink frame. All three need pixels beneath them, so they appear in the
+draw bar only inside the frame and only once a screenshot is in it — offering them over
+a see-through window would be offering nothing, and the bar rebuilds itself the moment a
+picture loads.
+
+They are painted from the backdrop rather than stroked, but they live in the **same
+array as every other mark**, which means undo, redo, select and the bin already apply to
+them and none of that code had to learn they exist. Two details that are not obvious:
+canvas blur samples beyond the edges of whatever it is given, so the crop is taken with a
+margin and clipped back, or the blurred patch carries a pale halo where the filter ran
+out of picture; and the magnifier has to restore and re-save the context between the
+clipped draw and its ring, or the ring is clipped away by its own lens.
+
+**Snip is not a mark, it is a statement about the export.** Only one may exist and a
+second replaces the first, because two crops fighting each other has no meaning. It dims
+everything outside itself so the teacher can see what they will keep — and that dimming
+must never reach the picture, so the export repaints the ink with the crop suppressed,
+composites, and repaints again. Save now exports the cropped region at the picture's own
+resolution, and crops the ink-only case too.
+
+### Verified
+
+Save still lands after the changes: deck five screens → six. The tools themselves draw
+from a picture that has to be pasted, and pasting needs either a keystroke or a click on
+macOS's own Paste confirmation, so blur, magnifier and crop are Glenn's to try.
