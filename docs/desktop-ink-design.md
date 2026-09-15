@@ -18,10 +18,14 @@ Lines:
 - **Nothing is ever written.** The overlay never touches the state file, never writes
   localStorage, never saves a snapshot. Its strokes live in a scratch screen that exists
   only in that window's memory.
-- **No screenshot, ever.** Freezing the screen behind the ink would need macOS Screen
-  Recording permission — a frightening prompt on a managed school Mac, and a new thing
-  for an IT department to refuse. So the ink floats; scroll the page underneath and the
-  circle stays where it was. Every screen annotator makes this trade.
+- ~~**No screenshot, ever.**~~ **SUPERSEDED 2026-09-15 by
+  [ink-frame-design.md](ink-frame-design.md).** This said capturing what is behind the
+  ink would need macOS Screen Recording permission, "a frightening prompt on a managed
+  school Mac", and refused it on that basis. Tested rather than assumed: capture works
+  even unsigned, and the real blocker is that the grant dies on every auto-update while
+  the app is ad-hoc signed. The ink still floats in *this* overlay — scroll the page
+  underneath and the circle stays where it was — but the frame that replaces it can hold
+  a picture. See ink-frame §1 for what macOS actually permits.
 - **Desktop only, not withheld — unavailable.** A web page cannot paint outside its own
   tab. The dock button renders only when `window.SagePlatform` exists, so the browser
   build and the taster never show a control that cannot work. Same class as the media

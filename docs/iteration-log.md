@@ -7650,3 +7650,66 @@ the first automatic update must be trivial so a fault in the updater and a fault
 feature can never be mistaken for each other. 0.4.0 — the writing, screenshots and
 annotation upgrade in flight in another chat — waits for this to land on one machine per
 platform.
+
+## 15 September 2026 — what macOS will and will not let an app photograph
+
+Glenn, with 0.3.1 landing on his Mac by itself: *let's get the annotation feature
+working on all screens as a pop-out windowed widget with tools to screenshot the webpage
+beneath the annotation and to save the screenshot as an image to the deck.* Designed
+with him before anything was written; the spec is `docs/ink-frame-design.md` and this is
+the afternoon of probing that decided it.
+
+### The assertion that was inherited rather than tested
+
+The overlay's design said, flatly, "no screenshot, ever", because capturing what is
+behind the ink would need Screen Recording permission and that is a frightening prompt on
+a school Mac. Glenn asked for the capture anyway, so a throwaway ad-hoc-signed app was
+run on his machine, launched through LaunchServices so it carried its own TCC identity
+rather than the terminal's, and asked macOS 26 the questions one at a time.
+
+The assertion was wrong in an interesting direction. **Capture works fine unsigned** — a
+real 1470×956 grab with thirty-three windows visible, which went straight to Glenn as a
+picture of his own screen. What does not work is *keeping* the permission: one changed
+string, re-signed ad-hoc, and macOS revoked it on the spot, offering a dialog whose only
+buttons are "Open System Settings" and "Deny". There is no Allow. And an app that has
+never been granted does not even appear in that list to be switched on; it has to be
+added with the **+** button. Along the way: `CGWindowListCreateImage` is *removed* from
+the macOS 26 SDK rather than deprecated, ScreenCaptureKit is the only route, a faceless
+helper app never gets offered the dialog at all (which cost an hour of false negatives
+before the probe was rebuilt with a window), and `screencapture` shelled out from inside
+the app is refused exactly as the API is.
+
+So the blocker is the signature, not the capability — and it collides head-on with what
+shipped the night before. Sage Stage now updates itself silently. A capture button would
+break for all twenty-two testers on every release, and the dialog they would meet does
+not offer them a way to say yes.
+
+### The good half of the answer
+
+Glenn: *why can't Cmd+Option+Shift+4 be a thing on Mac?* It can — the distinction is
+**who is asking**. When the teacher presses it (Cmd+Control+Shift+4 for the clipboard
+variant; Option grabs a window), no application requested a capture, so there is nothing
+to police and the image lands on the clipboard where any app may read it freely. When
+Sage Stage asks the same system tool to do the same job the request is attributed to
+Sage Stage and the pixels are withheld — which is why `screencapture -i` still draws the
+crosshair, still lets you complete the selection, and then writes zero bytes. That
+silent nothing was watched happening twice before the cause was clear. A pill button
+that presses the shortcut *for* the teacher needs Accessibility, a larger permission with
+the identical update problem, so macOS gets a line of instruction and Windows — which
+has no such gate at all — gets the button.
+
+### What was designed
+
+A **frame**: the transparent always-on-top window stops being the size of the display
+and becomes a rectangle the teacher places over a webpage or a slide. Tapping its edge
+strip flips it into place mode, because dragging inside it means draw and cannot also
+mean move. Two states, because blur and magnifier need pixels a see-through window does
+not have: **see-through** carries pen, highlighter, shapes and bin; once a screenshot is
+pasted in as the backdrop, **holding a picture** adds blur, magnifier and snip. Save
+sends the result to a *new screen at the end* of a chosen deck — never onto a screen a
+class already knows, because the layout is the craft — through the board window, since
+the frame still has no write path of its own. Three passes, and the third one is just
+the capture button, which on Windows can land with the first.
+
+Nothing built yet. Spec written, the overlay's superseded line marked as such, and
+Glenn's review next.
