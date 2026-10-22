@@ -8211,3 +8211,49 @@ a signal, just an artefact of the method).
 rollout:** a real Windows `.exe` updating itself. Glenn runs that in the morning; the
 `.exe` goes site-wide in the afternoon. 0.4.3 exists so that run says what happened
 either way instead of leaving him to notice a version that never changed.
+
+## 22 October 2026 (night, later) — the library you could not actually fill
+
+Glenn, after using it: *"There are operational issues with the adding of images. You
+can't add to a folder or delete them individually."* Both were mine, both from the same
+afternoon's bulk-selection change, and both are the kind of thing that only shows up when
+somebody tries to do the job rather than test the feature.
+
+**Adding never reached a folder.** `libraryAdd` hard-coded `folder: ''`, so every picture
+landed in Unfiled whatever was on screen — and the Add handler then set `folder = 'all'`,
+jumping the view away. Open "Picture of the day", add a picture, and watch it not appear:
+indistinguishable from a button that does nothing. A picture now lands in the folder being
+looked at, the view stays put, and the button says which it means — *Add pictures to this
+folder…*.
+
+**One at a time, through the OS dialog.** Thirty photographs was thirty trips. The picker
+takes `multiple` now, and the files are processed in sequence rather than at once —
+thirty simultaneous canvas decodes is a lot to ask of WebKit, and the strict ordering
+means `addedAt` comes out in the order they were chosen, which is the order a
+picture-of-the-day rotation then walks. `pickImage`'s body became `readImageFile` so the
+one-file and many-file paths cannot drift apart. A batch reports once at the end — *n
+pictures could not be opened* — instead of one dialog per bad file, and HEIC is counted
+and explained once rather than thirty times.
+
+Filenames become names. "Beach trip 3.jpeg" arrives as *Beach trip 3*, because thirty
+Untitleds is a library nobody can use.
+
+**And individual delete came back.** Taking the per-tile bin and folder dropdown away when
+the bulk bar arrived made the common case worse: one picture went from one tap to select,
+reach for a bar, confirm. Both controls are under every tile again. The bar is for thirty;
+the controls are for one; neither is a replacement for the other, which is what the last
+change got wrong.
+
+### Verified
+
+In the browser build, by capturing the file input the Add button creates and handing it
+three real JPEGs: `multiple` set, three files in, three items out, all filed into the
+folder on screen, names taken from the filenames with extensions stripped, `addedAt`
+ascending in pick order, and the view still on the folder showing all three. Then the
+per-tile dropdown moved one picture out (folder counts followed), and the per-tile bin
+removed one by name — *Take "Wednesday market" out of your library?* — leaving the other
+two. Selecting two still raises the bulk bar with the per-tile controls still in place.
+
+**Not verified:** a real OS file dialog, which nothing here can drive. The handler is
+exercised end to end with genuine `File` objects; what is untested is the dialog's own
+multi-select, which is the operating system's.

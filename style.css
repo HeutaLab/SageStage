@@ -1332,6 +1332,11 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
   border-radius: 5px;
 }
 .lib-name:hover { background: var(--surface-muted); text-decoration: underline; }
+/* Per-tile move and remove. The bulk bar is for thirty pictures; these are for
+   one, and taking them away when the bar arrived made the common case worse. */
+.lib-acts { gap: 4px; align-items: center; }
+.lib-folder { font-size: 11px; padding: 3px 4px; flex: 1; min-width: 0; }
+.lib-drop { width: 28px; height: 28px; flex-shrink: 0; }
 /* Acts on everything ticked, so it sits above the grid rather than below it. */
 .lib-bulk {
   gap: 8px;

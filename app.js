@@ -7380,7 +7380,7 @@
           }, 'Choose from library…'),
           el('button', {
             class: 'btn ghost',
-            onclick: () => pickImageToLibrary((ref) => { imgSetPictures(p, [ref]); api.refresh(); }),
+            onclick: () => pickImagesToLibrary('', (refs) => { if (refs.length) { imgSetPictures(p, refs); api.refresh(); } }),
           }, 'From this device…'),
           el('div', { class: 'hint' }, 'Stored locally on this device'),
         ));
@@ -7577,7 +7577,7 @@
             }, set.length > 1 ? 'Pictures… (' + set.length + ')' : 'Choose from library…'),
             el('button', {
               class: 'btn ghost small',
-              onclick: () => pickImageToLibrary((ref) => { imgSetPictures(p, set.concat([ref])); api.refresh(); }),
+              onclick: () => pickImagesToLibrary('', (refs) => { if (refs.length) { imgSetPictures(p, set.concat(refs)); api.refresh(); } }),
             }, 'Add from this device…')),
         el('div', { class: 'hint' }, following
           ? set.length + (set.length === 1 ? ' picture' : ' pictures') + ' in that folder. Add more there and they join this widget on their own.'
@@ -10780,57 +10780,115 @@
     restore = wireDialog(backdrop, close, { label: 'That photo is a HEIC', focus: okBtn });
   }
 
+  // One file, from the picker to a stored reference. Pulled out of pickImage so
+  // the single and the many-at-once paths cannot drift apart — they are the
+  // same decode, the same downscale, the same store.
+  //
+  // `cb(ref)` fires on success only. `after(status)` fires ALWAYS, with 'ok',
+  // 'heic' or 'failed', because a batch has to keep moving past a bad file and
+  // has to know at the end what it skipped.
+  function readImageFile(file, maxW, cb, after) {
+    const done = (status) => { if (after) after(status); };
+    const reader = new FileReader();
+    // A file the engine will not decode used to end the flow in silence: no
+    // callback, no toast, nothing. The teacher taps "Choose image…", the OS
+    // picker closes, and the app does exactly what it does when they press
+    // Cancel — so the honest reading is "it's broken". Truncated and
+    // zero-byte files fail everywhere; HEIC is caught above, by name, so this
+    // message no longer has to guess which of the two it was.
+    // `cb` is deliberately NOT called on failure. Four callers write its
+    // argument straight into state (mascot, money images, image widget,
+    // background), so a null would wipe an existing picture on a failed
+    // replace. Saying so and changing nothing is the right outcome.
+    const failed = () => {
+      // A batch reports once at the end instead of one toast per bad file.
+      if (!after) toast('⚠️ That picture could not be opened — the file may be damaged. Try a JPEG or PNG.', { ms: 7000 });
+      done('failed');
+    };
+    reader.onerror = failed;
+    reader.onload = () => {
+      // Refused before the decoder, not on its failure: see the HEIC note above.
+      if (isHeic(file, reader.result)) {
+        if (!after) heicDialog();
+        done('heic');
+        return;
+      }
+      // downscale large images so localStorage stays healthy
+      const img = new Image();
+      img.onerror = failed;
+      img.onload = () => {
+        const keep = (ref) => { cb(ref); done('ok'); };
+        const limit = maxW || 1600;
+        if (img.width <= limit && file.size < 400_000) { storeImage(reader.result, keep); return; }
+        // Width alone is not enough of a limiter. A 1000×20000 scan is under
+        // any width cap and still asks for a 20M-pixel canvas — over WebKit's
+        // 16,777,216 ceiling, so on the Tauri build the canvas fails and
+        // toDataURL hands back a degenerate string. Cap the area as well.
+        const MAX_PX = 12e6;
+        const byWidth = Math.min(1, limit / img.width);
+        const byArea = Math.sqrt(MAX_PX / Math.max(1, img.width * img.height));
+        const scale = Math.min(byWidth, byArea);
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * scale);
+        cv.height = Math.round(img.height * scale);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        // small pngs keep their transparency (coin cut-outs); the rest go jpeg
+        storeImage(
+          file.type === 'image/png' && limit <= 400 ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.82),
+          keep,
+        );
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
   function pickImage(cb, maxW) {
     const input = el('input', { type: 'file', accept: 'image/*' });
     input.addEventListener('change', () => {
       const file = input.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      // A file the engine will not decode used to end the flow in silence: no
-      // callback, no toast, nothing. The teacher taps "Choose image…", the OS
-      // picker closes, and the app does exactly what it does when they press
-      // Cancel — so the honest reading is "it's broken". Truncated and
-      // zero-byte files fail everywhere; HEIC is caught above, by name, so this
-      // message no longer has to guess which of the two it was.
-      // `cb` is deliberately NOT called on failure. Four callers write its
-      // argument straight into state (mascot, money images, image widget,
-      // background), so a null would wipe an existing picture on a failed
-      // replace. Saying so and changing nothing is the right outcome.
-      const failed = () => toast('⚠️ That picture could not be opened — the file may be damaged. Try a JPEG or PNG.', { ms: 7000 });
-      reader.onerror = failed;
-      reader.onload = () => {
-        // Refused before the decoder, not on its failure: see the HEIC note above.
-        if (isHeic(file, reader.result)) { heicDialog(); return; }
-        // downscale large images so localStorage stays healthy
-        const img = new Image();
-        img.onerror = failed;
-        img.onload = () => {
-          const limit = maxW || 1600;
-          if (img.width <= limit && file.size < 400_000) { storeImage(reader.result, cb); return; }
-          // Width alone is not enough of a limiter. A 1000×20000 scan is under
-          // any width cap and still asks for a 20M-pixel canvas — over WebKit's
-          // 16,777,216 ceiling, so on the Tauri build the canvas fails and
-          // toDataURL hands back a degenerate string. Cap the area as well.
-          const MAX_PX = 12e6;
-          const byWidth = Math.min(1, limit / img.width);
-          const byArea = Math.sqrt(MAX_PX / Math.max(1, img.width * img.height));
-          const scale = Math.min(byWidth, byArea);
-          const cv = document.createElement('canvas');
-          cv.width = Math.round(img.width * scale);
-          cv.height = Math.round(img.height * scale);
-          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-          // small pngs keep their transparency (coin cut-outs); the rest go jpeg
-          storeImage(
-            file.type === 'image/png' && limit <= 400 ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.82),
-            cb,
-          );
-        };
-        img.src = reader.result;
-      };
-      reader.readAsDataURL(file);
+      if (file) readImageFile(file, maxW, cb);
     });
     input.click();
   }
+
+  // Several at once, which is what filling a folder actually looks like: a
+  // teacher has thirty photographs and the old picker took them one trip
+  // through the OS dialog at a time.
+  //
+  // Sequential, not parallel. Each file goes through a canvas decode, and
+  // thirty at once is thirty simultaneous decodes for WebKit to find room for.
+  // The strict ordering also means `addedAt` comes out in the order the files
+  // were chosen, which is the order a picture-of-the-day rotation then walks.
+  function pickImages(onEach, onDone, maxW) {
+    const input = el('input', { type: 'file', accept: 'image/*', multiple: true });
+    input.addEventListener('change', () => {
+      const files = Array.from(input.files || []);
+      if (!files.length) return;
+      let i = 0;
+      const tally = { ok: 0, heic: 0, failed: 0 };
+      const next = () => {
+        if (i >= files.length) {
+          // One report for the batch, naming what was skipped and why.
+          if (tally.failed) toast('⚠️ ' + tally.failed + (tally.failed === 1 ? ' picture' : ' pictures') + ' could not be opened and ' + (tally.failed === 1 ? 'was' : 'were') + ' skipped.', { ms: 8000 });
+          if (tally.heic) heicDialog();
+          onDone(tally);
+          return;
+        }
+        const f = files[i++];
+        readImageFile(f, maxW, (ref) => onEach(ref, fileStem(f.name)), (status) => {
+          tally[status] = (tally[status] || 0) + 1;
+          next();
+        });
+      };
+      next();
+    });
+    input.click();
+  }
+
+  // "Beach trip 3.jpeg" -> "Beach trip 3". A filename is a far better starting
+  // name than "Untitled", and thirty Untitleds is a library nobody can use.
+  const fileStem = (name) => String(name || '').replace(/\.[^.]+$/, '').slice(0, 60);
 
   // ------------------------------------------------------------ picture library
   // The teacher's own pictures, findable again. media-library-design.md asks for
@@ -10856,17 +10914,23 @@
   }
 
   // File a picture, or hand back the entry that already covers it.
-  function libraryAdd(ref, name) {
+  function libraryAdd(ref, name, folder) {
     if (typeof ref !== 'string' || !SageSanitize.imageUrl(ref)) return null;
     const lib = library();
+    const dest = folder && lib.folders.some((f) => f.id === folder) ? folder : '';
     const found = lib.items.find((it) => it.ref === ref);
     if (found) {
       // Importing the same picture again must never overwrite the name the
       // teacher gave it the first time.
       if (!found.name && name) found.name = String(name).slice(0, 60);
+      // But a deliberate "add into this folder" does move it. Content
+      // addressing means the teacher is re-importing a picture the library
+      // already has, and they asked for it to be in this folder — leaving it
+      // where it was would look like the add did nothing at all.
+      if (dest) found.folder = dest;
       return found;
     }
-    const item = { id: uid(), ref, name: name ? String(name).slice(0, 60) : '', folder: '', addedAt: Date.now() };
+    const item = { id: uid(), ref, name: name ? String(name).slice(0, 60) : '', folder: dest, addedAt: Date.now() };
     lib.items.push(item);
     return item;
   }
@@ -10874,8 +10938,13 @@
   // Every picture that arrives from the device is filed on its way to the board.
   // That is the whole of "linked to the library": the teacher never has to
   // remember to save anything, and next week the picture is simply there.
-  function pickImageToLibrary(cb, maxW) {
-    pickImage((ref) => { libraryAdd(ref, ''); save(); cb(ref); }, maxW);
+  function pickImagesToLibrary(folder, cb, maxW) {
+    const added = [];
+    pickImages(
+      (ref, name) => { libraryAdd(ref, name, folder); added.push(ref); },
+      () => { save(); cb(added); },
+      maxW,
+    );
   }
 
   // Everything already on a board, listed in one pass. This is what makes the
@@ -10956,6 +11025,20 @@
       // Removing entries un-files the pictures; it deletes no file and touches
       // no board. Say so, because "remove" next to a photograph of a child is a
       // word a teacher is right to be careful with.
+      // One picture, one tap. Selecting it first and reaching for a bar is the
+      // right shape for thirty and the wrong shape for one, and taking the
+      // per-tile controls away when bulk arrived made the common case worse.
+      const drop = (it) => confirmDialog(
+        'Take “' + (it.name || 'this picture') + '” out of your library? Any board already using it keeps it.',
+        () => {
+          lib.items = lib.items.filter((x) => x !== it);
+          const at = chosen.indexOf(it.ref);
+          if (at >= 0) chosen.splice(at, 1);   // never leave a selection pointing at nothing
+          save(); paint();
+        },
+        { label: 'Remove' },
+      );
+
       const dropChosen = () => confirmDialog(
         'Take ' + chosen.length + (chosen.length === 1 ? ' picture' : ' pictures')
           + ' out of your library? Any board already using them keeps them.',
@@ -10999,10 +11082,21 @@
           // filing, so the badge is a number there and a tick here.
           ? el('span', { class: 'lib-tick' }, pickMany ? String(at + 1) : iconEl('tick'))
           : null);
+        const sel = selectInput(
+          [['', 'Unfiled']].concat(lib.folders.map((f) => [f.id, f.name])),
+          it.folder || '',
+          (v) => { it.folder = v; save(); paint(); },
+        );
+        sel.classList.add('lib-folder');
+        sel.title = 'Which folder this picture is in';
         return el('div', { class: 'lib-tile' },
           hit,
           el('button', { class: 'lib-name', title: 'Rename this picture', onclick: () => rename(it) },
             it.name || 'Untitled'),
+          el('div', { class: 'row lib-acts' }, sel, el('button', {
+            class: 'icon-btn lib-drop', title: 'Take out of the library',
+            'aria-label': 'Take this picture out of the library', onclick: () => drop(it),
+          }, iconEl('trash'))),
         );
       };
 
@@ -11043,7 +11137,7 @@
           ? 'Tap pictures to build a set — the widget steps through them in the order you tap.'
           : pickOne
             ? 'Tap a picture to put it on the board.'
-            : 'Tap pictures to select them, then file or remove them together. Your pictures stay on this device, and taking one out of the library never changes a board that is using it.';
+            : 'File or remove a picture with the controls under it, or tap several and do the lot at once. Your pictures stay on this device, and taking one out of the library never changes a board that is using it.';
 
         bulk.textContent = '';
         if (!pickOne && !pickMany && chosen.length) {
@@ -11080,16 +11174,19 @@
         foot.append(
           el('button', {
             class: 'btn ghost small',
-            onclick: () => pickImageToLibrary((ref) => {
-              libraryAdd(ref, '');
-              if (pickMany && chosen.indexOf(ref) < 0) chosen.push(ref);
-              folder = 'all';
+            // Into the folder being looked at. Filing everything to Unfiled and
+            // then jumping the view to All meant a teacher who opened "Picture
+            // of the day" and added a picture watched it land somewhere else —
+            // which reads as the button not working.
+            onclick: () => pickImagesToLibrary(folder === 'all' ? '' : folder, (refs) => {
+              if (!refs.length) return;
+              if (pickMany) for (const r of refs) if (chosen.indexOf(r) < 0) chosen.push(r);
               // Straight onto the board when the teacher came here to choose
               // one: they asked for a picture, not for a filing session.
-              if (pickOne) { finish(); pickOne(ref); return; }
+              if (pickOne) { finish(); pickOne(refs[0]); return; }
               paint();
             }),
-          }, iconEl('plus'), ' Add from this device…'),
+          }, iconEl('plus'), folder === 'all' ? ' Add pictures…' : ' Add pictures to this folder…'),
           el('button', { class: 'btn ghost small', onclick: sweep }, 'Find pictures on my boards'),
           el('span', { class: 'grow' }),
           pickMany
