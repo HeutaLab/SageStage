@@ -1313,15 +1313,35 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
   font-size: 26px;
   color: var(--ink-soft);
 }
+/* The name is the rename control now that the picture itself is the checkbox.
+   A real <button> so it is tabbable and announced, styled back down to text. */
 .lib-name {
+  display: block;
+  width: 100%;
+  padding: 1px 2px;
+  border: none;
+  background: none;
+  font: inherit;
   font-size: 12px;
+  text-align: left;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
+  border-radius: 5px;
 }
-.lib-acts { gap: 4px; align-items: center; }
-.lib-folder { font-size: 11px; padding: 3px 4px; flex: 1; min-width: 0; }
+.lib-name:hover { background: var(--surface-muted); text-decoration: underline; }
+/* Acts on everything ticked, so it sits above the grid rather than below it. */
+.lib-bulk {
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.lib-bulk:empty { display: none; }
 .lib-empty {
   grid-column: 1 / -1;
   display: grid;

@@ -33,6 +33,21 @@ gets settled; it is the section that decides the shape of the rest.
 
 ---
 
+## 0.5 A folder a widget follows (built 2026-10-22)
+
+§2.3's rule is "link for browsing, copy on use". A folder that an Image widget
+*follows* is a third relationship and worth naming: the widget stores a folder
+id, not a list, and derives its pictures from the library on every mount,
+ordered by the day each was filed.
+
+That makes the folder the single place the rotation is managed — pictures filed
+there join without the widget being opened — and it is what the daily
+picture-of-the-day rotation walks. A deleted folder falls back to whatever the
+widget itself holds; an empty one says so by name. Because the widget is reading
+a list it does not own, closing the library refreshes every following widget on
+the screen (`refreshFolderWidgets`), the same bargain `refreshListWidgets` makes
+for the class lists.
+
 ## 1. What the app does today
 
 There is image support, and it is entirely one-shot.

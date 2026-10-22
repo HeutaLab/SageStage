@@ -8080,3 +8080,88 @@ silent, marker `0.4.1`, no toast, dashboard clean. The browser build skips the w
 nowhere on this machine — it was type-checked by temporarily widening its `cfg` to macOS,
 and CI compiles it for real. Seeing it *fire* needs an MSI install on Windows, which is
 §5's standing "Windows, at all" gap rather than a new one.
+
+## 22 October 2026 (later still) — a picture a day, and the folder it comes from
+
+Glenn: *"The image widget timer needs to be able to run the next image in the library per
+day at say 6am."*
+
+**The thing that decides the shape: at 6am the app is shut and the laptop is in a bag.**
+So this cannot be a timer that fires. It is a question asked on every paint — *given the
+clock, which picture is today's?* — answered by counting school days from an anchor and
+taking the modulo. That answer is right whether the app was closed for a night, a weekend
+or a half term, and it needs nothing whatsoever to have run at six in the morning. A
+scheduled job would have missed every one of those cases, and it would have missed them
+silently.
+
+Days are counted as UTC-midnight day numbers rather than by subtracting timestamps: an
+hour goes missing twice a year, and a `/86400000` across it is off by one — which here
+means the wrong picture for a whole day.
+
+**Weekends hold.** Saturday and Sunday are not school days, so the class that left on
+Friday comes back on Monday to the picture they left, not to the one two further on.
+Thirty pictures is six weeks rather than four. Holidays still burn days; the app has no
+way to know a school's term dates, and pretending otherwise would be worse than the
+honest approximation.
+
+**The rollover hour is the point of the feature.** Midnight would do the arithmetic just
+as well, but 6am is a time when nobody is in the room — which is exactly why Glenn named
+it. A picture must never change under a class that is looking at it.
+
+**It follows a folder, not a list.** The widget holds a folder id. Pictures filed into
+*Picture of the day* join the rotation without the widget ever being opened, in the order
+they were filed, which is the only order a teacher can control. A deleted folder falls
+back to whatever the widget itself holds — a lesson losing its pictures to a tidy-up is
+not an improvement. An empty followed folder says so by name rather than offering
+"Choose from library…", which is the one thing that cannot help there.
+
+A manual ‹ › nudge sticks until the day actually turns. `shownFor` records which day the
+picture on screen belongs to; the rollover only fires when that disagrees with the clock.
+So a teacher can show tomorrow's picture early without the widget arguing, and tomorrow
+it still arrives on the right one.
+
+Two things moving the picture is one too many, so switching the daily rotation on takes
+*"move to the next picture"* off the countdown's at-zero menu.
+
+### Selecting more than one picture at a time
+
+Glenn's answer carried a second ask: the folder should be *"the single place you manage
+it as well as allowing the user to select more than one image at a time"*. Filing thirty
+pictures into a folder was thirty separate dropdowns, one per tile — which is the kind of
+thing that makes a feature technically present and practically unused.
+
+The tile is now the checkbox. Tap pictures to select them and one bar above the grid acts
+on all of them: **File into…**, **Remove**, **Clear**. The per-tile folder dropdown and
+bin are gone, which leaves the tiles as picture and name. The name became a real
+`<button>` so renaming is still one tap and still reachable from the keyboard. In the
+order-matters case — building a carousel — the badge stays a number; when filing, it is
+a tick.
+
+### The disagreement that would have cost an evening
+
+A widget that follows a folder is reading a list it does not own. Move three pictures out
+and the board carried on counting five of them, because nothing told it. `openLibrary`
+now hands `refreshFolderWidgets` back on the way out, in the exact mould of
+`refreshListWidgets`, which the class-list manager has done for name widgets all along.
+
+Also made the rollover write itself down. `mount` mutates props without saving — it has
+always done that — so `shownFor` and `src` lagged in the file until something else
+happened to save. It now saves on the day turning, which is once a day rather than once a
+repaint.
+
+### Verified
+
+In the browser build, against a five-picture folder and an anchor walked backwards:
+anchor today → 1/5; one day back (Wednesday) → 2/5; three days back (Monday) → 4/5, the
+three school days in between; seven days back → 1/5, five school days, wrapped. The
+weekend wording was unit-tested from every weekday: Friday and Saturday both say
+*Monday at 6:00am*, Sunday says *tomorrow*. The settings panel renders the folder picker,
+the checkbox, a 06:00 time field and *"Showing 4 of 5 — next change tomorrow at 6:00am.
+Saturdays and Sundays hold."*, with no stray `null`. Selecting three pictures showed
+*"3 pictures selected"* with File into… / Remove / Clear; filing them into Unfiled moved
+all three, and on closing the library the following widget re-read its folder and
+correctly dropped its strip, having been left with a single picture and no countdown.
+
+**Not verified:** an actual 6am rollover on a machine left running overnight. The
+thirty-second watcher is exercised only by the anchor arithmetic above; seeing it fire in
+place needs a board left on until morning, which is a tester's week rather than a session.

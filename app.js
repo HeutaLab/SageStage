@@ -7192,6 +7192,72 @@
   // `secs: 0` is no timer, and it is the default. An image widget placed today
   // looks and behaves exactly as it did yesterday until a duration is set in the
   // gear — the same promise timer-design.md §3 makes for the two clocks.
+  // ---- the day a rotation is on -------------------------------------------
+  // A picture of the day cannot be a timer that FIRES at six in the morning,
+  // because at six in the morning the app is shut and the laptop is in a bag.
+  // It is a question asked on every paint instead: given the clock, which
+  // picture is today's? That answer is right whether the app was closed for a
+  // night, a weekend or a half term, and it needs nothing to have run.
+  //
+  // Days are counted as UTC-midnight day numbers rather than by subtracting
+  // timestamps: an hour goes missing twice a year and a /86400000 across it is
+  // off by one, which here would mean the wrong picture for a day.
+  const dayNum = (d) => Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+
+  // Epoch day 0 is Thursday 1 Jan 1970, so +4 lands Sunday on 0.
+  const isSchoolDay = (n) => { const dow = (n + 4) % 7; return dow >= 1 && dow <= 5; };
+
+  // School days in [0, n]. Closed form rather than a loop: an anchor left from
+  // last September is three hundred iterations on every paint otherwise.
+  function schoolDaysUpTo(n) {
+    const weeks = Math.floor((n + 1) / 7);
+    let count = weeks * 5;
+    for (let k = weeks * 7; k <= n; k++) if (isSchoolDay(k)) count++;
+    return count;
+  }
+  // School days strictly after `a`, up to and including `b`.
+  const schoolDaysBetween = (a, b) => (b <= a ? 0 : schoolDaysUpTo(b) - schoolDaysUpTo(a));
+
+  // The day a moment belongs to. Before the rollover hour it is still
+  // yesterday's picture — which is the whole point of letting a teacher pick
+  // 6am rather than midnight: nobody wants the picture changing under a class
+  // still looking at it, and nobody is in the room at six.
+  function rotationDay(now, at) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(at || '06:00'));
+    const hh = m ? clamp(+m[1], 0, 23) : 6;
+    const mm = m ? clamp(+m[2], 0, 59) : 0;
+    const d = new Date(now);
+    const before = d.getHours() < hh || (d.getHours() === hh && d.getMinutes() < mm);
+    return dayNum(d) - (before ? 1 : 0);
+  }
+
+  // Which picture today is, counting only school days since the day the
+  // rotation was switched on. Saturday and Sunday hold: a class that left on
+  // Friday comes back to the picture they left, not to the one two further on.
+  function dailyIndex(p, len, now) {
+    const today = rotationDay(now, p.dailyAt);
+    const anchor = Number.isFinite(p.anchor) ? p.anchor : today;
+    return { today, index: len ? schoolDaysBetween(anchor, today) % len : 0 };
+  }
+
+  // "tomorrow at 6:00am" / "Monday at 6:00am" — said in the gear, so a teacher
+  // setting this up can see what it will do before they trust it to a Monday.
+  function nextChangeWords(p, now) {
+    const today = rotationDay(now, p.dailyAt);
+    let n = today + 1;
+    for (let guard = 0; guard < 10 && !isSchoolDay(n); guard++) n++;
+    const at = /^(\d{1,2}):(\d{2})$/.exec(String(p.dailyAt || '06:00'));
+    const hh = at ? clamp(+at[1], 0, 23) : 6;
+    const mm = at ? clamp(+at[2], 0, 59) : 0;
+    const clock = (hh % 12 || 12) + ':' + String(mm).padStart(2, '0') + (hh < 12 ? 'am' : 'pm');
+    // Named from the same arithmetic isSchoolDay uses, not from a Date built
+    // out of a day number — that lands on UTC midnight and reads back a day
+    // early for anyone west of Greenwich.
+    const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const when = n === today + 1 ? 'tomorrow' : DAYS[(n + 4) % 7];
+    return when + ' at ' + clock;
+  }
+
   const IMG_ZERO = [
     ['chime', 'Chime, and stop'],
     ['cover', 'Cover the picture'],
@@ -7202,6 +7268,22 @@
   // The set, derived rather than stored twice: whatever `srcs` holds that the
   // image gate accepts, else the single `src` of an older deck, else nothing.
   function imgSet(p) {
+    // A widget can FOLLOW a folder instead of holding a list. The folder stays
+    // the one place the teacher manages it: pictures filed there join the
+    // rotation without the widget being opened at all. Ordered by the day they
+    // were filed, because that is the order a teacher adds them in and the only
+    // one they can control.
+    if (p.folder) {
+      const lib = library();
+      if (lib.folders.some((f) => f.id === p.folder)) {
+        return lib.items
+          .filter((it) => it.folder === p.folder && !!SageSanitize.imageUrl(it.ref))
+          .sort((a, b) => a.addedAt - b.addedAt)
+          .map((it) => it.ref);
+      }
+      // The folder was deleted. Fall through to whatever the widget holds —
+      // a lesson losing its pictures to a tidy-up is not an improvement.
+    }
     const list = (Array.isArray(p.srcs) ? p.srcs : [])
       .filter((s) => typeof s === 'string' && !!SageSanitize.imageUrl(s));
     if (list.length) return list;
@@ -7228,10 +7310,29 @@
       src: null, srcs: [], i: 0, fit: 'contain',
       secs: 0, remaining: 0, running: false, endAt: null,
       zero: 'chime', sound: true, covered: false,
+      // the daily rotation: a folder to walk, the hour it turns over, the day
+      // it started counting from, and the day the picture on show belongs to
+      folder: '', daily: false, dailyAt: '06:00', anchor: null, shownFor: null,
     }),
     mount(body, w, api) {
       const p = w.props;
+      const cleanups = [];
+      const teardown = () => { for (const fn of cleanups) fn(); };
       const set = imgSet(p);
+      // The day decides which picture is up, before anything else does — and
+      // only when the day has actually turned, so a teacher who stepped ahead
+      // with › keeps that picture until tomorrow really arrives.
+      if (p.daily && set.length) {
+        const roll = dailyIndex(p, set.length, Date.now());
+        if (p.shownFor !== roll.today) {
+          p.i = roll.index;
+          p.shownFor = roll.today;
+          p.src = set[roll.index] || null;
+          // Once a day, not once a repaint: every other mount finds shownFor
+          // already today and writes nothing.
+          save();
+        }
+      }
       const idx = set.length ? clamp(Math.floor(finite(p.i, 0)), 0, set.length - 1) : 0;
       p.i = idx;
       if (set.length) p.src = set[idx];
@@ -7260,6 +7361,16 @@
             el('span', { class: 'img-veil-say' }, 'Tap to show'),
           ));
         }
+      } else if (p.folder && library().folders.some((f) => f.id === p.folder)) {
+        // Following a folder that happens to be empty is a different thing from
+        // having chosen no picture, and saying "Choose from library…" here
+        // would send the teacher to the one place that cannot help.
+        const fname = (library().folders.find((f) => f.id === p.folder) || {}).name || 'that folder';
+        wrap.append(el('div', { style: 'text-align:center;display:grid;gap:8px;justify-items:center;padding:10px;' },
+          el('div', { style: 'font-size:38px;color:var(--ink-soft);' }, iconEl('image')),
+          el('div', { class: 'hint' }, '“' + fname + '” has no pictures in it yet.'),
+          el('button', { class: 'btn ghost small', onclick: () => openLibrary() }, 'Open My pictures'),
+        ));
       } else {
         wrap.append(el('div', { style: 'text-align:center;display:grid;gap:8px;justify-items:center;--acc:#d9f99d;' },
           el('div', { style: 'font-size:38px;color:var(--ink-soft);' }, iconEl('image')),
@@ -7275,10 +7386,26 @@
         ));
       }
 
+      // A board left on overnight has to notice the morning for itself. Thirty
+      // seconds is plenty — the rollover is a minute-grained thing — and it
+      // costs nothing next to the 250ms the countdown already runs at.
+      if (p.daily && set.length > 1) {
+        const watch = setInterval(() => {
+          const roll = dailyIndex(p, set.length, Date.now());
+          if (p.shownFor === roll.today) return;
+          p.i = roll.index;
+          p.shownFor = roll.today;
+          p.src = set[roll.index];
+          save();
+          api.refresh();
+        }, 30000);
+        cleanups.push(() => clearInterval(watch));
+      }
+
       // The strip earns its space only when there is something on it to use: a
       // set to move through, or a clock to run. One picture and no timer is
       // yesterday's widget, down to the pixel.
-      if (!set.length || (secs <= 0 && set.length < 2)) return;
+      if (!set.length || (secs <= 0 && set.length < 2)) return teardown;
 
       const strip = el('div', { class: 'img-strip' });
       body.append(strip);
@@ -7303,7 +7430,7 @@
         );
       }
 
-      if (secs <= 0) return;
+      if (secs <= 0) return teardown;
 
       // A duration that has never been run shows its whole time. Only a clock
       // that actually reached zero gets to wear the finished red, so a deck
@@ -7395,7 +7522,8 @@
 
       paint();
       const iv = setInterval(paint, 250);
-      return () => clearInterval(iv);
+      cleanups.push(() => clearInterval(iv));
+      return teardown;
     },
     settings(box, w, api) {
       const p = w.props;
@@ -7420,23 +7548,42 @@
       // a null into the STRING "null" and prints it in the panel, where el()
       // would have skipped it. Several of these rows only exist once there is a
       // duration to talk about.
+      const folders = library().folders;
+      const following = !!p.folder && folders.some((f) => f.id === p.folder);
+      const shown = set.length ? clamp(Math.floor(finite(p.i, 0)), 0, set.length - 1) : 0;
       const rows = [
-        el('div', { class: 'row', style: 'flex-wrap:wrap;' },
-          el('button', {
-            class: 'btn ghost small',
-            onclick: () => openLibrary({
-              title: 'Pictures for this widget', multi: true, selected: set,
-              onPickMany: (refs) => { imgSetPictures(p, refs); api.refresh(); },
-            }),
-          }, set.length > 1 ? 'Pictures… (' + set.length + ')' : 'Choose from library…'),
-          el('button', {
-            class: 'btn ghost small',
-            onclick: () => pickImageToLibrary((ref) => { imgSetPictures(p, set.concat([ref])); api.refresh(); }),
-          }, 'Add from this device…'),
-        ),
-        el('div', { class: 'hint' }, set.length > 1
-          ? set.length + ' pictures — ‹ › on the widget moves through them.'
-          : 'Pictures you add are filed in your library, so next week they are already there.'),
+        settingRow('Pictures', selectInput(
+          [['', 'The ones I choose']].concat(folders.map((f) => [f.id, 'Folder: ' + f.name])),
+          following ? p.folder : '',
+          (v) => {
+            p.folder = v;
+            // A different source is a different rotation; nothing about where
+            // the old one had got to means anything here.
+            p.i = 0;
+            p.shownFor = null;
+            api.refresh();
+          },
+        )),
+        following
+          ? el('div', { class: 'row', style: 'flex-wrap:wrap;' },
+            el('button', { class: 'btn ghost small', onclick: () => openLibrary() }, 'Open My pictures'))
+          : el('div', { class: 'row', style: 'flex-wrap:wrap;' },
+            el('button', {
+              class: 'btn ghost small',
+              onclick: () => openLibrary({
+                title: 'Pictures for this widget', multi: true, selected: set,
+                onPickMany: (refs) => { imgSetPictures(p, refs); api.refresh(); },
+              }),
+            }, set.length > 1 ? 'Pictures… (' + set.length + ')' : 'Choose from library…'),
+            el('button', {
+              class: 'btn ghost small',
+              onclick: () => pickImageToLibrary((ref) => { imgSetPictures(p, set.concat([ref])); api.refresh(); }),
+            }, 'Add from this device…')),
+        el('div', { class: 'hint' }, following
+          ? set.length + (set.length === 1 ? ' picture' : ' pictures') + ' in that folder. Add more there and they join this widget on their own.'
+          : set.length > 1
+            ? set.length + ' pictures — ‹ › on the widget moves through them.'
+            : 'Pictures you add are filed in your library, so next week they are already there.'),
         settingRow('Fit', selectInput([['contain', 'Fit inside'], ['cover', 'Fill frame']], p.fit, (v) => { p.fit = v; api.refresh(); })),
         el('div', { class: 'row' }, el('span', { style: 'min-width:82px;' }, 'Timer'), mins, el('span', {}, 'min'), ss, el('span', {}, 'sec')),
         el('div', { class: 'row', style: 'flex-wrap:wrap;' },
@@ -7445,8 +7592,11 @@
             onclick: () => setDuration(total),
           }, label)),
         ),
+        // Two things moving the picture is one too many, so a daily rotation
+        // takes "move to the next picture" off the countdown's menu.
         secs > 0
-          ? settingRow('At zero', selectInput(IMG_ZERO, p.zero || 'chime', (v) => {
+          ? settingRow('At zero', selectInput(
+            p.daily ? IMG_ZERO.filter(([v]) => v !== 'next') : IMG_ZERO, p.zero || 'chime', (v) => {
             p.zero = v;
             // Choosing "reveal" arms it there and then, so the teacher sees
             // what they have just asked for rather than having to guess.
@@ -7455,6 +7605,40 @@
           }))
           : null,
         secs > 0 ? checkRow('Play sound when finished', p.sound !== false, (v) => { p.sound = v; save(); }) : null,
+
+        // ---- a picture a day. Not a timer: see dailyIndex() for why the
+        // rollover is computed from the clock rather than scheduled.
+        set.length > 1
+          ? checkRow('New picture each school day', !!p.daily, (v) => {
+            p.daily = v;
+            if (v) {
+              // Count from today, so the picture the teacher is looking at
+              // while they switch this on is the one that stays up today.
+              p.anchor = rotationDay(Date.now(), p.dailyAt);
+              p.shownFor = p.anchor;
+              p.i = 0;
+              p.src = set[0] || null;
+              if (p.zero === 'next') p.zero = 'chime';
+            }
+            api.refresh();
+          })
+          : null,
+        p.daily && set.length > 1
+          ? settingRow('Changes at', el('input', {
+            class: 'text-input', type: 'time', style: 'width:auto;',
+            value: /^\d{1,2}:\d{2}$/.test(p.dailyAt || '') ? p.dailyAt : '06:00',
+            onchange: (e) => {
+              p.dailyAt = /^\d{1,2}:\d{2}$/.test(e.target.value) ? e.target.value : '06:00';
+              p.shownFor = null;   // the day boundary moved; re-ask which day it is
+              api.refresh();
+            },
+          }))
+          : null,
+        p.daily && set.length > 1
+          ? el('div', { class: 'hint' },
+            'Showing ' + (shown + 1) + ' of ' + set.length + ' — next change ' + nextChangeWords(p, Date.now())
+            + '. Saturdays and Sundays hold.')
+          : null,
         secs > 0 && p.zero === 'next' && set.length < 2
           ? el('div', { class: 'hint' }, '⚠️ Add a second picture, or there is nothing to move on to.')
           : null,
@@ -10754,9 +10938,12 @@
       const lib = library();
       const chips = el('div', { class: 'lib-chips' });
       const note = el('div', { class: 'hint' });
+      // Above the grid, not below it: a grid of sixty pictures scrolls, and a
+      // bar that acts on a selection is no use once it has scrolled away.
+      const bulk = el('div', { class: 'row lib-bulk' });
       const grid = el('div', { class: 'lib-grid' });
       const foot = el('div', { class: 'row lib-foot' });
-      box.append(chips, note, grid, foot);
+      box.append(chips, note, bulk, grid, foot);
 
       const folderName = (id) => (lib.folders.find((f) => f.id === id) || {}).name || '';
       const count = (id) => lib.items.filter((it) => it.folder === id).length;
@@ -10766,14 +10953,32 @@
         save(); paint();
       }, { label: 'Save', placeholder: 'e.g. Year 4 class photo' });
 
-      // Removing an entry un-files the picture; it does not delete the file and
-      // it does not touch a board. Say so, because "remove" next to a
-      // photograph of a child is a word a teacher is right to be careful with.
-      const drop = (it) => confirmDialog(
-        'Take “' + (it.name || 'this picture') + '” out of your library? Any board already using it keeps it.',
-        () => { lib.items = lib.items.filter((x) => x !== it); save(); paint(); },
+      // Removing entries un-files the pictures; it deletes no file and touches
+      // no board. Say so, because "remove" next to a photograph of a child is a
+      // word a teacher is right to be careful with.
+      const dropChosen = () => confirmDialog(
+        'Take ' + chosen.length + (chosen.length === 1 ? ' picture' : ' pictures')
+          + ' out of your library? Any board already using them keeps them.',
+        () => {
+          const gone = new Set(chosen);
+          lib.items = lib.items.filter((x) => !gone.has(x.ref));
+          chosen.length = 0;
+          save(); paint();
+        },
         { label: 'Remove' },
       );
+
+      // Filing thirty pictures into a folder was thirty dropdowns. Select them
+      // and move them together: the tile is the checkbox, and the one bar acts
+      // on everything ticked.
+      const moveChosen = (dest) => {
+        for (const ref of chosen) {
+          const item = lib.items.find((x) => x.ref === ref);
+          if (item) item.folder = dest;
+        }
+        chosen.length = 0;
+        save(); paint();
+      };
 
       const tile = (it) => {
         const src = resolveImageSrc(it.ref);
@@ -10783,31 +10988,21 @@
           : el('div', { class: 'lib-gone', title: 'The file for this picture is not there any more' }, iconEl('image'));
         const hit = el('button', {
           class: 'lib-shot' + (at >= 0 ? ' on' : ''),
-          title: pickOne ? 'Put this on the board' : pickMany ? 'Add this to the set' : 'Rename',
+          title: pickOne ? 'Put this on the board' : pickMany ? 'Add this to the set' : 'Select',
           onclick: () => {
             if (pickOne) { finish(); pickOne(it.ref); return; }
-            if (pickMany) {
-              if (at >= 0) chosen.splice(at, 1); else chosen.push(it.ref);
-              paint();
-              return;
-            }
-            rename(it);
+            if (at >= 0) chosen.splice(at, 1); else chosen.push(it.ref);
+            paint();
           },
-        }, shot, at >= 0 ? el('span', { class: 'lib-tick' }, String(at + 1)) : null);
-        const sel = selectInput(
-          [['', 'Unfiled']].concat(lib.folders.map((f) => [f.id, f.name])),
-          it.folder || '',
-          (v) => { it.folder = v; save(); paint(); },
-        );
-        sel.classList.add('lib-folder');
-        sel.title = 'Which folder this picture is in';
+        }, shot, at >= 0
+          // Order matters when building a carousel and means nothing when
+          // filing, so the badge is a number there and a tick here.
+          ? el('span', { class: 'lib-tick' }, pickMany ? String(at + 1) : iconEl('tick'))
+          : null);
         return el('div', { class: 'lib-tile' },
           hit,
-          el('div', { class: 'lib-name', title: it.name || 'Untitled' }, it.name || 'Untitled'),
-          el('div', { class: 'row lib-acts' }, sel, el('button', {
-            class: 'icon-btn lib-drop', title: 'Take out of the library',
-            'aria-label': 'Take this picture out of the library', onclick: () => drop(it),
-          }, iconEl('trash'))),
+          el('button', { class: 'lib-name', title: 'Rename this picture', onclick: () => rename(it) },
+            it.name || 'Untitled'),
         );
       };
 
@@ -10848,7 +11043,23 @@
           ? 'Tap pictures to build a set — the widget steps through them in the order you tap.'
           : pickOne
             ? 'Tap a picture to put it on the board.'
-            : 'Your pictures stay on this device. Taking one out of the library never changes a board that is using it.';
+            : 'Tap pictures to select them, then file or remove them together. Your pictures stay on this device, and taking one out of the library never changes a board that is using it.';
+
+        bulk.textContent = '';
+        if (!pickOne && !pickMany && chosen.length) {
+          const moveTo = selectInput(
+            [['', 'File into…'], ['__none', 'Unfiled']].concat(lib.folders.map((f) => [f.id, f.name])),
+            '',
+            (v) => { if (v) moveChosen(v === '__none' ? '' : v); },
+          );
+          moveTo.setAttribute('aria-label', 'File the selected pictures into a folder');
+          bulk.append(
+            el('strong', {}, chosen.length + (chosen.length === 1 ? ' picture selected' : ' pictures selected')),
+            moveTo,
+            el('button', { class: 'btn ghost small', onclick: () => dropChosen() }, 'Remove'),
+            el('button', { class: 'btn ghost small', onclick: () => { chosen.length = 0; paint(); } }, 'Clear'),
+          );
+        }
 
         grid.textContent = '';
         const items = lib.items
@@ -10888,7 +11099,7 @@
         );
       };
       paint();
-    });
+    }, () => refreshFolderWidgets());
   }
 
   // ---------------------------------------------------------------- widget themes
@@ -13758,6 +13969,16 @@
   const refreshListWidgets = () => {
     save();
     for (const w of screen().widgets) if (w.type === 'picker' || w.type === 'groups') remountWidget(w);
+  };
+  // The same bargain for pictures: a widget that FOLLOWS a folder is reading a
+  // list it does not own, so when that list changes under it, it has to be told.
+  // Filing three pictures out of a folder and finding the board still counting
+  // five of them is the kind of quiet disagreement that costs an evening.
+  const refreshFolderWidgets = () => {
+    save();
+    for (const w of screen().widgets) {
+      if (w.type === 'image' && w.props && w.props.folder) remountWidget(w);
+    }
   };
   const TOOLS = [
     { id: 'background', glyph: 'background', accent: '#fbcfe8', label: 'Background', run: () => toggleBackgroundPanel() },
