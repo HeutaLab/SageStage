@@ -1,6 +1,6 @@
 # Sage Stage — the media library: a teacher's own pictures, in their own folders
 
-**Status:** Design. Not scheduled, no implementation started. §9 (formats at the door) is the one part already built and shipped — see commit `cb73ae8`.
+**Status:** Partly built. §9 (formats at the door) shipped first — see commit `cb73ae8`. §4 (the content-addressed `assets/` store) and §4.3 (`resolveImageSrc` behind the sanitiser) shipped with the Tauri file backend. **2026-10-22:** §§1–2's reuse-and-folders half shipped as the **My pictures** gallery over that store, wired into the Image widget — see the iteration log. Still design only: §2.3's *linking* half (pointing the app at folders on the device), §3's OneDrive caveats, and §8's pupil-photo fork, which is what that half is waiting on.
 **Companion documents:** [Storage abstraction & Tauri desktop](storage-abstraction-plan.md) (§8 reserves the `assets/` convention this builds on) · [Help system](help-system-design.md) · [App review checklist](app-review-checklist.md) · [Licensing](licensing-design.md)
 **Date:** 2026-08-26
 **Prompted by:** the first outside feedback on the built app — a teacher who has used SMART for years, asking the one question the app has no answer to.

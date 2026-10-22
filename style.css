@@ -1214,6 +1214,135 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
 }
 .media-fill video.mirror { transform: scaleX(-1); }
 
+/* ---- the image widget: its set, and its countdown ----------------------- */
+/* The strip is deliberately quiet. On a board the picture is the lesson and the
+   clock is furniture, so it appears only when there is a set to move through or
+   a duration to run — a single picture with no timer keeps the widget exactly
+   as it was. */
+.img-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+.img-count {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  min-width: 3.2em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.img-time {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 3.4em;
+  text-align: center;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.img-time.finished { color: var(--danger); animation: pulse 0.8s infinite; }
+.img-bar { margin-top: 6px; flex-shrink: 0; }
+/* The cover sits OVER the picture rather than instead of it, so the widget keeps
+   its size and its place on the board — which is the thing children navigate
+   the screen by. */
+.img-veil {
+  position: absolute;
+  inset: 0;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.img-veil-mark { font-size: 54px; line-height: 1; }
+.img-veil-say { font-size: 15px; font-weight: 600; color: var(--ink-soft); }
+
+/* ---- the picture library ------------------------------------------------ */
+.modal.lib-modal { width: min(880px, calc(100vw - 40px)); }
+.lib-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lib-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+}
+.lib-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lib-shot {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 2px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  cursor: pointer;
+}
+.lib-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lib-shot.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* The tap order is the carousel order, so the badge carries the number rather
+   than a tick — a teacher building a set needs to see what comes third. */
+.lib-tick {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.lib-gone {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  color: var(--ink-soft);
+}
+.lib-name {
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-acts { gap: 4px; align-items: center; }
+.lib-folder { font-size: 11px; padding: 3px 4px; flex: 1; min-width: 0; }
+.lib-empty {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  text-align: center;
+  padding: 24px 10px;
+  color: var(--ink-soft);
+}
+.lib-foot { flex-wrap: wrap; gap: 8px; align-items: center; }
+/* `.active` on a plain .btn had no rule of its own — only the teaching clock's
+   scoped copy — and the chip rows here are the first general use of it. The
+   ring and the weight do the work: `.btn.ghost` is ALREADY --accent-soft, so a
+   background alone marked the chosen chip with nothing at all, and a state that
+   rests on a colour difference is the one a colour-blind teacher cannot read. */
+.btn.active {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent-deep);
+  font-weight: 700;
+}
+
 /* document previews */
 .document-scroll {
   position: absolute;
@@ -6911,7 +7040,8 @@ circle.pt-sg.pt-pulse { fill: #0f766e; }
   /* The one infinite animation the sweep above missed. The finished timer flashes
      its whole readout to 35% opacity forever; the same rule already turns the
      text danger-red, so standing still it still plainly reads "time is up". */
-  .time-display.finished { animation: none; }
+  .time-display.finished,
+  .img-time.finished { animation: none; }
 }
 
 /* ====================================================================== a11y

@@ -39,6 +39,11 @@ Two timers, one audio primitive:
   pulses the digits red (`style.css:762`). Repeat prop re-rings at intervals.
 - **Visual timer** (`app.js:6738`) — canvas depleting disc, same presets, same
   `beep(4)`, own `color` prop. **It is already a de facto face of the same clock.**
+- **Image widget countdown** (shipped 2026-10-22) — a third clock, and deliberately
+  not a fourth face of these two: it belongs to a picture, chimes/covers/reveals/
+  advances at zero, and reuses the `endAt` + 250 ms paint idiom below. When the sound
+  work in §5 lands it should inherit `endSound` with the rest; it has a plain `sound`
+  boolean today.
 - **`beep(times)`** (`app.js:154`) — pure Web Audio, 880 Hz sine, no files, whole body
   try/catch-wrapped. There are no audio assets anywhere in the app, and no global
   mute; per-widget `sound` checkboxes are the only control.

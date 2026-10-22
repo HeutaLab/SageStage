@@ -7913,3 +7913,96 @@ the deck (six → seven) with an image widget in the right proportions.
 Also noted for later, from the same description: the saved screen should be able to carry
 the learning intention and success criteria beside the picture. Recorded in the design as
 an open item; it wants its own thinking rather than being bolted on.
+
+## 22 October 2026 — the picture that waits, and the pictures that were already there
+
+Glenn: *"I want the image widget to have a timer and linked to an image library."*
+Two asks that turn out to be one feature, because the thing a timer on a picture is
+*for* is usually a second picture.
+
+**The timer.** The Image widget gains a duration and a choice of what happens when it
+runs out: chime and stop, **cover** the picture, **reveal** it, or **move on** to the
+next one. That last option is what makes a set of pictures a slideshow, and it is why
+the two halves of the ask belong together. Defaults reproduce today exactly —
+`secs: 0` is no timer, and an image widget placed this morning is unchanged down to
+the pixel until a duration is set in the gear. The strip under the picture only
+appears when there is something on it to use.
+
+The cover sits **over** the picture rather than replacing it, so the widget keeps its
+size and its place on the board — the thing children navigate the screen by. It is
+always tappable: a countdown that hides a picture and leaves no way back is a trap,
+and it is the teacher standing in front of the class who decides when it is time to
+look. Choosing "reveal" arms it there and then, and pressing Start on a reveal hides
+the picture without needing a second tap, because pressing Start *is* the teacher
+saying "look away now".
+
+**The library.** `media-library-design.md` asks for three things — reuse, folders,
+their own material — and this is the first two, built over a store that was already
+there. §4's content-addressed `assets/` directory has been quietly collecting every
+picture anyone placed since it shipped, with no way to see inside it. **My pictures**
+is that window: a gallery with teacher-named folders, rename, re-file and remove, and
+one button that gathers up everything already on a board so the library is *full* the
+first time it is opened rather than empty with an invitation.
+
+Nothing in it copies a picture. An item is a name and a folder hung on a ref that
+exists already, so the same photograph on four boards stays one file, one entry and
+four references. Taking an entry out of the library deletes nothing and changes no
+board, and it says so, because "remove" next to a photograph of a child is a word a
+teacher is right to be careful with.
+
+The sweep walks state rather than reading `assets/` off the disk, and that is a
+decision rather than a shortcut: a file whose last reference was deleted is a picture
+the teacher took off the board, and a gallery that quietly offers it back is the
+erase-and-resurrect bug wearing a friendlier hat. It indexes `assets/` refs only — in
+a browser there is no store, so a picture on a board is a whole data URL and gathering
+those would buy a second copy of every bitmap inside a five-megabyte budget. Pictures
+added *through* the library are the teacher's own choice and are filed whatever the
+backend, with `shedBallast()` giving those inline entries up first if localStorage
+ever runs out.
+
+**`src` stays the picture on show.** That is the load-bearing decision of the whole
+change. `srcs` is the set and `i` is the position, but `src` is always whichever one
+is on the board — because it is the prop the deck minimap, the template importer's URL
+sink and the export walker that swaps refs back for bytes all already read. Every one
+of them keeps working untouched, and a deck saved before today has no `srcs` and reads
+as a set of one, so there is nothing to migrate.
+
+The third ask in the design — pointing the app at a folder on the device — stays its
+own slice. It wants a runtime fs scope, an answer for the OneDrive placeholder that is
+not there when the train has no signal, and §8's pupil-photo decision.
+
+### Three things the screenshots caught
+
+**A literal `null` printed in the settings panel.** `el()` skips a null child;
+`Element.append()` turns it into the *string* "null" and prints it. The rows are now
+collected into an array and filtered before they are appended.
+
+**The chosen folder chip was invisible.** `.btn.active` had no rule of its own outside
+the teaching clock, so it was written as a background — and `.btn.ghost` is *already*
+`--accent-soft`, which made the selected chip identical to every other chip. It is now
+a ring and a weight, which is also the state a colour-blind teacher can actually read.
+
+**A clock that had never run wore the finished red.** A duration with no history
+showed `00:00` in danger red, as though the lesson were already over. A widget now
+opens showing its whole time; only a clock that genuinely reached zero goes red.
+
+And one that the behaviour caught: `SageStorage.putAsset` exists on **both** backends —
+the browser one is a stub that returns null — so testing for the method told the
+library nothing. Both backends now answer `filesAssets`, and the browser build says
+plainly that a picture there lives inside the deck rather than as a file.
+
+### Verified
+
+In the browser build, against planted state: the set steps ONE → TWO → THREE → FOUR on
+a five-second timer with the counter and the picture in step; the cover hides and the
+tap reveals; reveal arms on choosing, hides on Start and uncovers at zero with the
+digits going red; the library lists four pictures, filters to a folder, pre-selects the
+widget's set with tap-order badges and writes a two-picture set back; the sweep finds
+two planted `assets/` refs (one on a widget, one the mascot) and renders both as the
+missing-file tile, since a browser has no store to resolve them against. No console
+errors at any point.
+
+**Not verified:** the desktop build. Every `assets/` path above was exercised with
+hand-planted references in a browser that cannot resolve them, so the library's
+thumbnails, `convertFileSrc` and a real sweep over a real `Documents/Sage Stage/assets`
+have not been seen working. That is the next session's first job.

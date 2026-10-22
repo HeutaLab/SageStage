@@ -65,6 +65,12 @@
     return {
       kind: 'local',
 
+      // Whether a picture handed to this backend becomes a FILE. Both backends
+      // answer putAsset(), so its mere presence says nothing — the local one is
+      // a stub that returns null. Callers that need to tell a teacher where
+      // their pictures live ask this instead of sniffing for a method.
+      filesAssets: false,
+
       // A browser has nowhere to put a file, so it says so rather than
       // pretending. pickImage() reads the null and keeps the data-URL it
       // already had, which is exactly today's behaviour — the browser build is
@@ -417,6 +423,7 @@
 
     return {
       kind: 'file',
+      filesAssets: true,
 
       async init() {
         try {

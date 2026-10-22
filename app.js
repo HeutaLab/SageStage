@@ -426,6 +426,41 @@
     if (!data.moneyImages || typeof data.moneyImages !== 'object') data.moneyImages = {};
     if (!data.defaults || typeof data.defaults !== 'object') data.defaults = {};
     if (!data.lists || typeof data.lists !== 'object') data.lists = {};
+    // The picture library: an INDEX over pictures the app already holds, never a
+    // second copy of them. An item names a picture and adds the two things a
+    // content-addressed filename cannot carry — what the teacher calls it, and
+    // which of their folders it belongs in. media-library-design.md §2.3 keeps
+    // the other half of that design, linking to folders on the device, for its
+    // own slice.
+    //
+    // Under the file backend a ref is a 76-character assets/ name and an item
+    // costs nothing. In a browser there is no store, so a ref is the whole data
+    // URL and an item costs as much as the picture — which is why shedBallast()
+    // gives those up before anything else when localStorage runs out.
+    if (!data.library || typeof data.library !== 'object' || Array.isArray(data.library)) data.library = {};
+    const lib = data.library;
+    lib.folders = (Array.isArray(lib.folders) ? lib.folders : [])
+      .filter((f) => f && typeof f === 'object' && typeof f.name === 'string')
+      .map((f) => ({ id: typeof f.id === 'string' && f.id ? f.id : uid(), name: f.name.slice(0, 40) }))
+      .slice(0, 60);
+    const libFolders = new Set(lib.folders.map((f) => f.id));
+    const libSeen = new Set();
+    lib.items = (Array.isArray(lib.items) ? lib.items : [])
+      .filter((it) => it && typeof it === 'object' && typeof it.ref === 'string')
+      // The same gate every stored image string in this app passes. A library
+      // that arrived in a hand-edited or imported file gets no exemption.
+      .filter((it) => !!SageSanitize.imageUrl(it.ref))
+      // One entry per picture. Content addressing means the same photograph
+      // imported twice is the same ref, so this is the whole of the de-duping.
+      .filter((it) => { if (libSeen.has(it.ref.trim())) return false; libSeen.add(it.ref.trim()); return true; })
+      .map((it) => ({
+        id: typeof it.id === 'string' && it.id ? it.id : uid(),
+        ref: it.ref.trim(),
+        name: typeof it.name === 'string' ? it.name.slice(0, 60) : '',
+        folder: libFolders.has(it.folder) ? it.folder : '',
+        addedAt: Number.isFinite(it.addedAt) ? it.addedAt : Date.now(),
+      }));
+    if (typeof lib.swept !== 'number') lib.swept = 0;
     if (!data.dashBg || typeof data.dashBg !== 'object' || !data.dashBg.value) {
       data.dashBg = { type: 'gradient', value: DASH_BG_DEFAULT };
     }
@@ -599,6 +634,20 @@
   // opinion about that. The backend retries after each concession and gives up
   // when this returns null.
   function shedBallast() {
+    // The picture library index goes first. Under the file backend its entries
+    // are 76-character names and dropping one saves nothing, so this only ever
+    // bites in a browser, where an entry carries the whole data URL. It is also
+    // the cheapest thing in the file to lose: "Find pictures on my boards"
+    // rebuilds it in one tap, and nothing on a screen depends on it.
+    const lib = state.library;
+    if (lib && Array.isArray(lib.items) && lib.items.length) {
+      const inline = lib.items.filter((it) => !SageSanitize.isAssetRef(it.ref));
+      if (inline.length) {
+        const oldest = inline.reduce((a, b) => (a.addedAt <= b.addedAt ? a : b));
+        lib.items = lib.items.filter((it) => it !== oldest);
+        return { json: JSON.stringify(state), notice: null };
+      }
+    }
     if (Array.isArray(state.bin) && state.bin.length) {
       state.bin.pop();
       return { json: JSON.stringify(state), notice: null };
@@ -7125,34 +7174,291 @@
   };
 
   // ---- Image ----
+  // One picture, or a set of them, with an optional countdown underneath.
+  //
+  // `src` stays the picture ON SHOW, and that is deliberate rather than lazy:
+  // it is the prop the rest of the app already reads — the deck minimap, the
+  // template importer's URL sink, the export walker that swaps asset refs back
+  // for bytes. `srcs` is the set it came from and `i` is where in that set we
+  // are, so moving through the set is a write to `src` and every one of those
+  // readers keeps working untouched. A deck saved before any of this has no
+  // `srcs` at all and reads as a set of one, so there is nothing to migrate.
+  //
+  // `secs: 0` is no timer, and it is the default. An image widget placed today
+  // looks and behaves exactly as it did yesterday until a duration is set in the
+  // gear — the same promise timer-design.md §3 makes for the two clocks.
+  const IMG_ZERO = [
+    ['chime', 'Chime, and stop'],
+    ['cover', 'Cover the picture'],
+    ['reveal', 'Reveal the picture'],
+    ['next', 'Move to the next picture'],
+  ];
+
+  // The set, derived rather than stored twice: whatever `srcs` holds that the
+  // image gate accepts, else the single `src` of an older deck, else nothing.
+  function imgSet(p) {
+    const list = (Array.isArray(p.srcs) ? p.srcs : [])
+      .filter((s) => typeof s === 'string' && !!SageSanitize.imageUrl(s));
+    if (list.length) return list;
+    return (typeof p.src === 'string' && SageSanitize.imageUrl(p.src)) ? [p.src] : [];
+  }
+
+  // The one place the set is written, so `src`, `srcs` and `i` can never
+  // disagree about which picture is on the board.
+  function imgSetPictures(p, refs) {
+    const list = [];
+    for (const r of refs) {
+      if (typeof r !== 'string' || !SageSanitize.imageUrl(r)) continue;
+      if (list.indexOf(r) < 0) list.push(r);   // the same picture twice in one carousel is never meant
+    }
+    p.srcs = list;
+    p.i = 0;
+    p.src = list.length ? list[0] : null;
+    save();
+  }
+
   WIDGETS.image = {
     title: 'Image', icon: 'image', accent: '#d9f99d', w: 320, h: 240,
-    defaults: () => ({ src: null, fit: 'contain' }),
+    defaults: () => ({
+      src: null, srcs: [], i: 0, fit: 'contain',
+      secs: 0, remaining: 0, running: false, endAt: null,
+      zero: 'chime', sound: true, covered: false,
+    }),
     mount(body, w, api) {
+      const p = w.props;
+      const set = imgSet(p);
+      const idx = set.length ? clamp(Math.floor(finite(p.i, 0)), 0, set.length - 1) : 0;
+      p.i = idx;
+      if (set.length) p.src = set[idx];
+      const secs = clamp(Math.floor(finite(p.secs, 0)), 0, 35999);
+      const zero = IMG_ZERO.some(([v]) => v === p.zero) ? p.zero : 'chime';
+
       const wrap = el('div', { class: 'media-fill' });
       body.append(wrap);
-      // the picker only ever writes a data: bitmap, but a template or an older
-      // saved deck can hold anything under this prop
-      const src = resolveImageSrc(w.props.src);
+
+      // the pickers only ever write a data: bitmap or an assets/ reference, but
+      // a template or an older saved deck can hold anything under these props
+      const src = resolveImageSrc(set[idx]);
       if (src) {
         const img = el('img', { src, alt: '' });
-        img.classList.toggle('cover', w.props.fit === 'cover');
+        img.classList.toggle('cover', p.fit === 'cover');
         wrap.append(img);
+        // The cover is always tappable. A countdown that hid the picture and
+        // left no way back would be a trap, and it is the teacher standing in
+        // front of the class who decides when it is time to look.
+        if (p.covered) {
+          wrap.append(el('button', {
+            class: 'img-veil', title: 'Show the picture', 'aria-label': 'Show the picture',
+            onclick: () => { p.covered = false; save(); api.refresh(); },
+          },
+            el('span', { class: 'img-veil-mark' }, iconEl('shade')),
+            el('span', { class: 'img-veil-say' }, 'Tap to show'),
+          ));
+        }
       } else {
-        const pick = el('button', { class: 'btn' }, 'Choose image…');
-        pick.addEventListener('click', () => pickImage((dataUrl) => { w.props.src = dataUrl; api.refresh(); }));
         wrap.append(el('div', { style: 'text-align:center;display:grid;gap:8px;justify-items:center;--acc:#d9f99d;' },
-          el('div', { style: 'font-size:38px;color:var(--ink-soft);' }, iconEl('image')), pick,
+          el('div', { style: 'font-size:38px;color:var(--ink-soft);' }, iconEl('image')),
+          el('button', {
+            class: 'btn',
+            onclick: () => openLibrary({ onPick: (ref) => { imgSetPictures(p, [ref]); api.refresh(); } }),
+          }, 'Choose from library…'),
+          el('button', {
+            class: 'btn ghost',
+            onclick: () => pickImageToLibrary((ref) => { imgSetPictures(p, [ref]); api.refresh(); }),
+          }, 'From this device…'),
           el('div', { class: 'hint' }, 'Stored locally on this device'),
         ));
       }
+
+      // The strip earns its space only when there is something on it to use: a
+      // set to move through, or a clock to run. One picture and no timer is
+      // yesterday's widget, down to the pixel.
+      if (!set.length || (secs <= 0 && set.length < 2)) return;
+
+      const strip = el('div', { class: 'img-strip' });
+      body.append(strip);
+
+      const go = (d) => {
+        p.i = (idx + d + set.length) % set.length;
+        p.src = set[p.i];
+        // A new picture gets the whole duration, not what was left of the last
+        // one's: thirty seconds each is the only honest reading of "thirty
+        // seconds".
+        if (secs > 0) {
+          p.remaining = secs;
+          if (p.running) p.endAt = Date.now() + secs * 1000;
+        }
+        save(); api.refresh();
+      };
+      if (set.length > 1) {
+        strip.append(
+          el('button', { class: 'btn ghost small', title: 'Previous picture', 'aria-label': 'Previous picture', onclick: () => go(-1) }, iconEl('chevl')),
+          el('span', { class: 'img-count' }, (idx + 1) + ' / ' + set.length),
+          el('button', { class: 'btn ghost small', title: 'Next picture', 'aria-label': 'Next picture', onclick: () => go(1) }, iconEl('chevr')),
+        );
+      }
+
+      if (secs <= 0) return;
+
+      // A duration that has never been run shows its whole time. Only a clock
+      // that actually reached zero gets to wear the finished red, so a deck
+      // that arrives with a duration and no history does not open looking as
+      // though the lesson is already over.
+      if (!Number.isFinite(p.remaining) || p.remaining < 0 || p.remaining > secs
+        || (p.remaining === 0 && !p.endAt)) p.remaining = secs;
+
+      const bar = el('div', { class: 'timer-bar img-bar' }, el('div'));
+      body.append(bar);
+      const fmt = (s) => {
+        s = Math.max(0, Math.ceil(s));
+        return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+      };
+      const digits = el('div', { class: 'img-time' });
+      const startBtn = el('button', { class: 'btn small', onclick: () => toggle() });
+      strip.append(digits, startBtn,
+        el('button', { class: 'btn ghost small', onclick: () => reset() }, 'Reset'),
+        el('button', {
+          class: 'btn ghost small' + (p.covered ? ' active' : ''),
+          title: p.covered ? 'Show the picture' : 'Cover the picture',
+          'aria-label': p.covered ? 'Show the picture' : 'Cover the picture',
+          onclick: () => { p.covered = !p.covered; save(); api.refresh(); },
+        }, iconEl('shade')),
+      );
+
+      let fired = false;
+      const atZero = () => {
+        // One chime for a picture change, the Timer's full four for a finish.
+        // A slideshow would otherwise ring like an alarm every thirty seconds.
+        if (p.sound !== false) beep(zero === 'next' ? 1 : 4, w.id);
+        if (zero === 'next' && set.length > 1) {
+          p.i = (idx + 1) % set.length;
+          p.src = set[p.i];
+          p.remaining = secs;
+          p.endAt = Date.now() + secs * 1000;   // roll straight on, as the Timer's repeat does
+          save(); api.refresh();
+          return;
+        }
+        fired = true;
+        p.running = false;
+        p.remaining = 0;
+        if (zero === 'cover') p.covered = true;
+        else if (zero === 'reveal') p.covered = false;
+        save();
+        if (zero === 'cover' || zero === 'reveal') api.refresh();
+        else paint();
+      };
+
+      const paint = () => {
+        let rem = p.remaining;
+        if (p.running && p.endAt) rem = (p.endAt - Date.now()) / 1000;
+        rem = Math.max(0, rem);
+        digits.textContent = fmt(rem);
+        digits.classList.toggle('finished', rem <= 0 && !p.running);
+        bar.firstChild.style.width = (rem / secs) * 100 + '%';
+        startBtn.textContent = p.running ? 'Pause' : 'Start';
+        if (p.running && rem <= 0 && !fired) atZero();
+      };
+
+      const toggle = () => {
+        if (p.running) {
+          p.remaining = Math.max(0, (p.endAt - Date.now()) / 1000);
+          p.running = false;
+          save(); paint();
+          return;
+        }
+        if (p.remaining <= 0) p.remaining = secs;
+        // Pressing Start on a reveal is the teacher saying "look away now". It
+        // should not take a second tap to hide the picture first.
+        const hide = zero === 'reveal' && !p.covered;
+        if (hide) p.covered = true;
+        p.endAt = Date.now() + p.remaining * 1000;
+        p.running = true;
+        fired = false;
+        save();
+        if (hide) api.refresh(); else paint();
+      };
+
+      const reset = () => {
+        p.running = false;
+        p.remaining = secs;
+        // Resetting a reveal arms it: the picture goes back under the cover,
+        // which is the whole of that game.
+        p.covered = zero === 'reveal';
+        fired = false;
+        save(); api.refresh();
+      };
+
+      paint();
+      const iv = setInterval(paint, 250);
+      return () => clearInterval(iv);
     },
     settings(box, w, api) {
-      box.append(
-        el('button', { class: 'btn ghost small', onclick: () => pickImage((d) => { w.props.src = d; api.refresh(); }) }, 'Replace image…'),
-        settingRow('Fit', selectInput([['contain', 'Fit inside'], ['cover', 'Fill frame']], w.props.fit, (v) => { w.props.fit = v; api.refresh(); })),
-        el('button', { class: 'btn danger small', onclick: () => { w.props.src = null; api.refresh(); } }, 'Remove image'),
-      );
+      const p = w.props;
+      const set = imgSet(p);
+      const secs = clamp(Math.floor(finite(p.secs, 0)), 0, 35999);
+      const mins = el('input', {
+        class: 'text-input', type: 'number', min: 0, max: 599, value: Math.floor(secs / 60), style: 'width:70px',
+      });
+      const ss = el('input', {
+        class: 'text-input', type: 'number', min: 0, max: 59, value: secs % 60, style: 'width:70px',
+      });
+      const setDuration = (total) => {
+        p.secs = clamp(Math.floor(total), 0, 35999);
+        p.remaining = p.secs;
+        p.running = false;
+        api.refresh();
+      };
+      const apply = () => setDuration((+mins.value || 0) * 60 + (+ss.value || 0));
+      mins.addEventListener('change', apply);
+      ss.addEventListener('change', apply);
+      // Collected and filtered rather than appended straight: box.append() turns
+      // a null into the STRING "null" and prints it in the panel, where el()
+      // would have skipped it. Several of these rows only exist once there is a
+      // duration to talk about.
+      const rows = [
+        el('div', { class: 'row', style: 'flex-wrap:wrap;' },
+          el('button', {
+            class: 'btn ghost small',
+            onclick: () => openLibrary({
+              title: 'Pictures for this widget', multi: true, selected: set,
+              onPickMany: (refs) => { imgSetPictures(p, refs); api.refresh(); },
+            }),
+          }, set.length > 1 ? 'Pictures… (' + set.length + ')' : 'Choose from library…'),
+          el('button', {
+            class: 'btn ghost small',
+            onclick: () => pickImageToLibrary((ref) => { imgSetPictures(p, set.concat([ref])); api.refresh(); }),
+          }, 'Add from this device…'),
+        ),
+        el('div', { class: 'hint' }, set.length > 1
+          ? set.length + ' pictures — ‹ › on the widget moves through them.'
+          : 'Pictures you add are filed in your library, so next week they are already there.'),
+        settingRow('Fit', selectInput([['contain', 'Fit inside'], ['cover', 'Fill frame']], p.fit, (v) => { p.fit = v; api.refresh(); })),
+        el('div', { class: 'row' }, el('span', { style: 'min-width:82px;' }, 'Timer'), mins, el('span', {}, 'min'), ss, el('span', {}, 'sec')),
+        el('div', { class: 'row', style: 'flex-wrap:wrap;' },
+          [['Off', 0], ['30s', 30], ['1m', 60], ['2m', 120], ['5m', 300]].map(([label, total]) => el('button', {
+            class: 'btn ghost small' + (secs === total ? ' active' : ''),
+            onclick: () => setDuration(total),
+          }, label)),
+        ),
+        secs > 0
+          ? settingRow('At zero', selectInput(IMG_ZERO, p.zero || 'chime', (v) => {
+            p.zero = v;
+            // Choosing "reveal" arms it there and then, so the teacher sees
+            // what they have just asked for rather than having to guess.
+            p.covered = v === 'reveal';
+            api.refresh();
+          }))
+          : null,
+        secs > 0 ? checkRow('Play sound when finished', p.sound !== false, (v) => { p.sound = v; save(); }) : null,
+        secs > 0 && p.zero === 'next' && set.length < 2
+          ? el('div', { class: 'hint' }, '⚠️ Add a second picture, or there is nothing to move on to.')
+          : null,
+        el('button', {
+          class: 'btn danger small',
+          onclick: () => { imgSetPictures(p, []); p.covered = false; api.refresh(); },
+        }, set.length > 1 ? 'Remove all pictures' : 'Remove image'),
+      ];
+      box.append(...rows.filter(Boolean));
     },
   };
 
@@ -10337,6 +10643,249 @@
     input.click();
   }
 
+  // ------------------------------------------------------------ picture library
+  // The teacher's own pictures, findable again. media-library-design.md asks for
+  // three things at once — reuse, folders, and their own material — and this is
+  // the first two of them, built over the store the app already has: §4's
+  // content-addressed assets/ directory, which has been quietly collecting every
+  // picture anyone placed since it shipped, with no way to see inside it.
+  //
+  // Nothing here copies a picture. An item is a name and a folder hung on a ref
+  // that exists already, which is why the same photograph on four boards stays
+  // one file, one library entry and four references to it.
+  //
+  // The third ask — pointing the app at a folder on the device — is §2.3's
+  // link-for-browsing half, and it stays its own slice: it wants a runtime fs
+  // scope, an answer for the OneDrive placeholder that is not there when the
+  // train has no signal, and §8's pupil-photo decision. None of that is here.
+
+  function library() {
+    if (!state.library || typeof state.library !== 'object' || Array.isArray(state.library)) state.library = {};
+    if (!Array.isArray(state.library.items)) state.library.items = [];
+    if (!Array.isArray(state.library.folders)) state.library.folders = [];
+    return state.library;
+  }
+
+  // File a picture, or hand back the entry that already covers it.
+  function libraryAdd(ref, name) {
+    if (typeof ref !== 'string' || !SageSanitize.imageUrl(ref)) return null;
+    const lib = library();
+    const found = lib.items.find((it) => it.ref === ref);
+    if (found) {
+      // Importing the same picture again must never overwrite the name the
+      // teacher gave it the first time.
+      if (!found.name && name) found.name = String(name).slice(0, 60);
+      return found;
+    }
+    const item = { id: uid(), ref, name: name ? String(name).slice(0, 60) : '', folder: '', addedAt: Date.now() };
+    lib.items.push(item);
+    return item;
+  }
+
+  // Every picture that arrives from the device is filed on its way to the board.
+  // That is the whole of "linked to the library": the teacher never has to
+  // remember to save anything, and next week the picture is simply there.
+  function pickImageToLibrary(cb, maxW) {
+    pickImage((ref) => { libraryAdd(ref, ''); save(); cb(ref); }, maxW);
+  }
+
+  // Everything already on a board, listed in one pass. This is what makes the
+  // library full the first time it is opened rather than empty with an
+  // invitation: those pictures are in the store already, they have simply never
+  // been named.
+  //
+  // It walks state rather than reading assets/ off the disk, and that is a
+  // decision rather than a shortcut. A file whose last reference was deleted is
+  // a picture the teacher took off the board, and a gallery that quietly offers
+  // it back is the erase-and-resurrect bug wearing a friendlier hat.
+  //
+  // assets/ refs only. In a browser there is no store, so a picture on a board
+  // is a whole data URL, and gathering those would buy a second copy of every
+  // bitmap inside a five-megabyte budget. Pictures added through the library
+  // itself are the teacher's own choice and are filed whatever the backend.
+  function librarySweep() {
+    const lib = library();
+    const before = lib.items.length;
+    const seen = new Set();
+    const take = (v) => {
+      if (typeof v !== 'string' || seen.has(v) || !SageSanitize.isAssetRef(v)) return;
+      seen.add(v);
+      libraryAdd(v, '');
+    };
+    const walk = (node, depth) => {
+      if (depth > 12) return;
+      if (Array.isArray(node)) { for (const v of node) walk(v, depth + 1); return; }
+      if (!node || typeof node !== 'object') return;
+      for (const k of Object.keys(node)) {
+        const v = node[k];
+        if (typeof v === 'string') take(v);
+        else walk(v, depth + 1);
+      }
+    };
+    walk(state.decks, 0);
+    walk(state.moneyImages, 0);
+    walk(state.dashBg, 0);
+    take(state.mascotImage);
+    lib.swept = Date.now();
+    save();
+    return lib.items.length - before;
+  }
+
+  // Three jobs in one surface, because a teacher who opens this mid-lesson
+  // should not have had to know which one they came for:
+  //   openLibrary()                                        manage
+  //   openLibrary({ onPick })                              choose one picture
+  //   openLibrary({ multi: true, onPickMany, selected })   choose a set, in order
+  function openLibrary(opts) {
+    const o = opts || {};
+    const pickOne = typeof o.onPick === 'function' ? o.onPick : null;
+    const pickMany = o.multi && typeof o.onPickMany === 'function' ? o.onPickMany : null;
+    const title = o.title || (pickOne || pickMany ? 'Choose a picture' : 'My pictures');
+    const chosen = pickMany && Array.isArray(o.selected) ? o.selected.slice() : [];
+    let folder = 'all';
+
+    openModal(title, (box, finish) => {
+      if (box.parentElement) box.parentElement.classList.add('lib-modal');
+      const lib = library();
+      const chips = el('div', { class: 'lib-chips' });
+      const note = el('div', { class: 'hint' });
+      const grid = el('div', { class: 'lib-grid' });
+      const foot = el('div', { class: 'row lib-foot' });
+      box.append(chips, note, grid, foot);
+
+      const folderName = (id) => (lib.folders.find((f) => f.id === id) || {}).name || '';
+      const count = (id) => lib.items.filter((it) => it.folder === id).length;
+
+      const rename = (it) => promptDialog('What is this picture called?', it.name, (v) => {
+        it.name = String(v || '').trim().slice(0, 60);
+        save(); paint();
+      }, { label: 'Save', placeholder: 'e.g. Year 4 class photo' });
+
+      // Removing an entry un-files the picture; it does not delete the file and
+      // it does not touch a board. Say so, because "remove" next to a
+      // photograph of a child is a word a teacher is right to be careful with.
+      const drop = (it) => confirmDialog(
+        'Take “' + (it.name || 'this picture') + '” out of your library? Any board already using it keeps it.',
+        () => { lib.items = lib.items.filter((x) => x !== it); save(); paint(); },
+        { label: 'Remove' },
+      );
+
+      const tile = (it) => {
+        const src = resolveImageSrc(it.ref);
+        const at = chosen.indexOf(it.ref);
+        const shot = src
+          ? el('img', { src, alt: '', loading: 'lazy', decoding: 'async' })
+          : el('div', { class: 'lib-gone', title: 'The file for this picture is not there any more' }, iconEl('image'));
+        const hit = el('button', {
+          class: 'lib-shot' + (at >= 0 ? ' on' : ''),
+          title: pickOne ? 'Put this on the board' : pickMany ? 'Add this to the set' : 'Rename',
+          onclick: () => {
+            if (pickOne) { finish(); pickOne(it.ref); return; }
+            if (pickMany) {
+              if (at >= 0) chosen.splice(at, 1); else chosen.push(it.ref);
+              paint();
+              return;
+            }
+            rename(it);
+          },
+        }, shot, at >= 0 ? el('span', { class: 'lib-tick' }, String(at + 1)) : null);
+        const sel = selectInput(
+          [['', 'Unfiled']].concat(lib.folders.map((f) => [f.id, f.name])),
+          it.folder || '',
+          (v) => { it.folder = v; save(); paint(); },
+        );
+        sel.classList.add('lib-folder');
+        sel.title = 'Which folder this picture is in';
+        return el('div', { class: 'lib-tile' },
+          hit,
+          el('div', { class: 'lib-name', title: it.name || 'Untitled' }, it.name || 'Untitled'),
+          el('div', { class: 'row lib-acts' }, sel, el('button', {
+            class: 'icon-btn lib-drop', title: 'Take out of the library',
+            'aria-label': 'Take this picture out of the library', onclick: () => drop(it),
+          }, iconEl('trash'))),
+        );
+      };
+
+      const sweep = () => {
+        const added = librarySweep();
+        paint();
+        const filed = !!(window.SageStorage && SageStorage.filesAssets);
+        toast(added > 0
+          ? '✅ Found ' + added + (added === 1 ? ' picture' : ' pictures') + ' already on your boards.'
+          : filed
+            ? 'Nothing new — every picture on your boards is already listed.'
+            : 'In this browser a picture lives inside the deck rather than as a file, so there is nothing to gather. The desktop app files them properly.',
+        { ms: 6500 });
+      };
+
+      const paint = () => {
+        chips.textContent = '';
+        const chip = (id, label) => el('button', {
+          class: 'btn ghost small' + (folder === id ? ' active' : ''),
+          onclick: () => { folder = id; paint(); },
+        }, label);
+        chips.append(chip('all', 'All (' + lib.items.length + ')'));
+        for (const f of lib.folders) chips.append(chip(f.id, f.name + ' (' + count(f.id) + ')'));
+        if (lib.items.some((it) => !it.folder)) chips.append(chip('', 'Unfiled (' + count('') + ')'));
+        chips.append(el('button', {
+          class: 'btn ghost small',
+          onclick: () => promptDialog('Name for the new folder', '', (v) => {
+            const name = String(v || '').trim().slice(0, 40);
+            if (!name) return;
+            const f = { id: uid(), name };
+            lib.folders.push(f);
+            folder = f.id;
+            save(); paint();
+          }, { label: 'Create', placeholder: 'e.g. Maths pictures' }),
+        }, iconEl('plus'), ' New folder'));
+
+        note.textContent = pickMany
+          ? 'Tap pictures to build a set — the widget steps through them in the order you tap.'
+          : pickOne
+            ? 'Tap a picture to put it on the board.'
+            : 'Your pictures stay on this device. Taking one out of the library never changes a board that is using it.';
+
+        grid.textContent = '';
+        const items = lib.items
+          .filter((it) => folder === 'all' || it.folder === folder)
+          .slice()
+          .sort((a, b) => b.addedAt - a.addedAt);
+        if (!items.length) {
+          grid.append(el('div', { class: 'lib-empty' },
+            el('div', { style: 'font-size:38px;color:var(--ink-soft);' }, iconEl('image')),
+            el('p', {}, lib.items.length
+              ? 'Nothing in ' + (folder === 'all' ? 'your library' : '“' + (folderName(folder) || 'Unfiled') + '”') + ' yet.'
+              : 'No pictures yet. Add one from this device, or gather up the pictures already on your boards.'),
+          ));
+        }
+        for (const it of items) grid.append(tile(it));
+
+        foot.textContent = '';
+        foot.append(
+          el('button', {
+            class: 'btn ghost small',
+            onclick: () => pickImageToLibrary((ref) => {
+              libraryAdd(ref, '');
+              if (pickMany && chosen.indexOf(ref) < 0) chosen.push(ref);
+              folder = 'all';
+              // Straight onto the board when the teacher came here to choose
+              // one: they asked for a picture, not for a filing session.
+              if (pickOne) { finish(); pickOne(ref); return; }
+              paint();
+            }),
+          }, iconEl('plus'), ' Add from this device…'),
+          el('button', { class: 'btn ghost small', onclick: sweep }, 'Find pictures on my boards'),
+          el('span', { class: 'grow' }),
+          pickMany
+            ? el('button', { class: 'btn', onclick: () => { finish(); pickMany(chosen.slice()); } },
+              chosen.length ? 'Use ' + chosen.length + (chosen.length === 1 ? ' picture' : ' pictures') : 'Use none')
+            : el('button', { class: 'btn', onclick: () => finish() }, 'Done'),
+        );
+      };
+      paint();
+    });
+  }
+
   // ---------------------------------------------------------------- widget themes
   // lets teachers color-code widgets per team/group; `clear` = transparent chrome,
   // `dark` = light ink (also fixes input styling on dark cards)
@@ -13237,6 +13786,10 @@
     // too: same register, two ways in. The menu sorts by label, so this position
     // only decides where it lands on the bar — set the register, then pick from it
     { id: 'lists', glyph: 'list', accent: '#bae6fd', label: 'Class lists', run: () => openListManager(refreshListWidgets) },
+    // and the picture library next to it, for the same reason: both are the
+    // teacher's own material, filed once and read by whatever needs it. Wears
+    // the Image widget's accent, so the two ways in look like one register.
+    { id: 'pictures', glyph: 'image', accent: '#d9f99d', label: 'My pictures', run: () => openLibrary() },
     widgetTool('picker', 'Name picker'),
     widgetTool('groups', 'Group maker'),
     widgetTool('dice', 'Dice'),
