@@ -8006,3 +8006,77 @@ errors at any point.
 hand-planted references in a browser that cannot resolve them, so the library's
 thumbnails, `convertFileSrc` and a real sweep over a real `Documents/Sage Stage/assets`
 have not been seen working. That is the next session's first job.
+
+## 22 October 2026 (later) — the half of the sentence nobody heard
+
+Glenn: *"I need the Windows and Mac apps to have a notification that says they've been
+updated or need to be updated."* Half of that already shipped, and the missing half was
+the half a teacher actually sees.
+
+**What was already there.** Since 14 September the board says one sentence when an update
+lands: *Sage Stage 0.4.1 is ready. It will start next time you open the app.* — or
+*…will install when you quit* on Windows, or *…this Mac needs an administrator* on a
+managed machine. A toast, eight seconds, no button, board only.
+
+**What was missing** is that this sentence is spoken by the version the teacher is
+*leaving*. They close the laptop at 3pm; on Monday the new version opens and says nothing
+at all. The update is invisible at exactly the moment it becomes real.
+
+Rust knew the whole time. `pre_upgrade_backup` writes a `last-version` marker and compares
+it against the running version to decide whether to copy the data file first — and that
+comparison *is* the question "were you just updated?". It was printing the answer to
+stderr and throwing it away. It now returns it.
+
+> **Sage Stage 0.4.1 — updated from 0.3.1. Your decks are untouched.**
+
+Asked, not emitted. `version_info` is a command the board calls at boot, because the
+answer exists before any window does and an emit would have to be timed against a webview
+that may not be listening yet — the `sage:update` event above has no such problem, since
+by the time an update lands the board has been up for twenty seconds. Only a *different*
+previous version counts: a fresh install has not been updated from anything, and the
+second launch of a version has nothing to report.
+
+The same command answers a question nobody could answer before: **which version am I
+running?** Help prints it at the foot. Twenty-two testers, and not one of them could look
+it up in the app.
+
+### The MSI machine that was never going to be told anything
+
+Chasing the other half of Glenn's sentence turned up something that was never decided, only
+inherited. There is no MSI key in `latest.json` on purpose (§4: a per-machine install wants
+an administrator at the moment the teacher quits). But the plugin resolves its platform key
+**before** it compares versions, so on an MSI install the check does not come back empty —
+it *fails*, `TargetsNotFound`. Six hours later it fails again. For the life of the machine.
+
+So a failed check now asks a second question with the NSIS key named outright. Nothing is
+downloaded and nothing is installed; `check()` reads the manifest and compares versions,
+which is all we want to know:
+
+> **Sage Stage 0.4.1 is available. This copy was installed for the whole computer, so it
+> updates through your IT team rather than on its own.**
+
+Because the second check compares versions properly, an up-to-date MSI machine stays
+quiet — which matters, because the first check fails there too. The sentence names the
+mechanism rather than the person: `bundle_type()` is also `None` for a bare binary run out
+of `target/`, and telling a developer "your IT team installed this" would be a flat untruth.
+
+### Two things fixed before they shipped rather than after
+
+A `Mutex` around state written once in `setup` and never mutated again — a lock whose only
+effect is to make the next reader hunt for the mutation. And a Help line that read the
+version a tick after boot, so opening Help fast enough would have had the desktop app
+describe itself as *running in this browser*. Which build it is can wait; which **kind** of
+build it is never has to.
+
+### Verified
+
+On the real 0.4.1 bundle, isolated `HOME`, marker seeded to `0.3.1`: stderr reported
+*first run of 0.4.1 here, after 0.3.1*, the pre-upgrade copy landed, and the board showed
+**Sage Stage 0.4.1 — updated from 0.3.1. Your decks are untouched.** Relaunched: stderr
+silent, marker `0.4.1`, no toast, dashboard clean. The browser build skips the whole path
+(no `SagePlatform`) and Help reads *running in this browser*, with no console errors.
+
+**Not verified:** the `needs-it` path at runtime. It is Windows-only, so it compiles
+nowhere on this machine — it was type-checked by temporarily widening its `cfg` to macOS,
+and CI compiles it for real. Seeing it *fire* needs an MSI install on Windows, which is
+§5's standing "Windows, at all" gap rather than a new one.

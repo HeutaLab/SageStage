@@ -776,6 +776,18 @@
         }).catch(() => { /* nothing to hear */ });
       },
 
+      // { version, updated_from } — the running version, and the one that ran
+      // here before it when this launch is the first after an update.
+      //
+      // A question rather than an event, unlike onUpdate above, and that is the
+      // whole difference between the two: the answer is already known before
+      // any window exists, so an emit would have to be timed against a webview
+      // that may not be listening yet. Asking has no such race.
+      async versionInfo() {
+        try { return await T.core.invoke('version_info'); }
+        catch (e) { return null; }      // a version is never worth a broken boot
+      },
+
       // The ✕ in a pop-out. close() rather than destroy() precisely SO the file
       // backend's onCloseRequested hook runs: a pop-out holding an unsaved edit
       // flushes it before the window goes.

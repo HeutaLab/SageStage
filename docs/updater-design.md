@@ -50,6 +50,29 @@ quit would otherwise never move:
    time you open the app.* / *…will install when you quit.* A toast, eight
    seconds, no button. Never a dialog.
 
+5. **On the launch where the new version actually runs, say so.** *Sage Stage
+   0.4.1 — updated from 0.4.0. Your decks are untouched.* Same toast, same
+   eight seconds, same board-only rule.
+
+   This is the half a teacher actually sees, and it was missing until
+   2026-10-22. Step 4's sentence is shown by the version they are *leaving* —
+   a teacher who closes the laptop at 3pm and opens it on Monday has long
+   forgotten it, and nothing on Monday said anything at all. Rust knew the
+   whole time: `pre_upgrade_backup` already compares a `last-version` marker
+   against the running version to decide whether to copy the data file, and
+   that comparison IS the question "were you just updated?". It now returns
+   the answer instead of only printing it to stderr.
+
+   Asked, not emitted: `version_info` is a command the board calls at boot.
+   The answer is known before any window exists, so an emit would have to be
+   timed against a webview that may not be listening yet. Only a *different*
+   previous version counts — a fresh install has not been updated from
+   anything, and the second launch of a version has nothing to report.
+
+   The same command answers the other question nobody could answer before:
+   **which version am I running?** Help prints it at the foot. A tester asked
+   "are you on 0.4.1?" previously had nowhere in the app to look.
+
 Decks are not involved at any point: they live in `Documents/Sage Stage`,
 outside the bundle.
 
@@ -78,9 +101,31 @@ Where the app folder is not the teacher's to write — an IT-installed Mac —
 the plugin would ask for an administrator password, a dialog in the middle of
 a lesson. `bundle_is_writable` asks `access(2)` first and, on "no", the update
 is not installed and the sentence is *…this Mac needs an administrator to
-install it.* An MSI-installed Windows app finds no entry in the manifest and
-does nothing (§4). Both keep the plain download link from licensing §9.3 as
-the way IT moves them.
+install it.* Both keep the plain download link from licensing §9.3 as the way
+IT moves them.
+
+**An MSI-installed Windows app used to be told nothing, ever** — and that was
+not a decision, it was a consequence nobody had looked at. There is no MSI key
+in the manifest (§4), and the plugin resolves its key *before* it compares
+versions, so the check does not come back empty: it **fails**, with
+`TargetsNotFound`. Six hours later it fails again. The teacher is never told a
+newer version exists, and an MSI machine sits on an old build for as long as it
+lives.
+
+So a failed check is now asked a second question, with the NSIS key named
+outright: not to install anything — nothing is downloaded — but to learn
+whether a newer version exists at all. If one does: *Sage Stage 0.4.1 is
+available. This copy was installed for the whole computer, so it updates
+through your IT team rather than on its own.* Because the second check compares
+versions properly, an up-to-date MSI machine stays silent, which matters: the
+first check fails there too.
+
+The sentence names the *mechanism*, not the person, and that is deliberate.
+`bundle_type()` reads a marker the bundler bakes into each installer, so it is
+`Msi` for an MSI install and `Nsis` for the .exe — but it is `None` for a bare
+binary run out of `target/`, which lands on the same path. Saying "your IT team
+installed this" would then be a flat untruth to a developer; saying it updates
+through them is true of every copy that reaches this branch.
 
 ### Developer hooks, inert unless set
 

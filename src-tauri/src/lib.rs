@@ -314,14 +314,19 @@ fn is_upgrade_copy(name: &str) -> bool {
         && name.ends_with(".json")
 }
 
-fn pre_upgrade_backup(app: &tauri::AppHandle) -> Result<(), String> {
+/// Returns the version that ran here before, when it was a different one —
+/// which is exactly the condition for telling the teacher they were updated.
+fn pre_upgrade_backup(app: &tauri::AppHandle) -> Result<Option<String>, String> {
     let version = app.package_info().version.to_string();
     let data_dir = app.path().app_data_dir().map_err(err)?;
     let marker = data_dir.join("last-version");
     let last = std::fs::read_to_string(&marker).ok().map(|s| s.trim().to_string());
     if last.as_deref() == Some(version.as_str()) {
-        return Ok(()); // this version has run here before
+        return Ok(None); // this version has run here before
     }
+    // A marker naming a DIFFERENT version is an update. No marker at all is a
+    // fresh install, which has not been updated from anything.
+    let updated_from = last.clone().filter(|l| !l.is_empty());
     let dir = app.path().document_dir().map_err(err)?.join("Sage Stage");
     let main = dir.join("sage-stage.json");
     if main.is_file() {
@@ -349,7 +354,7 @@ fn pre_upgrade_backup(app: &tauri::AppHandle) -> Result<(), String> {
     // at the next launch, not forgetting.
     std::fs::create_dir_all(&data_dir).map_err(err)?;
     std::fs::write(&marker, &version).map_err(err)?;
-    Ok(())
+    Ok(updated_from)
 }
 
 fn rotate_upgrade_copies(backups: &std::path::Path) {
@@ -388,7 +393,32 @@ struct UpdateNotice {
     /// `installed` — macOS, the next launch runs it. `ready` — Windows, it
     /// installs at quit. `needs-admin` — macOS, the app folder is not the
     /// teacher's to write, so an administrator installs it by hand.
+    /// `needs-it` — Windows, installed from the MSI, which the app never
+    /// replaces: nothing was downloaded and IT does the update.
     state: &'static str,
+}
+
+/// What the board is told at boot: the version it is running, and whether this
+/// launch is the first one after an update. Two facts, one question, because
+/// both are known before any window exists — an emit timed against a webview
+/// that may not be listening yet is a race this does not need.
+#[derive(Clone, serde::Serialize)]
+struct VersionInfo {
+    version: String,
+    /// The version that last ran on this machine, when it was a DIFFERENT one.
+    /// `None` on a fresh install — nothing was updated, and saying so would be
+    /// a lie — and `None` on every launch after the first of a version.
+    updated_from: Option<String>,
+}
+
+/// Written once during setup and read-only thereafter, so it carries no lock:
+/// a `Mutex` here would only make a future reader look for the mutation.
+struct Launch(VersionInfo);
+
+/// Asked once, by the board, at boot.
+#[tauri::command]
+fn version_info(launch: tauri::State<'_, Launch>) -> VersionInfo {
+    launch.0.clone()
 }
 
 /// The first caller of `finish_exit` does the exiting.
@@ -443,10 +473,11 @@ fn update_loop(app: tauri::AppHandle) {
     }
 }
 
-async fn check_for_update(
+/// One place both checks are configured from, so the second one cannot drift
+/// away from the first on endpoint, timeout or TLS.
+fn updater_builder(
     app: &tauri::AppHandle,
-    handled: &mut Option<String>,
-) -> tauri_plugin_updater::Result<()> {
+) -> tauri_plugin_updater::Result<tauri_plugin_updater::UpdaterBuilder> {
     let mut builder = app
         .updater_builder()
         .timeout(std::time::Duration::from_secs(30))
@@ -457,9 +488,52 @@ async fn check_for_update(
     if let Some(url) = std::env::var("SAGE_STAGE_UPDATE_URL").ok().and_then(|u| u.parse().ok()) {
         builder = builder.endpoints(vec![url])?;
     }
-    let update = match builder.build()?.check().await? {
-        Some(u) => u,
-        None => return Ok(()),
+    Ok(builder)
+}
+
+/// A machine the app cannot update itself, told once.
+///
+/// An MSI install has no key of its own in the manifest (§4: a per-machine
+/// install would want an administrator at the moment the teacher quits, so we
+/// deliberately publish no MSI entry). The lookup therefore FAILS rather than
+/// coming back empty — `TargetsNotFound` — and six hours later it fails again,
+/// silently, for as long as the machine lives. The teacher is never told a
+/// newer version exists at all.
+///
+/// So ask a second time with the NSIS key named outright. Nothing is
+/// downloaded and nothing is installed: `check()` reads the manifest and
+/// compares versions, which is the whole of what we want to know. The teacher
+/// gets one sentence pointing at the person who can actually do it.
+#[cfg(target_os = "windows")]
+async fn report_unupdatable(app: &tauri::AppHandle, handled: &mut Option<String>) {
+    let built = updater_builder(app).and_then(|b| b.target("windows-x86_64-nsis").build());
+    let Ok(updater) = built else { return };
+    let Ok(Some(update)) = updater.check().await else { return };
+    let version = update.version.clone();
+    if handled.as_deref() == Some(version.as_str()) {
+        return;
+    }
+    eprintln!("update: {version} exists, but this install is not one the app can replace");
+    *handled = Some(version.clone());
+    let _ = app.emit("sage:update", UpdateNotice { version, state: "needs-it" });
+}
+
+#[cfg(not(target_os = "windows"))]
+async fn report_unupdatable(_app: &tauri::AppHandle, _handled: &mut Option<String>) {}
+
+async fn check_for_update(
+    app: &tauri::AppHandle,
+    handled: &mut Option<String>,
+) -> tauri_plugin_updater::Result<()> {
+    let update = match updater_builder(app)?.build()?.check().await {
+        Ok(Some(u)) => u,
+        Ok(None) => return Ok(()),
+        // Not "no update" — no update THIS INSTALL CAN TAKE. Which of the two
+        // it is, only a second look can say.
+        Err(e) => {
+            report_unupdatable(app, handled).await;
+            return Err(e);
+        }
     };
     if handled.as_deref() == Some(update.version.as_str()) {
         // Already installed, or waiting for the quit. The running app still
@@ -813,13 +887,24 @@ pub fn run() {
             desktop_ink_mode,
             desktop_ink_cmd,
             desktop_ink_save,
-            desktop_ink_close
+            desktop_ink_close,
+            version_info
         ])
         .setup(|app| {
             // Before anything else, and before any window has read the file.
-            if let Err(e) = pre_upgrade_backup(app.handle()) {
-                eprintln!("upgrade: backup skipped: {e}");
-            }
+            // A failed copy loses the notice as well as the copy, which is the
+            // right way round: the backup is the reason this runs at all.
+            let updated_from = match pre_upgrade_backup(app.handle()) {
+                Ok(from) => from,
+                Err(e) => {
+                    eprintln!("upgrade: backup skipped: {e}");
+                    None
+                }
+            };
+            app.manage(Launch(VersionInfo {
+                version: app.package_info().version.to_string(),
+                updated_from,
+            }));
 
             app.manage(VideoBridge(start_video_bridge()));
 

@@ -108,6 +108,11 @@
     return s;
   }
 
+  // The running version, once Rust has been asked (desktop only; '' in a
+  // browser, where there is no build to name). Help prints it, because a tester
+  // asked "which version are you on?" has had no way at all to answer.
+  let appVersion = '';
+
   let toastTimer = null;
   // opts.action adds one button inside the toast — the undo path that asks the
   // teacher to notice nothing and find nothing. It lingers longer than a plain
@@ -14822,6 +14827,17 @@
             + 'time. 💾 → Danger zone erases everything on this device, including the snapshot '
             + 'history — it says so before it does it, and it means it.'),
       );
+      // Last, and small, because it is only ever wanted when someone asks for
+      // it — and when they do ask, it is usually because a tester is being
+      // asked which build they are on.
+      // The version arrives a tick after boot, so it can still be empty here if
+      // somebody opens Help the instant the board appears. Which build it is
+      // waits; which KIND of build it is never has to, and a desktop app that
+      // called itself a browser would be plainly wrong rather than merely late.
+      body.append(el('div', { class: 'hint', style: 'margin-top:14px;' },
+        window.SagePlatform
+          ? 'Sage Stage ' + (appVersion ? appVersion + ' — the' : '— the') + ' desktop app on this computer. It updates itself.'
+          : 'Sage Stage — running in this browser.'));
     });
   }
 
@@ -17014,7 +17030,27 @@
       if (u.state === 'installed') toast(v + ' is ready. It will start next time you open the app.', { ms: 8000 });
       else if (u.state === 'ready') toast(v + ' is ready. It will install when you quit.', { ms: 8000 });
       else if (u.state === 'needs-admin') toast(v + ' is available, but this Mac needs an administrator to install it.', { ms: 9000 });
+      else if (u.state === 'needs-it') toast(v + ' is available. This copy was installed for the whole computer, so it updates through your IT team rather than on its own.', { ms: 10000 });
     });
+  }
+
+  // And the other half of that sentence, which is the half a teacher actually
+  // sees. The toast above was shown by the version they were LEAVING — on the
+  // launch where the new one finally runs, nothing has ever said so. Rust knew
+  // all along: it writes a marker naming the version that last ran here, and
+  // compares at startup to decide whether to copy the data file first.
+  //
+  // Only when a DIFFERENT version ran here before. A fresh install has not been
+  // updated from anything, and the second launch of a version has nothing new
+  // to report.
+  if (!viewId && !soloBoot && !inkBoot && window.SagePlatform && SagePlatform.versionInfo) {
+    SagePlatform.versionInfo().then((info) => {
+      if (!info || !info.version) return;
+      appVersion = String(info.version);
+      if (!info.updated_from) return;
+      toast('Sage Stage ' + appVersion + ' — updated from ' + info.updated_from
+        + '. Your decks are untouched.', { ms: 8000 });
+    }).catch(() => { /* a version is never worth a broken boot */ });
   }
 })().catch((e) => {
   // Boot is async now, so a throw here is a promise rejection rather than a
