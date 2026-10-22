@@ -17252,6 +17252,7 @@
       else if (u.state === 'ready') toast(v + ' is ready. It will install when you quit.', { ms: 8000 });
       else if (u.state === 'needs-admin') toast(v + ' is available, but this Mac needs an administrator to install it.', { ms: 9000 });
       else if (u.state === 'needs-it') toast(v + ' is available. This copy was installed for the whole computer, so it updates through your IT team rather than on its own.', { ms: 10000 });
+      else if (u.state === 'failed') toast('⚠️ ' + v + ' downloaded, but could not be installed. Sage Stage will try again later.', { ms: 10000 });
     });
   }
 
@@ -17268,6 +17269,15 @@
     SagePlatform.versionInfo().then((info) => {
       if (!info || !info.version) return;
       appVersion = String(info.version);
+      // An update that was downloaded, promised at the quit, and then would not
+      // install. Nothing could be said at the time — the window was already
+      // going — so it is said here, once, by the launch that proves it did not
+      // happen. Said BEFORE the good news below, because it is the one of the
+      // two a teacher may have to act on.
+      if (info.failed_update) {
+        toast('⚠️ Sage Stage ' + info.failed_update + ' was downloaded but could not install when you quit. '
+          + 'It will try again. If it keeps happening, install it by hand.', { ms: 12000 });
+      }
       if (!info.updated_from) return;
       toast('Sage Stage ' + appVersion + ' — updated from ' + info.updated_from
         + '. Your decks are untouched.', { ms: 8000 });

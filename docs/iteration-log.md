@@ -8165,3 +8165,49 @@ correctly dropped its strip, having been left with a single picture and no count
 **Not verified:** an actual 6am rollover on a machine left running overnight. The
 thirty-second watcher is exercised only by the anchor arithmetic above; seeing it fire in
 place needs a board left on until morning, which is a tester's week rather than a session.
+
+## 22 October 2026 (night) — the update that failed quietly
+
+0.4.2 went out to 22 testers in the afternoon, and the `.exe` installs are the ones
+expected to move on their own. Which made the thing found while answering a question
+about them worth a release of its own: **both install failures were silent**, and the
+one platform that has never been proven is the one about to be relied on.
+
+Worse on macOS than it looked. `update.install(&bytes)?` let a failed *install* out
+through `check_for_update`, where `update_loop` logged it as a failed **check** and the
+board was told nothing at all. The install has its own outcome now — `failed` — and its
+own sentence.
+
+Windows fails at the one moment there is no window left to speak with: the app is
+closing. So it is written down — `update-failed` in the app data dir, beside
+`last-version` — and read back by the next launch, which is precisely the launch that
+proves it did not happen:
+
+> ⚠️ Sage Stage 0.4.3 was downloaded but could not install when you quit. It will try
+> again. If it keeps happening, install it by hand.
+
+A teacher who was told *"it will install when you quit"*, quit, and found the same
+version is owed an explanation rather than a repeat of the same promise.
+
+The note is read once and deleted, **and a note naming the version now running is
+dropped unread** — that one worked in the end, by hand or on a later try, and telling
+somebody their update failed while they are running it would be worse than silence.
+
+The writer is Windows-only and says so in a `cfg`; the reader stays on every platform,
+which costs one missing-file read at startup and means nothing has to know which
+platforms defer an install.
+
+### Verified
+
+On the real 0.4.3 bundle, isolated `HOME`: a marker naming `0.9.9` produced the warning
+toast on the board and the marker was consumed. A marker naming `0.4.3` — the running
+version — produced no toast at all, and was still consumed. Rust compiled clean with no
+warnings on macOS, and the Windows-only writer was type-checked by flipping just its own
+`cfg` and `finish_exit`'s (a blunt flip of all five `not(macos)` gates produces two
+unrelated E0428s, because `take_keyboard` and `restore_class` have platform twins — not
+a signal, just an artefact of the method).
+
+**Still not verified, and now the only thing standing between this and a site-wide
+rollout:** a real Windows `.exe` updating itself. Glenn runs that in the morning; the
+`.exe` goes site-wide in the afternoon. 0.4.3 exists so that run says what happened
+either way instead of leaving him to notice a version that never changed.

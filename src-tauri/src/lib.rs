@@ -395,7 +395,43 @@ struct UpdateNotice {
     /// teacher's to write, so an administrator installs it by hand.
     /// `needs-it` — Windows, installed from the MSI, which the app never
     /// replaces: nothing was downloaded and IT does the update.
+    /// `failed` — macOS, the bundle was writable and the swap still would not
+    /// go through.
     state: &'static str,
+}
+
+/// An update that downloaded and then would not install. Written as the app
+/// is closing, when there is no window left to say anything with, and read
+/// back by the next launch — because a teacher who was told "it will install
+/// when you quit", quit, and found the same version is owed an explanation
+/// rather than a repeat of the same promise.
+///
+/// Windows only, and that is the whole shape of it: macOS installs the moment
+/// the download lands, while a window is still there to be told, so a failure
+/// there is said at once and never needs writing down. The READER stays on
+/// every platform — one missing-file read at startup — so nothing has to know
+/// which platforms defer an install.
+#[cfg(not(target_os = "macos"))]
+fn note_failed_update(app: &tauri::AppHandle, version: &str, why: &str) {
+    let Ok(dir) = app.path().app_data_dir() else { return };
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    // Version first, reason after and clipped: this is read back into one
+    // sentence on a classroom board, not into a log viewer.
+    let why: String = why.chars().take(200).collect();
+    let _ = std::fs::write(dir.join("update-failed"), format!("{version}\n{why}"));
+}
+
+/// Read once and deleted, so the sentence is said exactly once however many
+/// times the app is opened afterwards.
+fn take_failed_update(app: &tauri::AppHandle) -> Option<String> {
+    let dir = app.path().app_data_dir().ok()?;
+    let path = dir.join("update-failed");
+    let body = std::fs::read_to_string(&path).ok()?;
+    let _ = std::fs::remove_file(&path);
+    let version = body.lines().next()?.trim().to_string();
+    if version.is_empty() { None } else { Some(version) }
 }
 
 /// What the board is told at boot: the version it is running, and whether this
@@ -409,6 +445,8 @@ struct VersionInfo {
     /// `None` on a fresh install — nothing was updated, and saying so would be
     /// a lie — and `None` on every launch after the first of a version.
     updated_from: Option<String>,
+    /// A version that was downloaded and then failed to install at quit.
+    failed_update: Option<String>,
 }
 
 /// Written once during setup and read-only thereafter, so it carries no lock:
@@ -442,8 +480,10 @@ fn finish_exit(app: &tauri::AppHandle) {
     {
         let pending = app.state::<PendingUpdate>().0.lock().unwrap().take();
         if let Some((update, bytes)) = pending {
+            let version = update.version.clone();
             if let Err(e) = update.install(&bytes) {
                 eprintln!("update: install at quit failed: {e}");
+                note_failed_update(app, &version, &e.to_string());
             }
         }
     }
@@ -543,12 +583,17 @@ async fn check_for_update(
     eprintln!("update: {} available (running {})", update.version, update.current_version);
     let bytes = update.download(|_, _| {}, || {}).await?;
     let version = update.version.clone();
+    // `?` here used to turn a failed install into a failed CHECK: the error
+    // left through check_for_update, update_loop logged it as a check problem,
+    // and the board was told nothing at all. The install has its own outcome.
     #[cfg(target_os = "macos")]
-    let state = if bundle_is_writable() {
-        update.install(&bytes)?;
-        "installed"
-    } else {
+    let state = if !bundle_is_writable() {
         "needs-admin"
+    } else if let Err(e) = update.install(&bytes) {
+        eprintln!("update: install failed: {e}");
+        "failed"
+    } else {
+        "installed"
     };
     #[cfg(not(target_os = "macos"))]
     let state = {
@@ -901,9 +946,15 @@ pub fn run() {
                     None
                 }
             };
+            let running = app.package_info().version.to_string();
+            // A failure note naming the version now running means it worked in
+            // the end — by hand, or on a later try. Saying so would be worse
+            // than saying nothing.
+            let failed_update = take_failed_update(app.handle()).filter(|v| *v != running);
             app.manage(Launch(VersionInfo {
-                version: app.package_info().version.to_string(),
+                version: running,
                 updated_from,
+                failed_update,
             }));
 
             app.manage(VideoBridge(start_video_bridge()));

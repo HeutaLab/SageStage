@@ -73,6 +73,24 @@ quit would otherwise never move:
    **which version am I running?** Help prints it at the foot. A tester asked
    "are you on 0.4.1?" previously had nowhere in the app to look.
 
+6. **And when it does not work, say that too.** Both installs could fail
+   silently until 2026-10-22, which is the worst possible shape for a feature
+   whose whole promise is *you will be on the new version*:
+
+   - **macOS** failed *loudly in the wrong place*. `update.install(&bytes)?`
+     let the error out through `check_for_update`, so `update_loop` logged it
+     as a failed **check** and the board was told nothing at all. The install
+     now has its own outcome, `failed`, and its own sentence.
+   - **Windows** fails at the moment there is no window left to speak with —
+     the app is closing. So it is written down (`update-failed` in the app
+     data dir, beside `last-version`) and read back by the next launch, which
+     is the launch that proves it did not happen: *⚠️ Sage Stage 0.4.3 was
+     downloaded but could not install when you quit. It will try again.*
+
+   The note is read once and deleted, and a note naming the version now
+   running is dropped unread — that one worked in the end, by hand or on a
+   later try, and saying otherwise would be worse than saying nothing.
+
 Decks are not involved at any point: they live in `Documents/Sage Stage`,
 outside the bundle.
 
@@ -216,4 +234,10 @@ never inline in the deck; and a 0.3.x file opened and saved by 0.4.0, and a
 - An update landing on a real installed copy through the published endpoint.
   0.3.1, the throwaway, is that.
 - Windows, at all: that the `/P /UPDATE` install with no `/R` leaves the app
-  closed and the new version in place.
+  closed and the new version in place. **This is the one that matters now**:
+  0.4.2 published on 22 Oct 2026 to 22 testers, and the `.exe` installs are
+  the ones expected to move on their own. 0.4.3 adds the failure notice above
+  precisely so that a first real Windows run says what happened either way,
+  rather than leaving a teacher to notice the version never changed.
+- The `needs-it` MSI sentence, at runtime. Windows-only, so it compiles
+  nowhere on a Mac; type-checked by widening its `cfg`, and built by CI.
